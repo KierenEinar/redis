@@ -149,6 +149,87 @@ main.c.s:
 	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/main.c.s
 .PHONY : main.c.s
 
+sds.obj: sds.c.obj
+
+.PHONY : sds.obj
+
+# target to build an object file
+sds.c.obj:
+	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/sds.c.obj
+.PHONY : sds.c.obj
+
+sds.i: sds.c.i
+
+.PHONY : sds.i
+
+# target to preprocess a source file
+sds.c.i:
+	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/sds.c.i
+.PHONY : sds.c.i
+
+sds.s: sds.c.s
+
+.PHONY : sds.s
+
+# target to generate assembly for a file
+sds.c.s:
+	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/sds.c.s
+.PHONY : sds.c.s
+
+ziplist.obj: ziplist.c.obj
+
+.PHONY : ziplist.obj
+
+# target to build an object file
+ziplist.c.obj:
+	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/ziplist.c.obj
+.PHONY : ziplist.c.obj
+
+ziplist.i: ziplist.c.i
+
+.PHONY : ziplist.i
+
+# target to preprocess a source file
+ziplist.c.i:
+	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/ziplist.c.i
+.PHONY : ziplist.c.i
+
+ziplist.s: ziplist.c.s
+
+.PHONY : ziplist.s
+
+# target to generate assembly for a file
+ziplist.c.s:
+	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/ziplist.c.s
+.PHONY : ziplist.c.s
+
+zskiplist.obj: zskiplist.c.obj
+
+.PHONY : zskiplist.obj
+
+# target to build an object file
+zskiplist.c.obj:
+	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/zskiplist.c.obj
+.PHONY : zskiplist.c.obj
+
+zskiplist.i: zskiplist.c.i
+
+.PHONY : zskiplist.i
+
+# target to preprocess a source file
+zskiplist.c.i:
+	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/zskiplist.c.i
+.PHONY : zskiplist.c.i
+
+zskiplist.s: zskiplist.c.s
+
+.PHONY : zskiplist.s
+
+# target to generate assembly for a file
+zskiplist.c.s:
+	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/zskiplist.c.s
+.PHONY : zskiplist.c.s
+
 # Help Target
 help:
 	@echo The following are some of the valid targets for this Makefile:
@@ -161,6 +242,15 @@ help:
 	@echo ... main.obj
 	@echo ... main.i
 	@echo ... main.s
+	@echo ... sds.obj
+	@echo ... sds.i
+	@echo ... sds.s
+	@echo ... ziplist.obj
+	@echo ... ziplist.i
+	@echo ... ziplist.s
+	@echo ... zskiplist.obj
+	@echo ... zskiplist.i
+	@echo ... zskiplist.s
 .PHONY : help
 
 

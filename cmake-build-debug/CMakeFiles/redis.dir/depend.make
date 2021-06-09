@@ -3,3 +3,9 @@
 
 CMakeFiles/redis.dir/main.c.obj: ../main.c
 
+CMakeFiles/redis.dir/sds.c.obj: ../sds.c
+
+CMakeFiles/redis.dir/ziplist.c.obj: ../ziplist.c
+
+CMakeFiles/redis.dir/zskiplist.c.obj: ../zskiplist.c
+

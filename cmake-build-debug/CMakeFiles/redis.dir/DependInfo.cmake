@@ -5,6 +5,9 @@ set(CMAKE_DEPENDS_LANGUAGES
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_C
   "C:/Users/CF/CLionProjects/redis/main.c" "C:/Users/CF/CLionProjects/redis/cmake-build-debug/CMakeFiles/redis.dir/main.c.obj"
+  "C:/Users/CF/CLionProjects/redis/sds.c" "C:/Users/CF/CLionProjects/redis/cmake-build-debug/CMakeFiles/redis.dir/sds.c.obj"
+  "C:/Users/CF/CLionProjects/redis/ziplist.c" "C:/Users/CF/CLionProjects/redis/cmake-build-debug/CMakeFiles/redis.dir/ziplist.c.obj"
+  "C:/Users/CF/CLionProjects/redis/zskiplist.c" "C:/Users/CF/CLionProjects/redis/cmake-build-debug/CMakeFiles/redis.dir/zskiplist.c.obj"
   )
 set(CMAKE_C_COMPILER_ID "GNU")
 

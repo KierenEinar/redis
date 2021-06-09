@@ -73,12 +73,12 @@ clean: CMakeFiles/redis.dir/clean
 CMakeFiles/redis.dir/all:
 	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/depend
 	$(MAKE) -f CMakeFiles\redis.dir\build.make CMakeFiles/redis.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=C:\Users\CF\CLionProjects\redis\cmake-build-debug\CMakeFiles --progress-num=1,2 "Built target redis"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=C:\Users\CF\CLionProjects\redis\cmake-build-debug\CMakeFiles --progress-num=1,2,3,4,5 "Built target redis"
 .PHONY : CMakeFiles/redis.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/redis.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\CF\CLionProjects\redis\cmake-build-debug\CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\CF\CLionProjects\redis\cmake-build-debug\CMakeFiles 5
 	$(MAKE) -f CMakeFiles\Makefile2 CMakeFiles/redis.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start C:\Users\CF\CLionProjects\redis\cmake-build-debug\CMakeFiles 0
 .PHONY : CMakeFiles/redis.dir/rule

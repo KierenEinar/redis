@@ -77,6 +77,24 @@
 		<Unit filename="C:/Users/CF/CLionProjects/redis/main.c">
 			<Option target="redis"/>
 		</Unit>
+		<Unit filename="C:/Users/CF/CLionProjects/redis/sds.c">
+			<Option target="redis"/>
+		</Unit>
+		<Unit filename="C:/Users/CF/CLionProjects/redis/sds.h">
+			<Option target="redis"/>
+		</Unit>
+		<Unit filename="C:/Users/CF/CLionProjects/redis/ziplist.c">
+			<Option target="redis"/>
+		</Unit>
+		<Unit filename="C:/Users/CF/CLionProjects/redis/ziplist.h">
+			<Option target="redis"/>
+		</Unit>
+		<Unit filename="C:/Users/CF/CLionProjects/redis/zskiplist.c">
+			<Option target="redis"/>
+		</Unit>
+		<Unit filename="C:/Users/CF/CLionProjects/redis/zskiplist.h">
+			<Option target="redis"/>
+		</Unit>
 		<Unit filename="C:/Users/CF/CLionProjects/redis/CMakeLists.txt">
 			<Option virtualFolder="CMake Files\"/>
 		</Unit>
