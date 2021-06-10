@@ -6,9 +6,5 @@
 
 #IncludeRegexTransform: 
 
-C:/Users/CF/CLionProjects/redis/main.c
-stdio.h
--
-stdlib.h
--
+C:/Users/CF/CLionProjects/redis/zskiplist.c
 

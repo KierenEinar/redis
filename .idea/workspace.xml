@@ -21,7 +21,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="eb0232cc-7133-4644-aa66-565d3251d5be" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/redis.dir/C.includecache" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/redis.dir/C.includecache" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/redis.dir/objects.a" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/redis.dir/objects.a" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/redis.dir/zskiplist.c.obj" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/CMakeFiles/redis.dir/zskiplist.c.obj" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/cmake-build-debug/redis.exe" beforeDir="false" afterPath="$PROJECT_DIR$/cmake-build-debug/redis.exe" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/zskiplist.c" beforeDir="false" afterPath="$PROJECT_DIR$/zskiplist.c" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -80,6 +85,9 @@
       <workItem from="1623242090185" duration="1808000" />
       <workItem from="1623249113362" duration="1855000" />
       <workItem from="1623250999615" duration="1634000" />
+      <workItem from="1623327397276" duration="1937000" />
+      <workItem from="1623329352740" duration="1843000" />
+      <workItem from="1623331233188" duration="699000" />
     </task>
     <servers />
   </component>
@@ -99,22 +107,22 @@
     <option name="oldMeFiltersMigrated" value="true" />
   </component>
   <component name="WindowStateProjectService">
-    <state width="1877" height="284" key="GridCell.Tab.0.bottom" timestamp="1623241172932">
+    <state width="1877" height="284" key="GridCell.Tab.0.bottom" timestamp="1623325785956">
       <screen x="0" y="0" width="1920" height="1050" />
     </state>
-    <state width="1877" height="284" key="GridCell.Tab.0.bottom/0.0.1920.1050@0.0.1920.1050" timestamp="1623241172932" />
-    <state width="1877" height="284" key="GridCell.Tab.0.center" timestamp="1623241172932">
+    <state width="1877" height="284" key="GridCell.Tab.0.bottom/0.0.1920.1050@0.0.1920.1050" timestamp="1623325785956" />
+    <state width="1877" height="284" key="GridCell.Tab.0.center" timestamp="1623325785955">
       <screen x="0" y="0" width="1920" height="1050" />
     </state>
-    <state width="1877" height="284" key="GridCell.Tab.0.center/0.0.1920.1050@0.0.1920.1050" timestamp="1623241172932" />
-    <state width="1877" height="284" key="GridCell.Tab.0.left" timestamp="1623241172931">
+    <state width="1877" height="284" key="GridCell.Tab.0.center/0.0.1920.1050@0.0.1920.1050" timestamp="1623325785955" />
+    <state width="1877" height="284" key="GridCell.Tab.0.left" timestamp="1623325785955">
       <screen x="0" y="0" width="1920" height="1050" />
     </state>
-    <state width="1877" height="284" key="GridCell.Tab.0.left/0.0.1920.1050@0.0.1920.1050" timestamp="1623241172931" />
-    <state width="1877" height="284" key="GridCell.Tab.0.right" timestamp="1623241172932">
+    <state width="1877" height="284" key="GridCell.Tab.0.left/0.0.1920.1050@0.0.1920.1050" timestamp="1623325785955" />
+    <state width="1877" height="284" key="GridCell.Tab.0.right" timestamp="1623325785956">
       <screen x="0" y="0" width="1920" height="1050" />
     </state>
-    <state width="1877" height="284" key="GridCell.Tab.0.right/0.0.1920.1050@0.0.1920.1050" timestamp="1623241172932" />
+    <state width="1877" height="284" key="GridCell.Tab.0.right/0.0.1920.1050@0.0.1920.1050" timestamp="1623325785956" />
     <state width="1877" height="352" key="GridCell.Tab.1.bottom" timestamp="1623241154811">
       <screen x="0" y="0" width="1920" height="1050" />
     </state>
@@ -131,5 +139,9 @@
       <screen x="0" y="0" width="1920" height="1050" />
     </state>
     <state width="1877" height="352" key="GridCell.Tab.1.right/0.0.1920.1050@0.0.1920.1050" timestamp="1623241154811" />
+    <state x="623" y="227" width="672" height="678" key="search.everywhere.popup" timestamp="1623331021686">
+      <screen x="0" y="0" width="1920" height="1050" />
+    </state>
+    <state x="623" y="227" width="672" height="678" key="search.everywhere.popup/0.0.1920.1050@0.0.1920.1050" timestamp="1623331021686" />
   </component>
 </project>
