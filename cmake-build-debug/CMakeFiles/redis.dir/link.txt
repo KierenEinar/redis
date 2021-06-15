@@ -1,3 +1,1 @@
-"C:\Program Files\JetBrains\CLion 2020.1.1\bin\cmake\win\bin\cmake.exe" -E remove -f CMakeFiles\redis.dir/objects.a
-C:\MinGW\bin\ar.exe cr CMakeFiles\redis.dir/objects.a @CMakeFiles\redis.dir\objects1.rsp
-C:\MinGW\bin\gcc.exe -g   -Wl,--whole-archive CMakeFiles\redis.dir/objects.a -Wl,--no-whole-archive  -o redis.exe -Wl,--out-implib,libredis.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\redis.dir\linklibs.rsp
+/Library/Developer/CommandLineTools/usr/bin/cc -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names  CMakeFiles/redis.dir/main.c.o CMakeFiles/redis.dir/ziplist.c.o CMakeFiles/redis.dir/zskiplist.c.o CMakeFiles/redis.dir/sds.c.o  -o redis 

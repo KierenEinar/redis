@@ -8,94 +8,98 @@
 		<Option virtualFolders="CMake Files\;"/>
 		<Build>
 			<Target title="all">
-				<Option working_dir="C:/Users/CF/CLionProjects/redis/cmake-build-debug"/>
+				<Option working_dir="/Users/kieren/Projects/myredis/redis/cmake-build-debug"/>
 				<Option type="4"/>
 				<MakeCommands>
-					<Build command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 all"/>
-					<CompileFile command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-				</MakeCommands>
-			</Target>
-			<Target title="redis">
-				<Option output="C:/Users/CF/CLionProjects/redis/cmake-build-debug/redis.exe" prefix_auto="0" extension_auto="0"/>
-				<Option working_dir="C:/Users/CF/CLionProjects/redis/cmake-build-debug"/>
-				<Option object_output="./"/>
-				<Option type="1"/>
-				<Option compiler="gcc"/>
-				<Compiler>
-					<Add directory="c:\mingw\bin\../lib/gcc/mingw32/9.2.0/include"/>
-					<Add directory="c:\mingw\bin\../lib/gcc/mingw32/9.2.0/../../../../include"/>
-					<Add directory="c:\mingw\bin\../lib/gcc/mingw32/9.2.0/include-fixed"/>
-				</Compiler>
-				<MakeCommands>
-					<Build command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 redis"/>
-					<CompileFile command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-				</MakeCommands>
-			</Target>
-			<Target title="redis/fast">
-				<Option output="C:/Users/CF/CLionProjects/redis/cmake-build-debug/redis.exe" prefix_auto="0" extension_auto="0"/>
-				<Option working_dir="C:/Users/CF/CLionProjects/redis/cmake-build-debug"/>
-				<Option object_output="./"/>
-				<Option type="1"/>
-				<Option compiler="gcc"/>
-				<Compiler>
-					<Add directory="c:\mingw\bin\../lib/gcc/mingw32/9.2.0/include"/>
-					<Add directory="c:\mingw\bin\../lib/gcc/mingw32/9.2.0/../../../../include"/>
-					<Add directory="c:\mingw\bin\../lib/gcc/mingw32/9.2.0/include-fixed"/>
-				</Compiler>
-				<MakeCommands>
-					<Build command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 redis/fast"/>
-					<CompileFile command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-				</MakeCommands>
-			</Target>
-			<Target title="edit_cache">
-				<Option working_dir="C:/Users/CF/CLionProjects/redis/cmake-build-debug"/>
-				<Option type="4"/>
-				<MakeCommands>
-					<Build command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 edit_cache"/>
-					<CompileFile command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 all"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 			<Target title="rebuild_cache">
-				<Option working_dir="C:/Users/CF/CLionProjects/redis/cmake-build-debug"/>
+				<Option working_dir="/Users/kieren/Projects/myredis/redis/cmake-build-debug"/>
 				<Option type="4"/>
 				<MakeCommands>
-					<Build command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
-					<CompileFile command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
-					<Clean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
-					<DistClean command="C:/PROGRA~2/CODEBL~1/MinGW/bin/mingw32-make.exe -f &quot;C:/Users/CF/CLionProjects/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 rebuild_cache"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="edit_cache">
+				<Option working_dir="/Users/kieren/Projects/myredis/redis/cmake-build-debug"/>
+				<Option type="4"/>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 edit_cache"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="redis">
+				<Option output="/Users/kieren/Projects/myredis/redis/cmake-build-debug/redis" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/kieren/Projects/myredis/redis/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/lib/clang/12.0.0/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 redis"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+				</MakeCommands>
+			</Target>
+			<Target title="redis/fast">
+				<Option output="/Users/kieren/Projects/myredis/redis/cmake-build-debug/redis" prefix_auto="0" extension_auto="0"/>
+				<Option working_dir="/Users/kieren/Projects/myredis/redis/cmake-build-debug"/>
+				<Option object_output="./"/>
+				<Option type="1"/>
+				<Option compiler="gcc"/>
+				<Compiler>
+					<Add directory="/usr/local/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/lib/clang/12.0.0/include"/>
+					<Add directory="/Library/Developer/CommandLineTools/usr/include"/>
+					<Add directory="/System/Library/Frameworks"/>
+					<Add directory="/Library/Frameworks"/>
+				</Compiler>
+				<MakeCommands>
+					<Build command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 redis/fast"/>
+					<CompileFile command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 &quot;$file&quot;"/>
+					<Clean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
+					<DistClean command="/usr/bin/make -j8 -f &quot;/Users/kieren/Projects/myredis/redis/cmake-build-debug/Makefile&quot;  VERBOSE=1 clean"/>
 				</MakeCommands>
 			</Target>
 		</Build>
-		<Unit filename="C:/Users/CF/CLionProjects/redis/main.c">
+		<Unit filename="/Users/kieren/Projects/myredis/redis/main.c">
 			<Option target="redis"/>
 		</Unit>
-		<Unit filename="C:/Users/CF/CLionProjects/redis/sds.c">
+		<Unit filename="/Users/kieren/Projects/myredis/redis/sds.c">
 			<Option target="redis"/>
 		</Unit>
-		<Unit filename="C:/Users/CF/CLionProjects/redis/sds.h">
+		<Unit filename="/Users/kieren/Projects/myredis/redis/sds.h">
 			<Option target="redis"/>
 		</Unit>
-		<Unit filename="C:/Users/CF/CLionProjects/redis/ziplist.c">
+		<Unit filename="/Users/kieren/Projects/myredis/redis/ziplist.c">
 			<Option target="redis"/>
 		</Unit>
-		<Unit filename="C:/Users/CF/CLionProjects/redis/ziplist.h">
+		<Unit filename="/Users/kieren/Projects/myredis/redis/ziplist.h">
 			<Option target="redis"/>
 		</Unit>
-		<Unit filename="C:/Users/CF/CLionProjects/redis/zskiplist.c">
+		<Unit filename="/Users/kieren/Projects/myredis/redis/zskiplist.c">
 			<Option target="redis"/>
 		</Unit>
-		<Unit filename="C:/Users/CF/CLionProjects/redis/zskiplist.h">
+		<Unit filename="/Users/kieren/Projects/myredis/redis/zskiplist.h">
 			<Option target="redis"/>
 		</Unit>
-		<Unit filename="C:/Users/CF/CLionProjects/redis/CMakeLists.txt">
+		<Unit filename="/Users/kieren/Projects/myredis/redis/CMakeLists.txt">
 			<Option virtualFolder="CMake Files\"/>
 		</Unit>
 	</Project>
