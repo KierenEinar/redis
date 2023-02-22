@@ -7,5 +7,4 @@
 
 #include "dict.h"
 
-
 #endif //REDIS_REDIS_H

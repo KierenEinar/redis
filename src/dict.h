@@ -5,6 +5,16 @@
 #ifndef REDIS_DICT_H
 #define REDIS_DICT_H
 
+#include "redis.h"
+
+#define DICT_OK 1
+#define DICT_ERR 0
+
+#define DICT_HT_INITIAL_BUCKETS_BIT 4
+#define DICT_HT_FORCE_RESIZE_RATIO 5
+
+#define DICT_HT_HASH_COMPARER_BITS 8
+
 typedef struct dictType {
     unsigned int (*hash)(const void *key);
     int (*keyComparer)(const void *key1, const void *key2);
@@ -12,12 +22,13 @@ typedef struct dictType {
     void  (*keyDestructor)(const void *key);
     void* (*valDup) (const void *value);
     void  (*valDestructor)(const void *value);
-};
+}dictType;
 
 typedef struct dictEntry{
+    unsigned char topHash;
     void *key;
     void *value;
-    dictEntry *nextEntry;
+    struct dictEntry *nextEntry;
 }dictEntry;
 
 typedef struct dictht{
@@ -32,15 +43,21 @@ typedef struct dict {
     dictType *dictType;
     int iterators;
     int rehashIdx;
+    unsigned long hash0; // for rand hash function
 } dict;
 
 //------------API-------------
 dict* dictCreate(dictType *type);
 int dictAdd(dict *d, void *key, void *val);
 int dictReplace(dict *d, void *key, void *val);
-dictEntry* dictFind(dict *d, void *key);
-void* dictFetchValue(dict *d, void *key);
-int dictDelete(dict *d, void *key);
+dictEntry* dictFind(dict *d, const void *key);
+void* dictFetchValue(dict *d, const void *key);
+int dictDelete(dict *d, const void *key);
+int dictExpand(dict *d, unsigned long size);
+void enableDictExpand(dict *d);
+void disableDictExpand(dict *d);
+//-----------private prototype-------
+
 
 
 #endif //REDIS_DICT_H
