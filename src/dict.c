@@ -114,7 +114,7 @@ int _dictExpandIfNeeded(dict *d) {
     // or used/size reach ratio
     if (( d->ht[0].used >= d->ht[0].size && dict_expand_enable ) ||
             d->ht[0].used / d->ht[0].size >= DICT_HT_FORCE_RESIZE_RATIO) {
-        return dictExpand(d, d->ht[0].used);
+        return dictExpand(d, d->ht[0].used*2);
     }
 
     return DICT_OK;
