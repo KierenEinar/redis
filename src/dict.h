@@ -49,6 +49,7 @@ typedef struct dict {
 //------------API-------------
 dict* dictCreate(dictType *type);
 int dictAdd(dict *d, void *key, void *val);
+int dictRehash(dict *d, int n);
 int dictReplace(dict *d, void *key, void *val);
 dictEntry* dictFind(dict *d, const void *key);
 void* dictFetchValue(dict *d, const void *key);

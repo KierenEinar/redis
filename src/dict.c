@@ -15,10 +15,11 @@ static int _keyIndex(dict *d, const void *key, unsigned long *topHash);
 static void _dictInit(dict *d, dictType *type);
 static int _dictExpandIfNeeded(dict *d);
 static unsigned long _nextPowerOfTwo(unsigned long n);
-static unsigned char _lowHash(unsigned long hash, uint8_t lowBits);
+//static unsigned char _lowHash(unsigned long hash, uint8_t lowBits);
 static unsigned char _topHash(unsigned long hash, uint8_t topBits);
 static void _setEntryKey(dict *d, dictEntry *entry, void *key);
 static void _setEntryValue(dict *d, dictEntry *entry, void *value);
+static void _dictReset(dictht *ht);
 
 /*----------------- API implements ---------------------*/
 dict* dictCreate(dictType *type){
@@ -39,24 +40,87 @@ int dictAdd(dict *d, void *key, void *value) {
 
     int table = _dictIsRehashing(d) ? 1 : 0;
     dictEntry *entry = malloc(sizeof (*entry));
-    entry->key = k;
-    entry->value = value;
     entry->topHash = topHash;
     entry->nextEntry = d->ht[table];
+    _setEntryKey(d, entry, key);
+    _setEntryValue(d, entry, value);
     d->ht[table] = entry;
     d->ht[table].used++;
-    _setEntryKey(d, entry, key);
-    _setEntryKey(d, entry, value);
     return DICT_OK;
 }
 
-dictEntry* dictFind(dict *d, void *key) {
+int dictRehash(dict *d, int n) {
 
+    if (!_dictIsRehashing(d)) return DICT_OK;
 
+    dictEntry *de, *nextEntry;
+    unsigned long deHash;
+    int idx;
+    while (n--) {
 
+        if (!d->ht[0].used) {
+            free(d->ht[0].tables);
+            _dictReset(&d->ht[0]);
+            d->ht[0] = d->ht[1];
+            _dictReset(&d->ht[1]);
+            d->rehashIdx = -1;
+            break;
+        }
+
+        do {
+            de = d->ht[0].tables[d->rehashIdx++];
+        } while (de == NULL);
+
+        while (de) {
+            deHash = d->dictType->hash(de->key);
+            nextEntry = de -> nextEntry;
+            idx = deHash & d->ht[1].mask;
+            de -> nextEntry = d->ht[1].tables[idx];
+            d->ht[1].tables[idx] = de;
+            de = nextEntry;
+            d->ht[0].used--;
+            d->ht[1].used++;
+        }
+
+        d->ht[0].tables[d->rehashIdx-1] = NULL;
+    }
+
+    return DICT_OK;
 
 }
 
+dictEntry* dictFind(dict *d, const void *key) {
+
+    int idx;
+    unsigned long topHash;
+    if (_dictIsRehashing(d)) _dictRehashStep(d);
+    hash = d->dictType->hash(key);
+    topHash = _topHash(hash, DICT_HT_HASH_COMPARER_BITS);
+
+    for (table=0; table<=1; table++) {
+        idx = hash & d->ht[table].mask;
+        de = d->ht[table].tables[idx];
+        while (de) {
+            idxTopHash = de->topHash;
+            if (idxTopHash == topHash && d->dictType->keyComparer(key, de->key)) {
+                return de;
+            }
+            de = de->nextEntry;
+        }
+        if (!_dictIsRehashing(d)) break;
+    }
+
+    return NULL;
+}
+
+void* dictFetchValue(dict *d, const void *key) {
+    dictEntry *entry = dictFind(d, key);
+    return (entry) ? entry->value : NULL;
+}
+
+int dictDelete(dict *d, const void *key) {
+
+}
 
 int dictExpand(dict *d, unsigned long size) {
 
@@ -122,7 +186,7 @@ int _dictExpandIfNeeded(dict *d) {
 
 static int _keyIndex(dict *d, const void *key, unsigned long *topHash) {
 
-    unsigned int table, idx, topHash, lowHash, idxTopHash = 0;
+    unsigned int table, idx, idxTopHash = 0;
     unsigned long hash;
     dictEntry *de;
 
@@ -132,10 +196,10 @@ static int _keyIndex(dict *d, const void *key, unsigned long *topHash) {
 
     hash = d->dictType->hash(key);
     *topHash = _topHash(hash, DICT_HT_HASH_COMPARER_BITS);
-    lowHash = _lowHash(hash, DICT_HT_HASH_COMPARER_BITS);
+    // lowHash = _lowHash(hash, DICT_HT_HASH_COMPARER_BITS);
 
     for (table=0; table<=1; table++) {
-        idx = lowHash & d->ht[table].mask;
+        idx = hash & d->ht[table].mask;
         de = d->ht[table].tables[idx];
         while (de) {
             idxTopHash = de->topHash;
