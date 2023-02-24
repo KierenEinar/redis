@@ -56,9 +56,10 @@ void* dictFetchValue(dict *d, const void *key);
 int dictDelete(dict *d, const void *key);
 int dictExpand(dict *d, unsigned long size);
 int dictShrink(dict *d);
-int dictClear(dict *d);
+int dictRelease(dict *d);
 void enableDictResize();
 void disableDictResize();
+int dictRehashMillSeconds(dict *d, unsigned long ms);
 //-----------private prototype-------
 
 

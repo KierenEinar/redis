@@ -5,6 +5,7 @@
 #include "dict.h"
 #include <limits.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 static int dict_resize_enable = 1;
 
@@ -25,7 +26,7 @@ static void _dictReset(dictht *ht);
 static void _dictFreeKey(dict *d, void *key);
 static void _dictFreeValue(dict *d, void *value);
 static int  _dictResize(dict *d, unsigned long realSize);
-static int _dictClear(dictht *ht);
+static int _dictClear(dict *d, dictht *ht);
 /*----------------- API implements ---------------------*/
 dict* dictCreate(dictType *type){
     dict *d = malloc(sizeof(dict));
@@ -185,6 +186,18 @@ int dictDelete(dict *d, const void *key) {
 
 }
 
+unsigned long _nextPowerOfTwo(unsigned long n) {
+
+    unsigned int i = DICT_HT_INITIAL_BUCKETS_BIT;
+    unsigned long r = 1 << i;
+    while (1) {
+        if (r >= n || r == LONG_MAX) {
+            return r;
+        }
+        r = 1 << (i++);
+    }
+}
+
 int dictExpand(dict *d, unsigned long size) {
     if (_dictIsRehashing(d) || d->ht[0].size > size) return DICT_ERR;
 
@@ -200,8 +213,11 @@ int dictShrink(dict *d) {
 
 }
 
-int dictClear(dict *d) {
-    return 0;
+int dictRelease(dict *d) {
+    unsigned long h0 = _dictClear(d, &d->ht[0]);
+    unsigned long h1 =_dictClear(d, &d->ht[1]);
+    free(d);
+    return h0 + h1;
 }
 
 void enableDictResize() {
@@ -209,6 +225,27 @@ void enableDictResize() {
 }
 void disableDictResize() {
     dict_resize_enable = 0;
+}
+
+long long timeInMillSeconds(void) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (long long) (tv.tv_sec * 1000 + tv.tv_usec/1000);
+}
+
+int dictRehashMillSeconds(dict *d, unsigned long ms) {
+    long long start = timeInMillSeconds();
+    long long end;
+    int rehashed = 0;
+    while (1) {
+        dictRehash(d,100);
+        rehashed+=100;
+        end = timeInMillSeconds();
+        if (end - start >= ms) {
+            break;
+        }
+    }
+    return rehashed;
 }
 
 
@@ -314,18 +351,6 @@ static void _dictInit(dict *d, dictType *type) {
     d->rehashIdx = -1;
 }
 
-unsigned long _nextPowerOfTwo(unsigned long n) {
-
-    unsigned int i = DICT_HT_INITIAL_BUCKETS_BIT;
-    unsigned long r = 1 << i;
-    while (1) {
-        if (r >= n || r == LONG_MAX) {
-            return r;
-        }
-        r = 1 << (i++);
-    }
-}
-
 static int _isPowerOfTwo(unsigned long n) {
 
     int i = 0;
@@ -380,6 +405,25 @@ static void _dictFreeValue(dict *d, void *value) {
     }
 }
 
-static int _dictClear(dictht *ht) {
-    return 0;
+static int _dictClear(dict *d, dictht *ht) {
+
+    unsigned long processed, idx;
+
+    dictEntry *de, *ptr;
+
+    for (idx=0; idx<ht->size; idx++) {
+        de = ht->tables[idx];
+        while (de) {
+            _dictFreeKey(d, de->key);
+            _dictFreeValue(d, de->value);
+            ptr = de;
+            de = ptr->nextEntry;
+            free(ptr);
+            processed++;
+        }
+    }
+
+    free(ht->tables);
+    _dictReset(ht);
+    return processed;
 }
