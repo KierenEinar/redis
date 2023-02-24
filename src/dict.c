@@ -6,7 +6,7 @@
 #include <limits.h>
 #include <stdlib.h>
 
-static int dict_expand_enable = 1;
+static int dict_resize_enable = 1;
 
 /*------------------ private protocol ------------------*/
 static int _dictIsRehashing(dict *d);
@@ -14,13 +14,18 @@ static void _dictRehashStep(dict *d);
 static int _keyIndex(dict *d, const void *key, unsigned long *topHash);
 static void _dictInit(dict *d, dictType *type);
 static int _dictExpandIfNeeded(dict *d);
+static int _dictShrinkIfNeeded(dict *d);
 static unsigned long _nextPowerOfTwo(unsigned long n);
+static int _isPowerOfTwo(unsigned long n);
 //static unsigned char _lowHash(unsigned long hash, uint8_t lowBits);
 static unsigned char _topHash(unsigned long hash, uint8_t topBits);
 static void _setEntryKey(dict *d, dictEntry *entry, void *key);
 static void _setEntryValue(dict *d, dictEntry *entry, void *value);
 static void _dictReset(dictht *ht);
-
+static void _dictFreeKey(dict *d, void *key);
+static void _dictFreeValue(dict *d, void *value);
+static int  _dictResize(dict *d, unsigned long realSize);
+static int _dictClear(dictht *ht);
 /*----------------- API implements ---------------------*/
 dict* dictCreate(dictType *type){
     dict *d = malloc(sizeof(dict));
@@ -39,12 +44,12 @@ int dictAdd(dict *d, void *key, void *value) {
     }
 
     int table = _dictIsRehashing(d) ? 1 : 0;
-    dictEntry *entry = malloc(sizeof (*entry));
+    dictEntry *entry = (dictEntry*)malloc(sizeof (*entry));
     entry->topHash = topHash;
-    entry->nextEntry = d->ht[table];
+    entry->nextEntry = d->ht[table].tables[idx];
     _setEntryKey(d, entry, key);
     _setEntryValue(d, entry, value);
-    d->ht[table] = entry;
+    d->ht[table].tables[idx] = entry;
     d->ht[table].used++;
     return DICT_OK;
 }
@@ -52,7 +57,7 @@ int dictAdd(dict *d, void *key, void *value) {
 int dictRehash(dict *d, int n) {
 
     if (!_dictIsRehashing(d)) return DICT_OK;
-
+    int emptyVisit = n * 10;
     dictEntry *de, *nextEntry;
     unsigned long deHash;
     int idx;
@@ -69,7 +74,9 @@ int dictRehash(dict *d, int n) {
 
         do {
             de = d->ht[0].tables[d->rehashIdx++];
-        } while (de == NULL);
+        } while (de == NULL && (emptyVisit--) > 0);
+
+        if (!de) return DICT_OK;
 
         while (de) {
             deHash = d->dictType->hash(de->key);
@@ -89,20 +96,48 @@ int dictRehash(dict *d, int n) {
 
 }
 
-dictEntry* dictFind(dict *d, const void *key) {
+int dictReplace(dict *d, void *key, void *val) {
 
-    int idx;
-    unsigned long topHash;
     if (_dictIsRehashing(d)) _dictRehashStep(d);
-    hash = d->dictType->hash(key);
-    topHash = _topHash(hash, DICT_HT_HASH_COMPARER_BITS);
+
+    dictEntry *de;
+    int table, idx;
+    unsigned long hash = d->dictType->hash(key);
+    unsigned char topHash = _topHash(hash, DICT_HT_HASH_COMPARER_BITS);
 
     for (table=0; table<=1; table++) {
         idx = hash & d->ht[table].mask;
         de = d->ht[table].tables[idx];
+        if (de) {
+            if (de->topHash == topHash && (de->key == key || (d->dictType->keyComparer(key, de->key) == 0))) {
+                _dictFreeValue(d, de->value);
+                _setEntryValue(d, d->ht[table].tables[idx], val);
+                return DICT_OK;
+            }
+            de = de->nextEntry;
+        }
+        if (!_dictIsRehashing(d)) break;
+    }
+
+    return DICT_ERR;
+}
+
+dictEntry* dictFind(dict *d, const void *key) {
+
+    int idx;
+    unsigned long topHash;
+    unsigned char idxTopHash;
+    dictEntry *de;
+    if (_dictIsRehashing(d)) _dictRehashStep(d);
+    unsigned long hash = d->dictType->hash(key);
+    topHash = _topHash(hash, DICT_HT_HASH_COMPARER_BITS);
+
+    for (int table=0; table<=1; table++) {
+        idx = hash & d->ht[table].mask;
+        de = d->ht[table].tables[idx];
         while (de) {
             idxTopHash = de->topHash;
-            if (idxTopHash == topHash && d->dictType->keyComparer(key, de->key)) {
+            if (idxTopHash == topHash && (de->key == key || d->dictType->keyComparer(key, de->key) == 0)) {
                 return de;
             }
             de = de->nextEntry;
@@ -120,33 +155,60 @@ void* dictFetchValue(dict *d, const void *key) {
 
 int dictDelete(dict *d, const void *key) {
 
+    if (_dictIsRehashing(d)) _dictRehashStep(d);
+
+    unsigned int table;
+    dictEntry **de;
+    unsigned long hash = d->dictType->hash(key);
+    unsigned char topHash = _topHash(hash, DICT_HT_HASH_COMPARER_BITS);
+
+    for (table=0; table<=1; table++) {
+        int idx = hash & d->ht[table].mask;
+        de = &d->ht[table].tables[idx];
+        if ((*de) != NULL) {
+            if ((*de)->topHash == topHash && ((*de)->key == key || d->dictType->keyComparer((*de)->key, key) == 0)) {
+                dictEntry *ptr = *de;
+                *de = ptr->nextEntry;
+                _dictFreeKey(d, ptr->key);
+                _dictFreeValue(d, ptr->value);
+                free(ptr);
+                d->ht[table].used--;
+                return DICT_OK;
+            }
+            de = &((*de)->nextEntry);
+        }
+
+        if (!_dictIsRehashing(d)) break;
+    }
+
+    return DICT_ERR;
+
 }
 
 int dictExpand(dict *d, unsigned long size) {
-
     if (_dictIsRehashing(d) || d->ht[0].size > size) return DICT_ERR;
 
-    dictht n;
     unsigned long realSize = _nextPowerOfTwo(size);
-    n.tables = calloc(realSize, sizeof(dictEntry*));
-    n.mask = realSize - 1;
-    n.used = 0;
-    n.size = realSize;
-    if (d->ht[0].tables == NULL) {
-        d->ht[0] = n;
-        return DICT_OK;
-    }
-
-    d->ht[1] = n;
-    d->rehashIdx = 0;
-    return DICT_OK;
+    return _dictResize(d, realSize);
 }
 
-void enableDictExpand() {
-    dict_expand_enable = 1;
+int dictShrink(dict *d) {
+    if (_dictIsRehashing(d) || d->ht[0].size <= (1 << DICT_HT_INITIAL_BUCKETS_BIT)) return DICT_ERR;
+
+    unsigned long realSize = d->ht[0].size >> 1;
+    return _dictResize(d, realSize);
+
 }
-void disableDictExpand() {
-    dict_expand_enable = 0;
+
+int dictClear(dict *d) {
+    return 0;
+}
+
+void enableDictResize() {
+    dict_resize_enable = 1;
+}
+void disableDictResize() {
+    dict_resize_enable = 0;
 }
 
 
@@ -163,10 +225,10 @@ static int _dictIsRehashing(dict *d) {
 }
 
 static void _dictRehashStep(dict *d) {
-    return;
+    dictRehash(d, 1);
 }
 
-int _dictExpandIfNeeded(dict *d) {
+static int _dictExpandIfNeeded(dict *d) {
 
     if (_dictIsRehashing(d)) return DICT_OK;
 
@@ -176,12 +238,43 @@ int _dictExpandIfNeeded(dict *d) {
     // in this two case, we choose to expand,
     // used >= size && dict_expand_enable
     // or used/size reach ratio
-    if (( d->ht[0].used >= d->ht[0].size && dict_expand_enable ) ||
+    if (( d->ht[0].used >= d->ht[0].size && dict_resize_enable ) ||
             d->ht[0].used / d->ht[0].size >= DICT_HT_FORCE_RESIZE_RATIO) {
         return dictExpand(d, d->ht[0].used*2);
     }
 
     return DICT_OK;
+}
+
+static int _dictShrinkIfNeeded(dict *d) {
+    if (_dictIsRehashing(d)) return DICT_OK;
+
+    if (( d->ht[0].used < d->ht[0].size && dict_resize_enable ) ||
+            d->ht[0].size / d->ht[0].used  >= DICT_HT_FORCE_RESIZE_RATIO) {
+        return dictShrink(d);
+    }
+
+    return DICT_OK;
+
+}
+
+static int _dictResize(dict *d, unsigned long realSize) {
+
+    if (realSize < DICT_HT_INITIAL_BUCKETS_BIT) return DICT_ERR;
+    dictht n;
+    n.tables = calloc(realSize, sizeof(dictEntry*));
+    n.mask = realSize - 1;
+    n.used = 0;
+    n.size = realSize;
+    if (d->ht[0].tables == NULL) {
+        d->ht[0] = n;
+        return DICT_OK;
+    }
+
+    d->ht[1] = n;
+    d->rehashIdx = 0;
+    return DICT_OK;
+
 }
 
 static int _keyIndex(dict *d, const void *key, unsigned long *topHash) {
@@ -233,6 +326,17 @@ unsigned long _nextPowerOfTwo(unsigned long n) {
     }
 }
 
+static int _isPowerOfTwo(unsigned long n) {
+
+    int i = 0;
+    while (i<64) {
+        if (n == 1<<(i++)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static unsigned char _lowHash(unsigned long hash, uint8_t lowBits) {
     if (lowBits > 8) {
         lowBits = 8;
@@ -249,7 +353,7 @@ static unsigned char _topHash(unsigned long hash, uint8_t topBits) {
 }
 
 static void _setEntryKey(dict *d, dictEntry *entry, void *key) {
-    if (d->dictType->keyDup != NULL) {
+    if (d->dictType->keyDup) {
         entry->key = d->dictType->keyDup(key);
         return;
     }
@@ -257,9 +361,25 @@ static void _setEntryKey(dict *d, dictEntry *entry, void *key) {
 }
 
 static void _setEntryValue(dict *d, dictEntry *entry, void *value) {
-    if (d->dictType->valDup != NULL) {
+    if (d->dictType->valDup) {
         entry->value = d->dictType->valDup(value);
         return;
     }
     entry->value = value;
+}
+
+static void _dictFreeKey(dict *d, void *key) {
+    if (d->dictType->keyDestructor) {
+        d->dictType->keyDestructor(key);
+    }
+}
+
+static void _dictFreeValue(dict *d, void *value) {
+    if (d->dictType->valDestructor) {
+        d->dictType->valDestructor(value);
+    }
+}
+
+static int _dictClear(dictht *ht) {
+    return 0;
 }

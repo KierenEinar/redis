@@ -55,8 +55,10 @@ dictEntry* dictFind(dict *d, const void *key);
 void* dictFetchValue(dict *d, const void *key);
 int dictDelete(dict *d, const void *key);
 int dictExpand(dict *d, unsigned long size);
-void enableDictExpand(dict *d);
-void disableDictExpand(dict *d);
+int dictShrink(dict *d);
+int dictClear(dict *d);
+void enableDictResize();
+void disableDictResize();
 //-----------private prototype-------
 
 
