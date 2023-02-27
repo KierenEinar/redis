@@ -248,6 +248,43 @@ int dictRehashMillSeconds(dict *d, unsigned long ms) {
     return rehashed;
 }
 
+dictEntry *dictGetRandomKey(dict *d) {
+
+    int slot = d->ht[0].size;
+    int table, size;
+    dictEntry *de;
+
+    if (_dictIsRehashing(d)) {
+        size += d->ht[1].size;
+    }
+
+    // find the entries
+    while (!de) {
+        table = 0;
+        slot = random() % size;
+        if (slot >= d->ht[0].size) {
+            table = 1;
+            slot = slot - d->ht[0].size;
+        }
+        de = d->ht[table].tables[slot];
+    }
+
+    // calculate entrys count
+    int entries = 0;
+    while (de) {
+        entries++;
+        de = de->nextEntry;
+    }
+
+    slot = random() % entries;
+    de = d->ht[table].tables[slot];
+    while (slot--) {
+        de = de->nextEntry;
+    }
+
+    return de;
+}
+
 
 /*------------------ private functions -----------------*/
 static void _dictReset(dictht *ht) {

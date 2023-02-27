@@ -60,6 +60,7 @@ int dictRelease(dict *d);
 void enableDictResize();
 void disableDictResize();
 int dictRehashMillSeconds(dict *d, unsigned long ms);
+dictEntry *dictGetRandomKey(dict *d);
 //-----------private prototype-------
 
 
