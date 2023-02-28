@@ -18,6 +18,7 @@ struct __attribute__((__packed__)) sdshdr {
 sds sdsnewlen(const char *c, int len);
 sds sdsnew(const char *c);
 sds sdsdup(const sds s);
+sds sdsrepeat(const char *c, int repeat);
 sds sdsempty(void);
 void sdsfree(sds s);
 void sdsclear(sds s);
@@ -41,7 +42,7 @@ void sdstolower(sds s);
 sds sdsfromlonglong(long long l);
 sds sdsjoin(char **argv, int argc, char *sep);
 sds sdsmapchars(sds s, const char *from, const char *to, int setlen);
-
+sds sdsreplacen(sds s, const char *replace, int replacelen, int n);
 
 void sdsMakeRoomFor(sds s, int addlen);
 void sdsincrlen(sds s, int len);
