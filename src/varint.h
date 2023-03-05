@@ -10,4 +10,7 @@
 char *putUVarInt64(unsigned long long value);
 unsigned long long uVarInt64(const char* c);
 
+char *putVarInt64(long long value);
+long long varInt64(const char *c);
+
 #endif //REDIS_UVARINT_H
