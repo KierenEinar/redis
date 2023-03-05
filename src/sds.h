@@ -5,12 +5,15 @@
 #ifndef REDIS_SDS_H
 #define REDIS_SDS_H
 
+#define SDS_MAX_PREALLOC 1 << 20 // 1m
+
+
 typedef char* sds;
 
 struct __attribute__((__packed__)) sdshdr {
     int len;
     int free;
-    char []buf;
+    char buf[];
 };
 
 //---------------------------------API--------------------------------
@@ -44,7 +47,7 @@ sds sdsjoin(char **argv, int argc, char *sep);
 sds sdsmapchars(sds s, const char *from, const char *to, int setlen);
 sds sdsreplacen(sds s, const char *replace, int replacelen, int n);
 
-void sdsMakeRoomFor(sds s, int addlen);
+sds sdsMakeRoomFor(sds s, int addlen);
 void sdsincrlen(sds s, int len);
 
 #endif //REDIS_SDS_H

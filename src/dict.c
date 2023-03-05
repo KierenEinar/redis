@@ -29,7 +29,7 @@ static int  _dictResize(dict *d, unsigned long realSize);
 static int _dictClear(dict *d, dictht *ht);
 /*----------------- API implements ---------------------*/
 dict* dictCreate(dictType *type){
-    dict *d = malloc(sizeof(dict));
+    dict *d = (dict*)malloc(sizeof(dict));
     _dictInit(d, type);
     return d;
 }
