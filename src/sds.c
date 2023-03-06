@@ -39,6 +39,12 @@ int sdsavail(const sds s) {
     return hdr->free;
 }
 
+char* sdsstr(const sds s, size_t *strlen) {
+    struct sdshdr *hdr = (void*)(s - sizeof(struct sdshdr));
+    *strlen = hdr->len;
+    return hdr->buf;
+}
+
 sds sdsrepeat(const char *c, int len) {
    if (c && len) {
        int clen = strlen(c);
@@ -124,6 +130,77 @@ sds sdscpylen(sds s, const char *c, int len) {
 
 sds sdscpy(sds s, const char *c) {
     return sdscpylen(s, c, strlen(c));
+}
+
+#define SDS_MAX_NUMBER_SIZE 21
+sds sdsll2str(long long value) {
+
+    int i = 0;
+    char *s, *p, aux;
+    char buf[SDS_MAX_NUMBER_SIZE];
+    unsigned long long nValue;
+    int negative = value > 0 ? 0 : 1;
+    nValue = value > 0 ? (unsigned long long)value : (unsigned long long)(-value);
+    p = s = buf;
+
+    while (1) {;
+        *p = '0' + nValue % 10;
+        nValue = nValue / 10;
+        i++;
+        if (!nValue) break;
+        p++;
+    }
+
+    if (negative) {
+        *(++p) = '-';
+        i++;
+    }
+
+    // reserve string
+    while (1) {
+       if (p<=s) {
+           break;
+       }
+       aux = *s;
+       *s = *p;
+       *p = aux;
+       p--;
+       s++;
+    }
+
+    sds ss = sdsnewlen(buf, i);
+    return ss;
+}
+
+sds sdsull2str(unsigned long long value) {
+    int i = 0;
+    char *s, *p, aux;
+    char buf[SDS_MAX_NUMBER_SIZE];
+
+    p = s = buf;
+
+    while (1) {;
+        *p = '0' + value % 10;
+        value = value / 10;
+        i++;
+        if (!value) break;
+        p++;
+    }
+
+    // reserve string
+    while (1) {
+        if (p<=s) {
+            break;
+        }
+        aux = *s;
+        *s = *p;
+        *p = aux;
+        p--;
+        s++;
+    }
+
+    sds ss = sdsnewlen(buf, i);
+    return ss;
 }
 
 
