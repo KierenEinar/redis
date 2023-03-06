@@ -5,8 +5,9 @@
 #ifndef REDIS_SDS_H
 #define REDIS_SDS_H
 
-#define SDS_MAX_PREALLOC 1 << 20 // 1m
+#include <stdarg.h>
 
+#define SDS_MAX_PREALLOC 1 << 20 // 1m
 
 typedef char* sds;
 
@@ -28,8 +29,12 @@ void sdsclear(sds s);
 sds sdscatlen(sds s, const char *c, int len);
 sds sdscat(sds s1, const char *c);
 sds sdscatsds(sds s1, const sds s2);
-void sdscpylen(sds s, const char *c, int len);
-void sdscpy(sds s, const char *c);
+sds sdscpylen(sds s, const char *c, int len);
+sds sdscpy(sds s, const char *c);
+void sdscatvsprintf(sds s, char *fmt, va_list v);
+void sdscatfmt(sds, char *fmt, ...);
+sds sdsll2str(const char *c, long long value);
+sds sdsull2str(const char *c, unsigned long long value);
 
 //-------------------------sds tools------------------------------
 int sdsavail(const sds s);

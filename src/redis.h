@@ -6,5 +6,7 @@
 #define REDIS_REDIS_H
 
 #include "dict.h"
+#include "sds.h"
+#include "varint.h"
 
 #endif //REDIS_REDIS_H

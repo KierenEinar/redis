@@ -5,7 +5,6 @@
 #include "varint.h"
 #include <memory.h>
 #include <stdlib.h>
-#include <stdio.h>
 char *putUVarInt64(unsigned long long value) {
     char buf[10];
     int i=0, v = 0;
@@ -34,7 +33,7 @@ unsigned long long uVarInt64(const char* c) {
 }
 
 char *putVarInt64(long long value) {
-    long long ux = (unsigned long long)(value) << 1;
+    long long ux = (long long)(value) << 1;
     if (value < 0) {
         ux = ~ux;
     }

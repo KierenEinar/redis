@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
     unsigned long long nv= uVarInt64(c);
     printf("nv = %llu\n", nv);
 
-    long long value2 = -9223372036854775808l;
+    long long value2 = 9223372036854775807l;
     char *c2 = putVarInt64(value2);
     printf("c2 = %s\n", c2);
     long long nv2= varInt64(c2);
@@ -22,4 +22,10 @@ int main(int argc, char **argv) {
 
     free(c2);
     free(c);
+
+    int c3 = 13;
+    c3 = c3 & (~(1<<2));
+    printf("%d", c3);
+
+
 }
