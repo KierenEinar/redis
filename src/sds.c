@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
+#include <stdarg.h>
 sds sdsnewlen(const char *init, int len) {
     struct sdshdr *sdshdr = (void* )malloc(sizeof(struct sdshdr) + len +1);
     if (!sdshdr) {
@@ -41,7 +42,7 @@ int sdsavail(const sds s) {
 
 char* sdsstr(const sds s, size_t *strlen) {
     struct sdshdr *hdr = (void*)(s - sizeof(struct sdshdr));
-    *strlen = hdr->len;
+    if (strlen) *strlen = hdr->len;
     return hdr->buf;
 }
 
@@ -106,7 +107,7 @@ sds sdscatsds(sds s1, const sds s2) {
     s1 = sdsMakeRoomFor(s1, len);
     if (!s1) return NULL;
     memcpy(s1+curlen, s2, len);
-    memset(s1+curlen+1, '\0', 1);
+    memset(s1+curlen+len, '\0', 1);
     hdr = (void *)(s1 - sizeof(hdr));
     hdr->len += len;
     hdr->free-=len;
@@ -124,7 +125,7 @@ sds sdscpylen(sds s, const char *c, int len) {
     memcpy(s, c, len);
     hdr->len = len;
     hdr->free += (len - curlen);
-    memset(s+len+1, '\0', 1);
+    memset(s+len, '\0', 1);
     return s;
 }
 
@@ -203,19 +204,161 @@ sds sdsull2str(unsigned long long value) {
     return ss;
 }
 
+sds sdscatvsnprintf(sds s, char *fmt, va_list ap) {
+    va_list cpy;
+    char staticbuf[1024], *buf = staticbuf;
+    int buflen;
+    int slen = strlen(fmt) * 2;
+    // try to allocate from heap
+
+    if (slen > sizeof(staticbuf)) {
+        buflen = slen;
+        buf = (void *)malloc(sizeof(char) * buflen);
+        if (!buf) return NULL;
+    } else {
+        buflen = sizeof (staticbuf);
+    }
+
+    while (1) {
+
+        buf[buflen-2] = '\0';
+        va_copy(cpy, ap);
+        vsnprintf(buf, buflen, fmt, cpy);
+        va_end(cpy);
+
+        if (buf[buflen-2] != '\0') { // not enough space to write
+            buflen = buflen * 2;
+            if (buf != staticbuf) {
+                free(buf);
+            }
+            buf = malloc(sizeof (char) * buflen);
+            if (!buf) return NULL;
+            continue;
+        }
+
+        break;
+    }
+
+    return sdscat(s, buf);
+}
+
+sds sdscatsprintf(sds s, char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    s = sdscatvsnprintf(s, fmt, ap);
+    va_end(ap);
+    return s;
+}
+
+//----------------------sds tools------------------------
+sds sdstrim(sds s, const char *trimset) {
+
+    struct sdshdr *hdr;
+    hdr = (void *)(s - sizeof(hdr));
+    char *sp = s, *ep = hdr->buf[hdr->len];
+    while (ep >= sp && strchr(trimset, ep)) ep--;
+    while (sp < ep && strchr(trimset, sp)) sp++;
+
+    int len = ep > sp ? (ep - sp + 1) : 0;
+    memmove(hdr->buf, sp, len);
+    hdr->free+= (hdr->len - len);
+    hdr->len = len;
+    hdr->buf[len] = '\0';
+    return s;
+}
+
+sds* sdssplitlen(sds s, const char *split, int splitlen, int *count) {
+    sds *tokens;
+    int slots=5, elements=0;
+    int j, start;
+    int len = sdslen(s);
+    tokens = malloc(sizeof(sds)*slots);
+    if (tokens==NULL) {
+        *count = 0;
+        return NULL;
+    }
+
+    for (j=0;j<(len-splitlen+1);j++) {
+
+        if (elements+2>slots) {
+            slots *= 2;
+            sds *newtokens = realloc(tokens, sizeof(sds)*slots);
+            if (newtokens==NULL) {
+                goto cleanup;
+            }
+            tokens = newtokens;
+        }
+
+        if (memcmp(s+j, split, splitlen) == 0) {
+
+            tokens[elements] = sdsnewlen(s+start, j-start);
+            if (tokens[elements] == NULL) {
+                goto cleanup;
+            }
+            start = j + splitlen;
+            j = j + splitlen - 1;
+            elements++;
+        }
+
+    }
+
+    tokens[elements] = sdsnewlen(s+start, j-start);
+    if (tokens[elements] == NULL) {
+        goto cleanup;
+    }
+
+    *count = elements;
+    return tokens;
+
+cleanup:
+    *count = 0;
+    for (int i=0;i<slots;i++) {
+        sdsfree(tokens[i]);
+    }
+    free(tokens);
+    return NULL;
+}
+
+sds sdsrange(sds s, int start, int end) {
+    return NULL;
+}
+
+void sdsmapchars(sds s, const char *from, const char *to, int setlen) {
+    int len = sdslen(s);
+    for (int l=0;l<len;l++) {
+        for (int j=0;j<setlen;j++) {
+            if (s[l] == from[j]) {
+                s[l] = to[j];
+                break;
+            }
+        }
+    }
+}
+
+sds sdsjoin(char **argv, int argc, char *sep) {
+
+    sds join = sdsempty();
+    for (int i=0; i<argc; i++) {
+        join = sdscat(join, argv[i]);
+        if (argc!=i-1) {
+            join = sdscat(join, sep);
+        }
+    }
+    return join;
+}
+
 
 sds sdsMakeRoomFor(sds s, int addlen) {
 
     struct sdshdr *hdr, *sh;
-    int len, free;
-    hdr = (void*)(s - sizeof(struct sdshdr));
+    int len;
+    printf("---%s----\n", sdsstr(s, NULL));
+    hdr = (void*)(s - sizeof(hdr));
     if (hdr->free >= addlen) {
         return s;
     }
 
     len = hdr->len;
-    free = hdr -> free;
-
     int newLen = len + addlen;
     if (newLen * 2 < SDS_MAX_PREALLOC) {
         newLen = newLen * 2;
@@ -223,12 +366,10 @@ sds sdsMakeRoomFor(sds s, int addlen) {
         newLen+=SDS_MAX_PREALLOC;
     }
 
-    sh = (void *)realloc(hdr, sizeof(hdr) + newLen);
+    sh = realloc(hdr, sizeof(hdr) + newLen + 1);
     if (!sh) {
         return NULL;
     }
-
-    sh->len = len;
-    sh->free = newLen - len;
+    sh->free = (newLen - len);
     return (char *)sh->buf;
 }

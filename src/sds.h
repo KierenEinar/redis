@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #define SDS_MAX_PREALLOC 1 << 20 // 1m
 
-typedef char* sds;
+typedef char *sds;
 
 struct __attribute__((__packed__)) sdshdr {
     int len;
@@ -31,8 +31,8 @@ sds sdscat(sds s1, const char *c);
 sds sdscatsds(sds s1, const sds s2);
 sds sdscpylen(sds s, const char *c, int len);
 sds sdscpy(sds s, const char *c);
-void sdscatvsprintf(sds s, char *fmt, va_list v);
-void sdscatfmt(sds, char *fmt, ...);
+sds sdscatvsnprintf(sds s, char *fmt, va_list v);
+sds sdscatsprintf(sds, char *fmt, ...);
 sds sdsll2str(long long value);
 sds sdsull2str(unsigned long long value);
 
@@ -42,7 +42,7 @@ int sdslen(const sds s);
 char* sdsstr(const sds s, size_t *strlen);
 
 sds sdstrim(sds s, const char *trimset);
-sds* sdssplitlen(const char* c1, int clen, const char *split, int splitlen, int *count);
+sds* sdssplitlen(sds s, const char *split, int splitlen, int *count);
 sds sdsrange(sds s, int start, int end);
 int sdsindexof(sds s, const char *c);
 int sdscmp(sds s1, sds s2);
@@ -50,7 +50,7 @@ void sdstoupper(sds s);
 void sdstolower(sds s);
 sds sdsfromlonglong(long long l);
 sds sdsjoin(char **argv, int argc, char *sep);
-sds sdsmapchars(sds s, const char *from, const char *to, int setlen);
+void sdsmapchars(sds s, const char *from, const char *to, int setlen);
 sds sdsreplacen(sds s, const char *replace, int replacelen, int n);
 
 sds sdsMakeRoomFor(sds s, int addlen);
