@@ -204,7 +204,7 @@ sds sdsull2str(unsigned long long value) {
     return ss;
 }
 
-sds sdscatvsnprintf(sds s, char *fmt, va_list ap) {
+sds sdscatvsnprintf(sds s, const char *fmt, va_list ap) {
     va_list cpy;
     char staticbuf[1024], *buf = staticbuf;
     int buflen;
@@ -242,7 +242,7 @@ sds sdscatvsnprintf(sds s, char *fmt, va_list ap) {
     return sdscat(s, buf);
 }
 
-sds sdscatsprintf(sds s, char *fmt, ...) {
+sds sdscatsprintf(sds s, const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
     s = sdscatvsnprintf(s, fmt, ap);
@@ -250,12 +250,137 @@ sds sdscatsprintf(sds s, char *fmt, ...) {
     return s;
 }
 
+/*
+ * %s C String
+ * %S sds
+ * %i signed int
+ * %I signed int64
+ * %u unsigned int
+ * %U unsigned int64
+ * %%
+ * **/
+sds sdscatfmt(sds s, char const *fmt, ...) {
+
+    struct sdshdr *hdr;
+    hdr =  (void*)(s - sizeof(hdr));
+
+    va_list ap;
+    const char *f = fmt;
+    va_start(ap, fmt);
+    f = *fmt;
+    int i = 0;
+    while (*f) {
+
+        char *next, *str;
+        int strl;
+        long long num;
+        unsigned long long unum;
+        if (hdr->free == 0) {
+            sds news = sdsMakeRoomFor(s, 1);
+            if (!news) {
+                sdsfree(s);
+                return NULL;
+            }
+            s = news;
+            hdr = (void*)(s - sizeof(hdr));
+        }
+
+        switch (*f) {
+
+            case '%':
+                next = f+1;
+                f++;
+                switch (*next) {
+                    case 's':
+                    case 'S':
+                        str = va_arg(ap, char*);
+                        strl = (*next=='s') ? strlen(next) : sdslen(next);
+                        if (hdr->free<strl) {
+                            sds news = sdsMakeRoomFor(s, strl);
+                            if (!news) {
+                                sdsfree(s);
+                                return NULL;
+                            }
+                            s = news;
+                            hdr = (void*)(s - sizeof(hdr));
+                        }
+                        memcpy(s+i, next, strl);
+                        hdr->len+=strl;
+                        hdr->free-=strl;
+                        i+=strl;
+                        break;
+                    case 'i':
+                        num = va_arg(ap, int);
+                    case 'I':
+                        num = va_arg(ap, long long);
+                        str = sdsll2str(num);
+                        strl = sdslen(str);
+                        if (hdr->free<strl) {
+                            sds news = sdsMakeRoomFor(s, strl);
+                            if (!news) {
+                                sdsfree(s);
+                                return NULL;
+                            }
+                            s = news;
+                            hdr = (void*)(s - sizeof(hdr));
+                        }
+                        memcpy(s+i, str, strl);
+                        sdsfree(str);
+                        i+=strl;
+                        hdr->len+=strl;
+                        hdr->free-=strl;
+                        break;
+
+                    case 'u':
+                        unum = va_arg(ap, unsigned int);
+                    case 'U':
+                        unum = va_arg(ap, unsigned long long);
+                        str = sdsull2str(unum);
+                        strl = sdslen(str);
+                        if (hdr->free<strl) {
+                            sds news = sdsMakeRoomFor(s, strl);
+                            if (!news) {
+                                sdsfree(s);
+                                return NULL;
+                            }
+                            s = news;
+                            hdr = (void*)(s - sizeof(hdr));
+                        }
+                        memcpy(s+i, str, strl);
+                        sdsfree(str);
+                        i+=strl;
+                        hdr->len+=strl;
+                        hdr->free-=strl;
+                        break;
+                    default:
+                        s[i++] = *f;
+                        hdr->len += 1;
+                        hdr->free-=1;
+                        break;
+                }
+                break;
+
+            default:
+                s[i++] = *f;
+                hdr->len += 1;
+                hdr->free-=1;
+                break;
+        }
+
+        f++;
+
+    }
+
+    return s;
+
+}
+
 //----------------------sds tools------------------------
 sds sdstrim(sds s, const char *trimset) {
 
     struct sdshdr *hdr;
     hdr = (void *)(s - sizeof(hdr));
-    char *sp = s, *ep = hdr->buf[hdr->len];
+    char *sp = s, *ep = hdr->buf[hdr->len-1];
     while (ep >= sp && strchr(trimset, ep)) ep--;
     while (sp < ep && strchr(trimset, sp)) sp++;
 

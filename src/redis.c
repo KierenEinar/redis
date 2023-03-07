@@ -53,6 +53,9 @@ int main(int argc, char **argv) {
     printf("s8_buf=%s, s8_len=%ld\n", s8buf, s8len);
 
 
+    sds s9 = sdscatfmt(sdsempty(), "hello, %i", 1);
+
+
     free(c2);
     free(c);
     sdsfree(s4);
