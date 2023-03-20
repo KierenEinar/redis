@@ -108,17 +108,69 @@ robj* tryObjectEncoding(robj *obj) {
     }
 
 
-    // try raw to embedstr
+    // try raw to embed str
     if (obj->encoding == OBJECT_ENCODING_EMBSTR) {
         return obj;
     }
 
+    sds s = obj->ptr;
+
     if (len <= EMBSTR_LEN_LIMIT) {
-        sds s = obj->ptr;
-        createEmbeddedStringObject(s, sdslen(s));
+        robj *o = createEmbeddedStringObject(s, sdslen(s));
+        o->lru = obj->lru;
+        decrRefCount(obj);
+        return o;
     }
 
 
+    // try to remove free space
+    if (sdsavail(s) > len/10) {
+        obj->ptr = sdsremovefree(obj->ptr);
+    }
+
+    return obj;
 }
 
+
+int getLongLongFromObject(robj *obj, long long *target) {
+
+    if (!obj) return -1;
+
+    long long value = 0;
+
+    if (obj->type != OBJECT_STRING) return -1;
+
+    if (obj->encoding == OBJECT_ENCODING_INT) {
+        value = (long)obj->ptr;
+        if(target) *target = value;
+        return 1;
+    } else if (obj->encoding == OBJECT_ENCODING_RAW || obj->encoding == OBJECT_ENCODING_EMBSTR) {
+        sds s = obj->ptr;
+        if (string2ll(s, sdslen(s), &value)) {
+            if (target) *target = value;
+            return 1;
+        }
+    } else {
+        // todo panic
+    }
+
+    return -1;
+
+}
+
+int getLongFromObject(robj *obj, long *target) {
+
+    long long value = 0;
+
+    if (!getLongLongFromObject(obj, &value)) {
+        return -1;
+    }
+
+    if (value < LONG_MIN || value > LONG_MAX) {
+        return -1;
+    }
+
+    if (target) *target = (long)value;
+    return 1;
+}
 

@@ -72,8 +72,11 @@ void dictObjectDestructor(void *val);
 
 extern dictType dbDictType;
 
-int setCommand(client *c);
 
+
+//--------------command-----------------
+void setCommand(client *c);
+void setGenericCommand(client *c, robj *key, robj *value, robj *expire, int unit, int flags);
 
 //--------------redisObject public method ---------------
 robj* createObject(int type, void *ptr);
@@ -84,6 +87,15 @@ void decrRefCount(robj *o);
 void freeStringObject(robj *o);
 
 robj* tryObjectEncoding(robj *obj);
+int getLongLongFromObject(robj *obj, long long *target);
+int getLongFromObject(robj *obj, long *target);
+
+
+
+//-----------------db public method----------------------
+robj* lookupKeyWrite(db *db, robj *key);
+void expireIfNeeded(db *db, robj *key);
+robj* lookupKey(db *db, robj *key, int flags);
 
 
 

@@ -36,6 +36,7 @@ sds sdscatsprintf(sds s, const char *fmt, ...);
 sds sdscatfmt(sds s, char const *fmt, ...);
 sds sdsll2str(long long value);
 sds sdsull2str(unsigned long long value);
+sds sdsremovefree(sds s);
 
 //-------------------------sds tools------------------------------
 int sdsavail(const sds s);

@@ -70,14 +70,16 @@ int string2l(char *s, int len, long *v) {
     }
 
     if (value >= 0 && value <= LONG_MAX) {
-        *v = value;
+        if (v) *v = value;
         return 1;
     }
 
     if (value < 0 && value <= LONG_MIN) {
-        *v = value;
+        if (v) *v = value;
         return 1;
     }
 
     return 0;
 }
+
+

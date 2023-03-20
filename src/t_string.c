@@ -10,9 +10,37 @@
 #define SET_PX 1 << 4
 
 #define UNIT_SECONDS 0
-#define UNIT_MICROSECONDS 1
+#define UNIT_MILLISECONDS 1
 
-int setCommand(client *c) {
+void setGenericCommand(client *c, robj *key, robj *value, robj *expire, int unit, int flags) {
+
+    long long milliSeconds;
+    long long when_ts;
+    if (expire && !getLongLongFromObject(expire, &milliSeconds)) {
+        // todo reply client err
+        return;
+    }
+
+    if (milliSeconds <= 0) {
+        // todo reply client err
+        return;
+    }
+
+    if (unit == UNIT_SECONDS)  milliSeconds *= 1000;
+
+    if ( ((flags & SET_NX) && (lookupKeyWrite(c->db, key) != NULL) ) ||
+            ( (flags & SET_XX) && (lookupKeyWrite(key) == NULL)) ) {
+        // todo reply client error
+        return;
+    }
+
+    setkey(c->db, key, value);
+    if (expire) setExpire(c->db, key, when_ts + expireMicro);
+    // todo server.dirty ++
+}
+
+
+void setCommand(client *c) {
 
     robj *expire = NULL;
     int flags = SET_NO_FLAGS;
@@ -38,7 +66,7 @@ int setCommand(client *c) {
                   (a[1] == 'x' || a[1] == 'X') && a[2] == '\0' && !(flags & SET_EX) ) {
            flags |= SET_PX;
            expire = next;
-           unit = UNIT_MICROSECONDS;
+           unit = UNIT_MILLISECONDS;
            j++;
        }
     }

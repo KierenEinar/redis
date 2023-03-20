@@ -204,6 +204,23 @@ sds sdsull2str(unsigned long long value) {
     return ss;
 }
 
+sds sdsremovefree(sds s) {
+
+    struct sdshdr *hdr, *nsh;
+
+    int avail = sdsavail(s);
+    if (avail == 0) {
+        return s;
+    }
+
+    hdr = (struct sdshdr *)(s - sizeof(struct sdshdr));
+    nsh = realloc(hdr, sizeof(struct sdshdr) + hdr->len + 1);
+    nsh->free = 0;
+
+    return (char*)(nsh + 1);
+
+}
+
 sds sdscatvsnprintf(sds s, const char *fmt, va_list ap) {
     va_list cpy;
     char staticbuf[1024], *buf = staticbuf;
