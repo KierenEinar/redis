@@ -58,8 +58,8 @@ build CMakeFiles/redis.dir/src/dict.c.o: C_COMPILER__redis_Debug /Users/kieren/P
   OBJECT_DIR = CMakeFiles/redis.dir
   OBJECT_FILE_DIR = CMakeFiles/redis.dir/src
 
-build CMakeFiles/redis.dir/src/redis.c.o: C_COMPILER__redis_Debug /Users/kieren/Projects/myredis/redis/src/redis.c || cmake_object_order_depends_target_redis
-  DEP_FILE = CMakeFiles/redis.dir/src/redis.c.o.d
+build CMakeFiles/redis.dir/src/server.c.o: C_COMPILER__redis_Debug /Users/kieren/Projects/myredis/redis/src/server.c || cmake_object_order_depends_target_redis
+  DEP_FILE = CMakeFiles/redis.dir/src/server.c.o.d
   FLAGS = -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.0.sdk -std=gnu11
   OBJECT_DIR = CMakeFiles/redis.dir
   OBJECT_FILE_DIR = CMakeFiles/redis.dir/src
@@ -76,6 +76,24 @@ build CMakeFiles/redis.dir/src/varint.c.o: C_COMPILER__redis_Debug /Users/kieren
   OBJECT_DIR = CMakeFiles/redis.dir
   OBJECT_FILE_DIR = CMakeFiles/redis.dir/src
 
+build CMakeFiles/redis.dir/src/object.c.o: C_COMPILER__redis_Debug /Users/kieren/Projects/myredis/redis/src/object.c || cmake_object_order_depends_target_redis
+  DEP_FILE = CMakeFiles/redis.dir/src/object.c.o.d
+  FLAGS = -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.0.sdk -std=gnu11
+  OBJECT_DIR = CMakeFiles/redis.dir
+  OBJECT_FILE_DIR = CMakeFiles/redis.dir/src
+
+build CMakeFiles/redis.dir/src/t_string.c.o: C_COMPILER__redis_Debug /Users/kieren/Projects/myredis/redis/src/t_string.c || cmake_object_order_depends_target_redis
+  DEP_FILE = CMakeFiles/redis.dir/src/t_string.c.o.d
+  FLAGS = -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.0.sdk -std=gnu11
+  OBJECT_DIR = CMakeFiles/redis.dir
+  OBJECT_FILE_DIR = CMakeFiles/redis.dir/src
+
+build CMakeFiles/redis.dir/src/utils.c.o: C_COMPILER__redis_Debug /Users/kieren/Projects/myredis/redis/src/utils.c || cmake_object_order_depends_target_redis
+  DEP_FILE = CMakeFiles/redis.dir/src/utils.c.o.d
+  FLAGS = -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.0.sdk -std=gnu11
+  OBJECT_DIR = CMakeFiles/redis.dir
+  OBJECT_FILE_DIR = CMakeFiles/redis.dir/src
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target redis
@@ -84,7 +102,7 @@ build CMakeFiles/redis.dir/src/varint.c.o: C_COMPILER__redis_Debug /Users/kieren
 #############################################
 # Link the executable redis
 
-build redis: C_EXECUTABLE_LINKER__redis_Debug CMakeFiles/redis.dir/src/db.c.o CMakeFiles/redis.dir/src/dict.c.o CMakeFiles/redis.dir/src/redis.c.o CMakeFiles/redis.dir/src/sds.c.o CMakeFiles/redis.dir/src/varint.c.o
+build redis: C_EXECUTABLE_LINKER__redis_Debug CMakeFiles/redis.dir/src/db.c.o CMakeFiles/redis.dir/src/dict.c.o CMakeFiles/redis.dir/src/server.c.o CMakeFiles/redis.dir/src/sds.c.o CMakeFiles/redis.dir/src/varint.c.o CMakeFiles/redis.dir/src/object.c.o CMakeFiles/redis.dir/src/t_string.c.o CMakeFiles/redis.dir/src/utils.c.o
   FLAGS = -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.0.sdk
   OBJECT_DIR = CMakeFiles/redis.dir
   POST_BUILD = :

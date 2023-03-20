@@ -5,8 +5,6 @@
 #ifndef REDIS_DICT_H
 #define REDIS_DICT_H
 
-#include "redis.h"
-
 #define DICT_OK 1
 #define DICT_ERR 0
 
@@ -15,19 +13,26 @@
 
 #define DICT_HT_HASH_COMPARER_BITS 8
 
+#include <stdint.h>
+
 typedef struct dictType {
-    unsigned int (*hash)(const void *key);
-    int (*keyComparer)(const void *key1, const void *key2);
+    uint64_t (*hash)(const void *key);
     void* (*keyDup) (const void *key);
-    void  (*keyDestructor)(const void *key);
     void* (*valDup) (const void *value);
+    int (*keyComparer)(const void *key1, const void *key2);
+    void  (*keyDestructor)(const void *key);
     void  (*valDestructor)(const void *value);
 }dictType;
 
 typedef struct dictEntry{
     unsigned char topHash;
     void *key;
-    void *value;
+    union {
+        void *value;
+        uint64_t u_64;
+        int64_t s_64;
+        double d;
+    } v;
     struct dictEntry *nextEntry;
 }dictEntry;
 
@@ -49,10 +54,15 @@ typedef struct dict {
 //------------API-------------
 dict* dictCreate(dictType *type);
 int dictAdd(dict *d, void *key, void *val);
+dictEntry *dictAddRow(dict *d, void *key, dictEntry **existing);
 int dictRehash(dict *d, int n);
 int dictReplace(dict *d, void *key, void *val);
 dictEntry* dictFind(dict *d, const void *key);
 void* dictFetchValue(dict *d, const void *key);
+uint64_t dictFetchUnsignedInteger(dict *d, void *key);
+int64_t dictFetchSignedInteger(dict *d, void *key);
+int dictSetUnsignedInteger(dict *d, void *key, uint64_t us);
+int dictSetSignedInteger(dict *d, void *key, int64_t s);
 int dictDelete(dict *d, const void *key);
 int dictExpand(dict *d, unsigned long size);
 int dictShrink(dict *d);

@@ -56,4 +56,5 @@ void sdsmapchars(sds s, const char *from, const char *to, int setlen);
 sds sdsMakeRoomFor(sds s, int addlen);
 void sdsincrlen(sds s, int len);
 
+
 #endif //REDIS_SDS_H

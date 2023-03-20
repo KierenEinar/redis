@@ -2,11 +2,38 @@
 // Created by kieren jiang on 2023/2/20.
 //
 
-#include "redis.h"
+#include "server.h"
 #include "varint.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <limits.h>
+
+uint64_t dictSdsHash(const void *key) {
+    return 2ul;
+}
+
+int dictSdsComparer(const void *key1, const void *key2) {
+    return 1;
+}
+
+void dictObjectDestructor(void *data) {
+
+}
+
+void dictSdsDestructor(void *data) {
+
+}
+
+// global vars
+dictType dbDictType = {
+        dictSdsHash,
+        NULL,
+        NULL,
+        dictSdsComparer,
+        dictSdsDestructor,
+        dictObjectDestructor,
+};
+
 int main(int argc, char **argv) {
     unsigned long long value = 18446744073709551615UL;
     char *c = putUVarInt64(value);
