@@ -12,6 +12,9 @@
 
 #include <limits.h>
 #include <stdlib.h>
+#include <time.h>
+#include <stdio.h>
+#include <sys/time.h>
 
 extern struct redisObj;
 extern struct redisDb;
@@ -72,7 +75,9 @@ void dictObjectDestructor(void *val);
 
 extern dictType dbDictType;
 
-
+// --------------mstime---------------
+typedef int64_t mstime_t;
+mstime_t ms_now();
 
 //--------------command-----------------
 void setCommand(client *c);
@@ -94,9 +99,16 @@ int getLongFromObject(robj *obj, long *target);
 
 //-----------------db public method----------------------
 robj* lookupKeyWrite(db *db, robj *key);
-void expireIfNeeded(db *db, robj *key);
+int expireIfNeeded(db *db, robj *key);
+
+#define LOOKUP_NOTOUCH 1 << 0
+#define LOOKUP_TOUCH 1 << 1
 robj* lookupKey(db *db, robj *key, int flags);
+int getExpire(db *db, robj *key, mstime_t *expireMilliSeconds);
+int dbSyncDelete(db *db, robj *key);
 
+void setKey(db *db, robj *key, robj *val);
 
-
+int dbAdd(db *db, robj *key, robj *val);
+int dbOverwrite(db *db, robj *key, robj *val);
 #endif //REDIS_SERVER_H

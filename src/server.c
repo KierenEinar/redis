@@ -4,8 +4,6 @@
 
 #include "server.h"
 #include "varint.h"
-#include <stdio.h>
-#include <stdlib.h>
 #include <limits.h>
 
 uint64_t dictSdsHash(const void *key) {
@@ -33,6 +31,15 @@ dictType dbDictType = {
         dictSdsDestructor,
         dictObjectDestructor,
 };
+
+mstime_t ms_now() {
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    mstime_t milliseconds= 0;
+    milliseconds = t.tv_sec * 1000 + t.tv_usec / 1000;
+    return milliseconds;
+}
+
 
 int main(int argc, char **argv) {
     unsigned long long value = 18446744073709551615UL;

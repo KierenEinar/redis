@@ -29,7 +29,7 @@ void setGenericCommand(client *c, robj *key, robj *value, robj *expire, int unit
     if (unit == UNIT_SECONDS)  milliSeconds *= 1000;
 
     if ( ((flags & SET_NX) && (lookupKeyWrite(c->db, key) != NULL) ) ||
-            ( (flags & SET_XX) && (lookupKeyWrite(key) == NULL)) ) {
+            ( (flags & SET_XX) && (lookupKeyWrite(c->db, key) == NULL)) ) {
         // todo reply client error
         return;
     }
