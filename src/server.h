@@ -9,14 +9,16 @@
 #include "sds.h"
 #include "varint.h"
 #include "utils.h"
+#include "zmalloc.h"
 
 #include <limits.h>
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <memory.h>
 
-extern struct redisObj;
+extern struct redisObject;
 extern struct redisDb;
 extern struct client;
 extern struct redisCmd;
@@ -32,6 +34,25 @@ extern struct redisCmd;
 
 #define STRING_INT_LIMIT_LEN 20
 #define EMBSTR_LEN_LIMIT 39
+
+// define redis eviction strategy
+#define MAXMEMORY_FLAG_LRU 1 << 0
+#define MAXMEMORY_FLAG_LFU 1 << 1
+#define MAXMEMORY_ALLKEYS 1 << 2
+
+// define maxmemorry policy
+#define MAXMEMORY_VOLATILE_LRU 0 << 8 | MAXMEMORY_FLAG_LRU
+#define MAXMEMORY_VOLATILE_LFU 1 << 8 | MAXMEMORY_FLAG_LFU
+#define MAXMEMORY_VOLATILE_TTL 2 << 8
+#define MAXMEMORY_VOLATILE_RANDOM 3 << 8
+
+#define MAXMEMORY_ALLKEYS_LRU 4 << 8 | MAXMEMORY_FLAG_LRU | MAXMEMORY_ALLKEYS
+#define MAXMEMORY_ALLKEYS_LFU 5 << 8 | MAXMEMORY_FLAG_LFU | MAXMEMORY_ALLKEYS
+#define MAXMEMORY_ALLKEYS_RANDOM 6 << 8 | MAXMEMORY_ALLKEYS
+#define MAXMEMORY_NOEVICTION 7 << 8
+
+#define CLOCK_RESOLUTION 1000
+#define CLOCK_MAX ((1<<24) -1)
 
 #define REDIS_OK 1
 #define REDIS_ERR -1
@@ -68,12 +89,24 @@ typedef struct client {
     time_t ctime;
 }client;
 
+typedef struct redisServer {
+    db *db; // arrays of redisdb
+    int db_nums; // nums of db, set default 16
+    client **client; // arrays of client ptr
+    unsigned long long maxmemorry; // max memorry
+    int maxmemorry_policy; // max memorry policy, see define maxmemorry policy
+    int maxmemorry_samples; // max memorry samples keys count each time
+};
+
+
 uint64_t dictSdsHash(const void *key);
 int dictSdsComparer(const void *key1, const void *key2);
 void dictSdsDestructor(void *val);
 void dictObjectDestructor(void *val);
 
+// global vars
 extern dictType dbDictType;
+extern struct redisServer server;
 
 // --------------mstime---------------
 typedef int64_t mstime_t;

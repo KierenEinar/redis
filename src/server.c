@@ -32,6 +32,8 @@ dictType dbDictType = {
         dictObjectDestructor,
 };
 
+struct redisServer server;
+
 mstime_t ms_now() {
     struct timeval t;
     gettimeofday(&t, NULL);

@@ -305,6 +305,69 @@ dictEntry *dictGetRandomKey(dict *d) {
 }
 
 
+int dictGetSomeKeys(dict *d, dictEntry **de, int count) {
+
+    int table = _dictIsRehashing(d) ? 2 : 1;
+    int j = 0;
+    int stored = 0;
+    int emptylen = 0;
+    int maxStep = count * 10;
+    unsigned long maxSizeMask = d->ht[0].mask;
+    if (table == 2 && d->ht[1].mask > maxSizeMask) maxSizeMask = d->ht[1].mask;
+    unsigned long i = random() & maxSizeMask;
+
+    for (int k=0; k<count; k++) {
+        if (_dictIsRehashing(d)) {
+            _dictRehashStep(d);
+        } else {
+            break;
+        }
+    }
+
+
+    while (stored < count && j<= maxStep) {
+
+        for (int t=0; t<table; t++) {
+
+            if (table == 2 && t == 0 && i < d->rehashIdx) {
+                // moreover if we are out of range in both tables, update i to rehash_idx
+                if (i >= d->ht[1].size) i = d->rehashIdx;
+                // table0 rehash has empty buckets
+                continue;
+            }
+
+            if (i >= d->ht[t].size) continue;
+            dictEntry *entry;
+            if (!entry) {
+                if (emptylen >= 5) {
+                    i = random() & maxSizeMask;
+                    emptylen = 0;
+                }
+                continue;
+            }
+
+            emptylen = 0;
+            while (entry) {
+                *de = entry;
+                de++;
+                stored++;
+                entry = entry->nextEntry;
+            }
+
+            if (stored == count) {
+                return stored;
+            }
+        }
+
+        j++;
+        i = (i + 1) & maxSizeMask;
+    }
+
+    return stored;
+
+}
+
+
 /*------------------ private functions -----------------*/
 static void _dictReset(dictht *ht) {
     ht->tables = NULL;

@@ -71,6 +71,7 @@ void enableDictResize();
 void disableDictResize();
 int dictRehashMillSeconds(dict *d, unsigned long ms);
 dictEntry *dictGetRandomKey(dict *d);
+int dictGetSomeKeys(dict *d, dictEntry **de, int count);
 //-----------private prototype-------
 
 
