@@ -41,6 +41,7 @@ sds sdsremovefree(sds s);
 //-------------------------sds tools------------------------------
 int sdsavail(const sds s);
 int sdslen(const sds s);
+void sdssetlen(const sds s, size_t len);
 char* sdsstr(const sds s, size_t *strlen);
 
 sds sdstrim(sds s, const char *trimset);

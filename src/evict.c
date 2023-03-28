@@ -113,8 +113,107 @@ void evictionPoolPopulate(int dbid, dict* sampleDict, dict* keyDict, struct evic
         count--;
     }
 
-
 }
 
+int freeMemoryIfNeeded(void) {
+
+    unsigned long long mem_reported, mem_tofree, mem_freed;
+
+    mem_reported = zmalloc_used_memory();
+
+    if (mem_reported < server.maxmemorry) {
+        return REDIS_OK;
+    }
+
+    if (server.maxmemorry_policy == MAXMEMORY_NOEVICTION) {
+        goto cantfree;
+    }
+
+    mem_freed = 0;
+    mem_tofree = mem_reported - server.maxmemorry;
+
+    while (mem_freed < mem_tofree) {
+
+        int bestdbid, dbid;
+        sds bestkey;
+        dict *d;
+        db *db;
+        dictEntry *de;
+        struct evictionPoolEntry *pool = EvictionPoolLRU;
+        static unsigned long long next_db;
+
+        if (server.maxmemorry_policy & (MAXMEMORY_FLAG_LRU|MAXMEMORY_FLAG_LFU) || server.maxmemorry_policy == MAXMEMORY_VOLATILE_TTL) {
+
+            while (bestkey == NULL) {
+
+                for (dbid=0; dbid<server.db_nums; dbid++) {
+                    db = server.db + dbid;
+                    d = db->dict;
+                    if (!(server.maxmemorry_policy & MAXMEMORY_ALLKEYS))
+                        d = db->expires;
+                    if (!dictSize(d)) continue;
+                    evictionPoolPopulate(dbid, d, db->dict, pool);
+                }
+
+                for (int k=EVICTION_POOL_SIZE-1; k>=0; k--) {
+                    if (pool[k].key == NULL) continue;
+
+                    sds key = pool[k].key;
+
+                    if (server.maxmemorry_policy & MAXMEMORY_ALLKEYS) {
+                        de = dictFind(db->dict, key);
+                    } else {
+                        de = dictFind(db->expires, key);
+                    }
+
+                    pool[k].key = NULL;
+                    if (pool[k].key != pool[k].cached)
+                        sdsfree(pool[k].key);
+                    pool[k].idle = 0;
+                    pool[k].dbid = 0;
+
+                    if (de) {
+                        bestdbid = pool[k].dbid;
+                        bestkey = de->key;
+                        break;
+                    } else {
+                        // continue iterate
+                    }
+                }
+            }
+
+
+        } else if (server.maxmemorry_policy == MAXMEMORY_ALLKEYS_RANDOM || server.maxmemorry_policy == MAXMEMORY_VOLATILE_RANDOM) {
+
+            for (dbid=0; dbid <server.db_nums; dbid++) {
+                int next_db = (++next_db) % server.db_nums;
+                db = server.db + next_db;
+                d = server.maxmemorry_policy & MAXMEMORY_ALLKEYS ? db->dict : db->expires;
+                if (!dictSize(d)) continue;
+
+                if (de) {
+                    bestkey = de->key;
+                    bestdbid = dbid;
+                }
+            }
+        }
+
+
+        if (bestkey) {
+            robj *keyobj = createStringObject(bestkey, sdslen(bestkey));
+            dbSyncDelete(db+bestdbid, keyobj);
+            unsigned long long delta = mem_reported - zmalloc_used_memory();
+            mem_freed+=delta;
+            mem_tofree-=delta;
+
+            decrRefCount(keyobj);
+
+        }
+    }
+
+
+cantfree:
+    //todo
+}
 
 

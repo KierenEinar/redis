@@ -367,6 +367,10 @@ int dictGetSomeKeys(dict *d, dictEntry **de, int count) {
 
 }
 
+size_t dictSize(dict* d) {
+    return _dictIsRehashing(d) ? d->ht[0].size + d->ht[1].size : d->ht[0].size;
+}
+
 
 /*------------------ private functions -----------------*/
 static void _dictReset(dictht *ht) {

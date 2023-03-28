@@ -35,6 +35,12 @@ int sdslen(const sds s) {
     return hdr->len;
 }
 
+void sdssetlen(const sds s, size_t len) {
+    struct sdshdr *hdr = (void*)(s - sizeof(struct sdshdr));
+    hdr->free += (hdr->len - len);
+    hdr->len = len;
+}
+
 int sdsavail(const sds s) {
     struct sdshdr *hdr = (void*)(s - sizeof(struct sdshdr));
     return hdr->free;

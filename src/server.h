@@ -120,6 +120,7 @@ void setGenericCommand(client *c, robj *key, robj *value, robj *expire, int unit
 robj* createObject(int type, void *ptr);
 robj* createEmbeddedStringObject(const char *s, size_t len);
 robj* createRawStringObject(const char *s, size_t len);
+robj* createStringObject(const char *s, size_t len);
 
 void decrRefCount(robj *o);
 void freeStringObject(robj *o);

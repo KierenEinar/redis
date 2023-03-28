@@ -20,3 +20,7 @@ void* zrealloc(void *ptr, size_t size) {
 size_t zmalloc_used_memory () {
     return 0; // todo add used memory
 }
+
+void zfree(void *ptr) {
+    free(ptr);
+}

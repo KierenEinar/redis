@@ -11,4 +11,6 @@ void* zcalloc(size_t count, size_t size);
 void* zrealloc(void* ptr, size_t size);
 size_t zmalloc_used_memory();
 
+void zfree(void *ptr);
+
 #endif //REDIS_ZMALLOC_H

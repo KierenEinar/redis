@@ -14,7 +14,7 @@
 #define DICT_HT_HASH_COMPARER_BITS 8
 
 #include <stdint.h>
-
+#include <sys/types.h>
 typedef struct dictType {
     uint64_t (*hash)(const void *key);
     void* (*keyDup) (const void *key);
@@ -72,6 +72,8 @@ void disableDictResize();
 int dictRehashMillSeconds(dict *d, unsigned long ms);
 dictEntry *dictGetRandomKey(dict *d);
 int dictGetSomeKeys(dict *d, dictEntry **de, int count);
+size_t dictSize(dict *d);
+
 //-----------private prototype-------
 
 
