@@ -1,7 +1,7 @@
 # Prerequisites
 .idea
 *.d
-./cmake-build-debug
+./cmake-build-debug/
 # Object files
 *.o
 *.ko

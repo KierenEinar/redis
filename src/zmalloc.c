@@ -22,5 +22,6 @@ size_t zmalloc_used_memory () {
 }
 
 void zfree(void *ptr) {
+    if (!ptr) return;
     free(ptr);
 }

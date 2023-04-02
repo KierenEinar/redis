@@ -106,6 +106,12 @@ build CMakeFiles/redis.dir/src/zmalloc.c.o: C_COMPILER__redis_Debug /Users/kiere
   OBJECT_DIR = CMakeFiles/redis.dir
   OBJECT_FILE_DIR = CMakeFiles/redis.dir/src
 
+build CMakeFiles/redis.dir/src/el.c.o: C_COMPILER__redis_Debug /Users/kieren/Projects/myredis/redis/src/el.c || cmake_object_order_depends_target_redis
+  DEP_FILE = CMakeFiles/redis.dir/src/el.c.o.d
+  FLAGS = -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.0.sdk -std=gnu11
+  OBJECT_DIR = CMakeFiles/redis.dir
+  OBJECT_FILE_DIR = CMakeFiles/redis.dir/src
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target redis
@@ -114,7 +120,7 @@ build CMakeFiles/redis.dir/src/zmalloc.c.o: C_COMPILER__redis_Debug /Users/kiere
 #############################################
 # Link the executable redis
 
-build redis: C_EXECUTABLE_LINKER__redis_Debug CMakeFiles/redis.dir/src/db.c.o CMakeFiles/redis.dir/src/dict.c.o CMakeFiles/redis.dir/src/server.c.o CMakeFiles/redis.dir/src/sds.c.o CMakeFiles/redis.dir/src/varint.c.o CMakeFiles/redis.dir/src/object.c.o CMakeFiles/redis.dir/src/t_string.c.o CMakeFiles/redis.dir/src/utils.c.o CMakeFiles/redis.dir/src/evict.c.o CMakeFiles/redis.dir/src/zmalloc.c.o
+build redis: C_EXECUTABLE_LINKER__redis_Debug CMakeFiles/redis.dir/src/db.c.o CMakeFiles/redis.dir/src/dict.c.o CMakeFiles/redis.dir/src/server.c.o CMakeFiles/redis.dir/src/sds.c.o CMakeFiles/redis.dir/src/varint.c.o CMakeFiles/redis.dir/src/object.c.o CMakeFiles/redis.dir/src/t_string.c.o CMakeFiles/redis.dir/src/utils.c.o CMakeFiles/redis.dir/src/evict.c.o CMakeFiles/redis.dir/src/zmalloc.c.o CMakeFiles/redis.dir/src/el.c.o
   FLAGS = -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.0.sdk
   OBJECT_DIR = CMakeFiles/redis.dir
   POST_BUILD = :
