@@ -10,13 +10,17 @@
 #include "varint.h"
 #include "utils.h"
 #include "zmalloc.h"
+#include "el.h"
 
 #include <limits.h>
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
 #include <sys/time.h>
 #include <memory.h>
+#include <string.h>
 
 extern struct redisObject;
 extern struct redisDb;
@@ -54,6 +58,15 @@ extern struct redisCmd;
 #define CLOCK_RESOLUTION 1000
 #define CLOCK_MAX ((1<<24) -1)
 
+// define protocol
+#define PROTO_IO_BUF_SIZE 1024 * 16
+#define PROTO_MAX_INLINE_SIZE 1024 * 32
+#define PROTO_MAX_ARG_SIZE 1024 * 32
+#define PROTO_MAX_BULK_SIZE 1024 * 1024 * 512
+#define PROTO_REQ_MULTI_BULK 1
+#define PROTO_REQ_INLINE 2
+
+// define result
 #define REDIS_OK 1
 #define REDIS_ERR -1
 
@@ -79,8 +92,15 @@ typedef struct redisCmd {
 }cmd;
 
 typedef struct client {
+
+    int fd;
+
     sds query_buf;
-    int argc;
+    int reqtype;
+    long multibulklen;
+    long long bulklen;
+
+    long argc;
     robj **argv;
 
     db *db;
@@ -129,7 +149,10 @@ robj* tryObjectEncoding(robj *obj);
 int getLongLongFromObject(robj *obj, long long *target);
 int getLongFromObject(robj *obj, long *target);
 
-
+//----------------client method----------------------
+void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData);
+void processInputBuffer(client *c);
+int processMultiBulkBuffer(client *c);
 
 //-----------------db public method----------------------
 robj* lookupKeyWrite(db *db, robj *key);

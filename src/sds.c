@@ -467,8 +467,8 @@ cleanup:
     return NULL;
 }
 
-sds sdsrange(sds s, int start, int end) {
-    return NULL;
+void sdsrange(sds s, int start, int end) {
+
 }
 
 void sdsmapchars(sds s, const char *from, const char *to, int setlen) {
