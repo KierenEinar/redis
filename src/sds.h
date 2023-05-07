@@ -47,7 +47,7 @@ char* sdsstr(const sds s, size_t *strlen);
 sds sdstrim(sds s, const char *trimset);
 sds* sdssplitlen(sds s, const char *split, int splitlen, int *count);
 void sdsrange(sds s, int start, int end);
-int sdscmp(sds s1, sds s2);
+int sdscmp(const sds s1, const sds s2);
 void sdstoupper(sds s);
 void sdstolower(sds s);
 sds sdsfromlonglong(long long l);

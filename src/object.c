@@ -16,7 +16,7 @@ robj* createObject(int type, void *ptr) {
 
     robj *o = malloc(sizeof (*o));
     o->type = type;
-    o->refcount = 0;
+    o->refcount = 1;
     o->encoding = OBJECT_ENCODING_RAW;
     o->ptr = ptr;
     // todo add lru clock
@@ -76,7 +76,7 @@ robj* createEmbeddedStringObject(const char *s, size_t len) {
     return o;
 }
 
-
+// for saving space
 robj* tryObjectEncoding(robj *obj) {
 
     if (obj->type != OBJECT_STRING) {

@@ -167,6 +167,11 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
 
     size_t readlen = PROTO_IO_BUF_SIZE;
 
+    if (c->reqtype == PROTO_REQ_MULTI_BULK && c->multibulklen && c->bulklen >= PROTO_MAX_ARG_SIZE) {
+        size_t remaining = c->bulklen + 2 - sdslen(c->query_buf);
+        if (remaining < readlen) readlen = remaining;
+    }
+
     int qblen = sdslen(c->query_buf);
 
     c->query_buf = sdsMakeRoomFor(c->query_buf, readlen);

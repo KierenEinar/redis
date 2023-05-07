@@ -22,11 +22,6 @@
 #include <memory.h>
 #include <string.h>
 
-extern struct redisObject;
-extern struct redisDb;
-extern struct client;
-extern struct redisCmd;
-
 #define LRUBITS 24
 // define obj type
 #define OBJECT_STRING 1
@@ -85,11 +80,11 @@ typedef struct redisDb {
 
 typedef void redisCommandProc(struct client* c);
 
-typedef struct redisCmd {
+typedef struct redisCommand {
     char *name;
     int arty;
     redisCommandProc *proc;
-}cmd;
+}redisCommand;
 
 typedef struct client {
 
@@ -104,7 +99,7 @@ typedef struct client {
     robj **argv;
 
     db *db;
-    cmd *cmd;
+    redisCommand *cmd;
 
     time_t ctime;
 }client;
@@ -157,6 +152,11 @@ int processMultiBulkBuffer(client *c);
 //-----------------db public method----------------------
 robj* lookupKeyWrite(db *db, robj *key);
 int expireIfNeeded(db *db, robj *key);
+
+//---------------aof persistent ------------
+void feedAppendOnlyFile(struct redisCommand *cmd, int seldb, robj **argv, int argc);
+void flushAppendOnlyFile(int force);
+
 
 #define LOOKUP_NOTOUCH 1 << 0
 #define LOOKUP_TOUCH 1 << 1
