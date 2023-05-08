@@ -4,8 +4,6 @@
 
 #include "utils.h"
 #include <limits.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 int string2ll(const char *s, size_t slen, long long *value) {
 

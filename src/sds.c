@@ -210,21 +210,19 @@ sds sdsull2str(unsigned long long value) {
     return ss;
 }
 
-sds sdsremovefree(sds s) {
+sds sdsRemoveFree(sds s) {
 
-    struct sdshdr *hdr, *nsh;
+    struct sdshdr *sh, *newsh;
 
     int avail = sdsavail(s);
     if (avail == 0) {
         return s;
     }
+    sh = (struct sdshdr *)((char*)s - sizeof(struct sdshdr));
+    newsh = realloc(sh, sizeof(struct sdshdr) + sh->len + 1);
+    newsh->free = 0;
 
-    hdr = (struct sdshdr *)(s - sizeof(struct sdshdr));
-    nsh = realloc(hdr, sizeof(struct sdshdr) + hdr->len + 1);
-    nsh->free = 0;
-
-    return (char*)(nsh + 1);
-
+    return (char *)(newsh + 1);
 }
 
 sds sdscatvsnprintf(sds s, const char *fmt, va_list ap) {

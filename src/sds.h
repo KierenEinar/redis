@@ -36,7 +36,7 @@ sds sdscatsprintf(sds s, const char *fmt, ...);
 sds sdscatfmt(sds s, char const *fmt, ...);
 sds sdsll2str(long long value);
 sds sdsull2str(unsigned long long value);
-sds sdsremovefree(sds s);
+
 
 //-------------------------sds tools------------------------------
 int sdsavail(const sds s);
@@ -56,7 +56,7 @@ void sdsmapchars(sds s, const char *from, const char *to, int setlen);
 //int sdsindexof(sds s, const char *c);
 //sds sdsreplacen(sds s, const char *replace, int replacelen, int n);
 sds sdsMakeRoomFor(sds s, int addlen);
-void sdsincrlen(sds s, int len);
-
+void sdsIncrlen(sds s, int len);
+sds sdsRemoveFree(sds s);
 
 #endif //REDIS_SDS_H

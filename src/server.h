@@ -113,6 +113,12 @@ typedef struct redisServer {
     int maxmemorry_samples; // max memorry samples keys count each time
 };
 
+#define OBJ_SHARED_INTEGERS 10000
+#define OBJ_SHARED_REFCOUNT INT_MAX
+struct sharedObject {
+    robj *integers[OBJ_SHARED_INTEGERS];
+};
+
 
 uint64_t dictSdsHash(const void *key);
 int dictSdsComparer(const void *key1, const void *key2);
@@ -122,7 +128,7 @@ void dictObjectDestructor(void *val);
 // global vars
 extern dictType dbDictType;
 extern struct redisServer server;
-
+extern struct sharedObject shared;
 // --------------mstime---------------
 typedef int64_t mstime_t;
 mstime_t ms_now();
@@ -139,7 +145,7 @@ robj* createStringObject(const char *s, size_t len);
 
 void decrRefCount(robj *o);
 void freeStringObject(robj *o);
-
+void makeObjectShared(robj *o);
 robj* tryObjectEncoding(robj *obj);
 int getLongLongFromObject(robj *obj, long long *target);
 int getLongFromObject(robj *obj, long *target);

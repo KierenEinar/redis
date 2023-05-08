@@ -8,8 +8,31 @@
 #include <memory.h>
 
 void incrRef(robj *o) {
-    if (o->refcount != INT_MAX) // int_max represents the share object
+    if (o->refcount != OBJ_SHARED_REFCOUNT) // int_max represents the share object
         o->refcount++;
+}
+
+void decrRefCount(robj *o) {
+    if (o->refcount == OBJ_SHARED_REFCOUNT)
+        return;
+
+    if (o->refcount == 1) {
+        switch (o->type) {
+            case OBJECT_STRING:
+                freeStringObject(o);
+                break;
+            default:
+                //todo panic
+                break;
+        }
+        free(o);
+    }
+    o->refcount--;
+}
+
+void makeObjectShared(robj *o) {
+    if (o->refcount > 1) return;
+    o->refcount = OBJ_SHARED_INTEGERS;
 }
 
 robj* createObject(int type, void *ptr) {
@@ -36,17 +59,6 @@ robj* createRawStringObject(const char *s, size_t len) {
     return createObject(OBJECT_STRING, sdsnewlen(s, len));
 }
 
-void decrRefCount(robj *o) {
-    if (o->refcount == 1) {
-        switch (o->type) {
-            case OBJECT_STRING:
-                freeStringObject(o);
-                break;
-        }
-        free(o);
-    }
-    o->refcount--;
-}
 
 void freeStringObject(robj *o) {
     if (o->encoding == OBJECT_ENCODING_RAW) {
@@ -56,7 +68,7 @@ void freeStringObject(robj *o) {
 
 robj* createEmbeddedStringObject(const char *s, size_t len) {
 
-    robj *o = malloc(sizeof(robj) + sizeof(struct sdshdr) + len + 1);
+    robj *o = malloc(sizeof(*o) + sizeof(struct sdshdr) + len + 1);
 
     struct sdshdr *hdr = (void*)(o+1);
     o->encoding = OBJECT_ENCODING_EMBSTR;
@@ -92,40 +104,40 @@ robj* tryObjectEncoding(robj *obj) {
         return obj;
     }
 
-    sds buf = (char *)obj->ptr;
+    sds buf = obj->ptr;
     int len = sdslen(buf);
 
     long value;
 
     // convert to int
     if (len <= STRING_INT_LIMIT_LEN && string2l(buf, len, &value)) {
-        obj->encoding = OBJECT_ENCODING_INT;
-        if (obj->encoding == OBJECT_ENCODING_RAW) {
-            free(obj->ptr);
+
+        if (value >= 0 && value < OBJ_SHARED_INTEGERS) {
+            decrRefCount(obj);
+            return shared.integers[value];
         }
+
+        if (obj->encoding == OBJECT_ENCODING_RAW)
+            free(obj->ptr);
+
+        obj->encoding = OBJECT_ENCODING_INT;
         obj->ptr = (void*)value;
         return obj;
     }
 
-
-    // try raw to embed str
-    if (obj->encoding == OBJECT_ENCODING_EMBSTR) {
-        return obj;
-    }
-
-    sds s = obj->ptr;
-
     if (len <= EMBSTR_LEN_LIMIT) {
-        robj *o = createEmbeddedStringObject(s, sdslen(s));
-        o->lru = obj->lru;
+        if (obj->encoding == OBJECT_ENCODING_EMBSTR)
+            return obj;
+
+        robj *emb = createEmbeddedStringObject(buf, len);
         decrRefCount(obj);
-        return o;
+        return emb;
     }
 
+    // try save space for remove free space
 
-    // try to remove free space
-    if (sdsavail(s) > len/10) {
-        obj->ptr = sdsremovefree(obj->ptr);
+    if (obj->encoding == OBJECT_ENCODING_RAW && sdsavail(buf) > len / 10) {
+        obj->ptr = sdsRemoveFree(buf);
     }
 
     return obj;
