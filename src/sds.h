@@ -43,10 +43,10 @@ int sdsavail(const sds s);
 int sdslen(const sds s);
 void sdssetlen(const sds s, size_t len);
 char* sdsstr(const sds s, size_t *strlen);
-
+#define sdsEncodedObject(objPtr) (objPtr->encoding == OBJECT_ENCODING_RAW || objPtr->encoding == OBJECT_ENCODING_EMBSTR)
 sds sdstrim(sds s, const char *trimset);
 sds* sdssplitlen(sds s, const char *split, int splitlen, int *count);
-void sdsrange(sds s, int start, int end);
+sds sdsrange(sds s, int start, int end);
 int sdscmp(const sds s1, const sds s2);
 void sdstoupper(sds s);
 void sdstolower(sds s);

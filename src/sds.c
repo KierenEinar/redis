@@ -3,6 +3,7 @@
 //
 
 #include "sds.h"
+#include "server.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <memory.h>
@@ -465,8 +466,14 @@ cleanup:
     return NULL;
 }
 
-void sdsrange(sds s, int start, int end) {
+sds sdsrange(sds s, int start, int end) {
 
+}
+
+sds sdsfromlonglong(long long l) {
+    char s[STRING_INT_LIMIT_LEN];
+    size_t len = ll2string(s, sizeof(s), l);
+    return sdsnewlen(s, len);
 }
 
 void sdsmapchars(sds s, const char *from, const char *to, int setlen) {

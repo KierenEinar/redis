@@ -12,7 +12,7 @@ int string2ll(const char *s, size_t slen, long long *value);
 int string2l(const char *s, size_t slen, long *value);
 
 // slen including '\0'
-int ll2string(char *s, size_t slen, long long value);
+size_t ll2string(char *s, size_t slen, long long value);
 
 
 #endif //REDIS_UTILS_H

@@ -100,7 +100,7 @@ int string2l(const char *s, size_t slen, long *value) {
     return 1;
 }
 
-int ll2string(char *s, size_t slen, long long value) {
+size_t ll2string(char *s, size_t slen, long long value) {
 
     unsigned char negative = value > 0 ? 0 : 1;
     unsigned long long v = negative ? -value : value;

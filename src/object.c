@@ -95,7 +95,7 @@ robj* tryObjectEncoding(robj *obj) {
         return obj;
     }
 
-    if (obj->encoding != OBJECT_ENCODING_RAW && obj->encoding != OBJECT_ENCODING_EMBSTR) {
+    if (!sdsEncodedObject(obj)) {
         return obj;
     }
 
@@ -143,6 +143,25 @@ robj* tryObjectEncoding(robj *obj) {
     return obj;
 }
 
+robj* getDecodedObject(robj *o) {
+
+    if (sdsEncodedObject(o)) {
+        incrRef(o);
+        return o;
+    }
+
+    if (o->encoding == OBJECT_ENCODING_INT) {
+        long v = (long)o->ptr;
+        char s[STRING_INT_LIMIT_LEN];
+        size_t len = ll2string(s, sizeof(s), v);
+        robj *emb= createEmbeddedStringObject(s, len);
+        return emb;
+    } else {
+        //todo panic
+    }
+
+}
+
 
 int getLongLongFromObject(robj *obj, long long *target) {
 
@@ -169,6 +188,13 @@ int getLongLongFromObject(robj *obj, long long *target) {
     return -1;
 
 }
+
+robj* createStringObjectFromLongLong(long long value) {
+    char s[STRING_INT_LIMIT_LEN];
+    size_t len = ll2string(s, STRING_INT_LIMIT_LEN, value);
+    return createStringObject(s, len);
+}
+
 
 int getLongFromObject(robj *obj, long *target) {
 

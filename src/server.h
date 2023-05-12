@@ -5,13 +5,6 @@
 #ifndef REDIS_SERVER_H
 #define REDIS_SERVER_H
 
-#include "dict.h"
-#include "sds.h"
-#include "varint.h"
-#include "utils.h"
-#include "zmalloc.h"
-#include "el.h"
-
 #include <limits.h>
 #include <stdlib.h>
 #include <time.h>
@@ -19,8 +12,21 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <memory.h>
 #include <string.h>
+#include <pthread.h>
+#include <signal.h>
+
+#include "dict.h"
+#include "sds.h"
+#include "varint.h"
+#include "utils.h"
+#include "zmalloc.h"
+#include "el.h"
+#include "bio.h"
+#include "config.h"
+#include "adlist.h"
 
 #define LRUBITS 24
 // define obj type
@@ -64,6 +70,17 @@
 // define result
 #define REDIS_OK 1
 #define REDIS_ERR -1
+
+// aof state
+#define AOF_ON 1
+#define AOF_OFF 0
+
+// aof fsync policy
+#define AOF_FSYNC_NO 0
+#define AOF_FSYNC_EVERYSEC 1
+#define AOF_FSYNC_ALWAYS 2
+
+#define REDIS_THREAD_STACK_SIZE 1024 * 1024 * 4
 
 typedef struct redisObject {
     unsigned type:4;
@@ -111,6 +128,30 @@ typedef struct redisServer {
     unsigned long long maxmemorry; // max memorry
     int maxmemorry_policy; // max memorry policy, see define maxmemorry policy
     int maxmemorry_samples; // max memorry samples keys count each time
+
+    // aof fd
+    int aof_fd;
+
+    // aof buf append
+    int select_db;
+    sds aof_buf;
+    int aof_state;
+
+    // aof child rewtite
+    pid_t aof_child_pid;
+
+    // aof flush
+    int aof_fsync;
+    unsigned long long aof_fsync_delayed;
+    unsigned long long aof_current_size;
+    time_t aof_flush_postponed_start;
+    int aof_last_write_errno;
+    int aof_last_write_status;
+    time_t aof_last_fsync;
+
+    time_t unix_time;
+
+
 };
 
 #define OBJ_SHARED_INTEGERS 10000
@@ -142,11 +183,13 @@ robj* createObject(int type, void *ptr);
 robj* createEmbeddedStringObject(const char *s, size_t len);
 robj* createRawStringObject(const char *s, size_t len);
 robj* createStringObject(const char *s, size_t len);
+robj* createStringObjectFromLongLong(long long value);
 
 void decrRefCount(robj *o);
 void freeStringObject(robj *o);
 void makeObjectShared(robj *o);
 robj* tryObjectEncoding(robj *obj);
+robj* getDecodedObject(robj *o);
 int getLongLongFromObject(robj *obj, long long *target);
 int getLongFromObject(robj *obj, long *target);
 
