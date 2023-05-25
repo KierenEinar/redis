@@ -1,308 +1,369 @@
 //
-// Created by kieren jiang on 2023/3/30.
+// Created by kieren jiang on 2023/5/15.
 //
 
 #include "el.h"
+#include <poll.h>
+#include "el_select.c"
 
+void elGetTime(long *when_sec, long *when_ms) {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    *when_sec = tv.tv_sec;
+    *when_ms = tv.tv_usec / 1000;
+}
+
+void addMilliSecondsToNow(long long milliseconds, long *sec, long *ms) {
+
+    long cur_sec, cur_ms, when_sec, when_ms;
+    elGetTime(&cur_sec, &cur_ms);
+
+    when_sec = cur_sec + milliseconds /1000;
+    when_ms = cur_ms + milliseconds % 1000;
+    if (when_ms > 1000) {
+        when_sec+=1;
+        when_ms-=1000;
+    }
+
+    *sec = when_sec;
+    *ms = when_ms;
+}
+
+
+timerEvent *elSearchNearestTimer(eventLoop *el) {
+
+    timerEvent *te = el->timerHead;
+    timerEvent *shortest = NULL;
+
+    while (te) {
+        if (shortest == NULL || (te->sec < shortest->sec ||
+            (te->sec == shortest->sec && te->ms < shortest->ms) && te->id > EL_TIMER_DELETED)) {
+            shortest = te;
+        }
+
+        te = te->next;
+    }
+
+    return shortest;
+
+}
 
 eventLoop* elCreateEventLoop(int setsize) {
-    eventLoop *el;
-    if (el = zmalloc(sizeof(*el))==NULL) goto err;
 
+    eventLoop *el = malloc(sizeof(*el));
+    if (el == NULL) return NULL;
 
-    el->events = zcalloc(sizeof(fileEvent), setsize);
-    el->fires = zcalloc(sizeof(fireEvent), setsize);
-    timeEvent *timeHead = zmalloc(sizeof(*timeHead));
-    el->setsize = setsize;
-    el->timerHead = timeHead;
-    el->lasttime = time(NULL);
-    el->maxfd = -1;
+    el->events = malloc(sizeof(fileEvent) * setsize);
+    el->fired = malloc(sizeof(firedEvent) * setsize);
+
+    if (el->events == NULL || el->fired == NULL) goto err;
+
     el->stop = 0;
-    elApiCreate(el);
+    el->maxfd = -1;
+    el->setsize = setsize;
+    el->lastTime = time(NULL);
+    el->nextTimerEventId = 1;
+    el->timerHead = NULL;
 
-    for (int j=0; j<setsize; j++) {
-        el->events[j].mask = EL_NONE;
+    if (elApiCreate(el) == -1)
+        goto err;
+
+    for (int i=0; i<setsize; i++) {
+        el->events[i].mask = EL_NONE;
     }
+
+    el->beforeSleepProc = NULL;
+    el->afterSleepProc = NULL;
+
     return el;
 
 err:
-    if (el) {
-        zfree(el->events);
-        zfree(el->fires);
-        zfree(el);
-    }
+    if (el->events) free(el->events);
+    if (el->fired) free(el->fired);
+    free(el);
     return NULL;
 }
 
-int elAddFileEvent(eventLoop *el, int fd, int mask, fileProc proc, void *clientData) {
+void elDeleteEventLoop(eventLoop* el) {
+    elApiFree(el);
+    free(el->events);
+    free(el->fired);
+    free(el);
+}
+
+int elCreateFileEvent(eventLoop* el, int fd, int mask, fileProc proc, void *clientData) {
 
     if (fd >= el->setsize) {
         errno = ERANGE;
         return EL_ERR;
     }
-    int res = elApiAddEvent(el, fd, mask);
-    if (res == EL_ERR)
+
+    if (elApiAddEvent(el, fd, mask) == -1) {
         return EL_ERR;
+    }
 
-    fileEvent *fe = &el->events[fd];
+    fileEvent *event = &el->events[fd];
+    event->mask |= mask;
+    if (event->mask & EL_READABLE) event->rfileProc = proc;
+    if (event->mask & EL_WRITABLE) event->wfileProc = proc;
+    event->clientData = clientData;
 
-    if (mask & EL_READABLE) fe->rFileProc = proc;
-    if (mask & EL_WRITABLE) fe->wFileProc = proc;
-    fe->mask |= mask;
-    fe->clientData = clientData;
-    if (fd > el->maxfd) el->maxfd = fd;
+    if (fd > el->maxfd) {
+        el->maxfd = fd;
+    }
+
     return EL_OK;
+
 }
 
-void elDeleteFileEvent(eventLoop *el, int fd, int mask) {
+int elDeleteFileEvent(eventLoop* el, int fd, int mask) {
 
-    if (fd >= el->setsize)
-        return;
+    if (fd >= el->setsize) {
+        errno = ERANGE;
+        return EL_ERR;
+    }
 
-    if (el->events[fd].mask == EL_NONE)
-        return;
+    fileEvent *event = &el->events[fd];
 
-    if (!elApiDelEvent(el, fd, mask));
-        return;
+    if (mask & EL_WRITABLE) mask |= EL_BARRIER;
 
-    fileEvent *fe = &el->events[fd];
+    event->mask &= ~mask;
 
-    fe->mask = fe->mask & ~mask;
+    if (elApiDeleteEvent(el, fd, mask) == -1) {
+        return EL_ERR;
+    }
 
-    if (fe->mask == EL_NONE) {
-        for (int j=el->setsize-1; j>=0; j--) {
-            if (el->events[j].mask != EL_NONE ) {
-                el->maxfd = el->events[j].fd;
+    if (el->maxfd == fd && event->mask == EL_NONE) {
+
+        int j;
+        for (j = el->maxfd - 1; j>=0; j--) {
+            if (el->events[j].mask != EL_NONE) {
+                el->maxfd = j;
                 break;
             }
         }
     }
 
-}
 
-void elGetNow(long *sec, long *milliseconds) {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    *sec = tv.tv_sec;
-    *milliseconds = tv.tv_usec / 1000;
-}
-
-void elAddMillisecondsToNow(long long milliseconds, long *when_sec, long *when_ms) {
-
-    long now_sec, now_ms, sec, ms;
-    elGetNow(now_sec, now_ms);
-
-    sec = now_sec + milliseconds / 1000;
-    ms = now_ms + milliseconds % 1000;
-    if (ms >= 1000) {
-        sec+=1;
-        ms-=1000;
-    }
-
-    *when_sec = sec;
-    *when_ms = ms;
+    return EL_OK;
 
 }
 
-timeEvent *elSearchNearestTimeEvent(eventLoop *el) {
-    timeEvent *te = el->timerHead;
-    timeEvent *nearest = NULL;
+int elGetFileEvent(eventLoop* el, int fd, int mask) {
 
-    while (te) {
-
-        if (!nearest || nearest->when_sec > te->when_sec ||
-            (nearest->when_sec == te->when_sec && nearest->when_ms > te->when_ms)) {
-            nearest = te;
-        }
-        te = te->next;
-    }
-
-    return nearest;
-
+    if (el->setsize >= fd) return -1;
+    if (el->events[fd].mask & mask) return 1;
+    return 0;
 }
 
-int elAddTimeEvent(eventLoop *el, long long milliseconds, timeProc proc, finalizeTimeProc finalize, void *clientData) {
+long long elCreateTimerEvent(eventLoop* el, long long ms, timerProc proc, timerFinalizeProc finalizeProc, void *clientData) {
 
-    timeEvent *te = zmalloc(sizeof(*te));
-    te->id = ++el->nextEventId;
-    te->clientData = clientData;
-    te->timeProc = proc;
-    elAddMillisecondsToNow(milliseconds, &te->when_sec, &te->when_ms);
-
-    te->next = el->timerHead;
-    te->finalize = finalize;
-    el->timerHead->prev = te;
-    el->timerHead = te;
-
-    return te->id;
-
+   timerEvent *timer = malloc(sizeof(*timer));
+   timer->clientData = clientData;
+   timer->timerProc = proc;
+   long when_sec, when_ms;
+   addMilliSecondsToNow(ms, &when_sec, &when_ms);
+   timer->id = el->nextTimerEventId++;
+   timer->next = el->timerHead;
+   if (el->timerHead != NULL) {
+       el->timerHead->prev = timer;
+   }
+   timer->prev = NULL;
+   timer->sec = when_sec;
+   timer->ms = when_ms;
+   timer->timerFinalizeProc = finalizeProc;
+   el->timerHead = timer;
+   return timer->id;
 }
 
-int elDeleteTimeEvent(eventLoop *el, int id) {
 
-    if (id >= el->nextEventId)
-        return EL_ERR;
+int elDeleteTimerEvent(eventLoop* el, long long id) {
 
-    timeEvent *te = el->timerHead;
+    timerEvent *timer = el->timerHead;
 
-    while (te) {
-        if (te->id == id) {
-            te->id = EVENT_DELETION_ID;
+    while (timer) {
+        if (timer->id == id) {
+            timer->id = EL_TIMER_DELETED;
             return EL_OK;
         }
-        te = te->next;
+        timer = timer->next;
     }
+
     return EL_ERR;
 }
 
-int elProcessEvents(eventLoop *el, int flags) {
-    int processed;
+static int elProcessTimerEvents(eventLoop *el) {
 
-    if (el->maxfd != -1 || (flags & TIME_EVENTS && !(flags & DONT_WAIT))) {
+    long nowSec, nowMs;
 
-        timeEvent *shortest;
+    int processed = 0;
 
-        struct timeval tv, *tvp;
+    timerEvent *te = el->timerHead;
+    time_t nowSecs = time(NULL);
 
-        if (flags & TIME_EVENTS  && !(flags & DONT_WAIT)) {
-            shortest = elSearchNearestTimeEvent(el);
-        }
-
-        if (shortest) {
-            long sec, ms;
-            elGetNow(&sec, &ms);
-
-            long te_ms = (shortest->when_sec * 1000 +  shortest->when_ms);
-            te_ms -= (sec * 1000 + ms);
-
-            if (te_ms > 0) {
-                tv.tv_sec = te_ms / 1000;
-                tv.tv_usec = (te_ms % 1000) * 1000;
-            } else {
-                tv.tv_sec = 0;
-                tv.tv_usec = 0;
-            }
-
-            tvp = &tv;
-
-        } else {
-
-            if (flags & DONT_WAIT) {
-                tv.tv_sec = 0;
-                tv.tv_usec = 0;
-            }
-
-            tvp = &tv;
-
-        }
-
-        long event_nums = elApiPoll(el, tv);
-
-        for (long j=0; j<event_nums; j++) {
-            int fired = 0;
-            fireEvent f = el->fires[j];
-            if (f.mask & EL_READABLE) {
-                fileEvent e = el->events[f.fd];
-                if (e.rFileProc != NULL) {
-                    e.rFileProc(el, f.fd, f.mask, e.clientData);
-                    fired++;
-                }
-            }
-
-            if (!fired && f.mask & EL_WRITABLE) {
-                fileEvent e = el->events[f.fd];
-                if (e.wFileProc != NULL) {
-                    e.wFileProc(el, f.fd, f.mask, e.clientData);
-                    fired++;
-                }
-            }
-
-            if (fired) processed++;
-
-        }
-    }
-
-    if (flags & TIME_EVENTS) {
-        processed += elProcessTimeEvents(el, flags);
-    }
-
-    return processed;
-}
-
-int elProcessTimeEvents(eventLoop *el, int flags) {
-
-    long processed = 0;
-
-    time_t now = time(NULL);
-
-    long maxid = el->nextEventId;
-
-    if (el->lasttime > now) {
-        timeEvent *te = el->timerHead;
+    // check if the lasttime been set the feature clock, we choose to fire all
+    if (nowSecs < el->lastTime)
         while (te) {
-            te->when_sec = 0;
-            te->when_ms = 0;
+            te->sec = 0;
+            te->ms = 0;
             te = te->next;
         }
-    }
 
-    el->lasttime = now;
+    el->lastTime = time(NULL);
 
-    // handle deletion
-    timeEvent *te = el->timerHead;
+    long long maxEventId = el->nextTimerEventId;
+
     while (te) {
 
-        if (te->id >= maxid) {
-            te = te->next;
-            continue;
-        }
+        timerEvent *next = te->next;
 
-        timeEvent *next = te->next;
-        if (te->id == EVENT_DELETION_ID) {
-            if (te == el->timerHead) {
+        if (te->id == EL_TIMER_DELETED) { // unlink if has been deleted
+
+            if (te->prev) {
+                te->prev->next = te->next;
+            } else {
                 el->timerHead = te->next;
             }
-            if (te->prev) te->prev->next = next;
-            if (next) next->prev = te->prev;
-            if (te->finalize)
-                te->finalize(el, te->id, te->clientData);
-            zfree(te);
-            te= next;
+
+            if (te->next) {
+                te->next->prev = te->prev;
+            }
+
+            te->timerFinalizeProc(el, te->clientData);
+            free(te);
+            te = next;
             continue;
         }
 
+        if (te->id > maxEventId) {
+            te = next;
+            continue;
+        }
 
-        long sec, ms;
-        elGetNow(&sec, &ms);
+        elGetTime(&nowSec, &nowMs);
 
-        if (te->when_sec < sec || (te->when_sec == sec && (te->when_ms < ms))) {
-            long retval = te->timeProc(el, te->id, te->clientData);
-            if (retval != EL_NO_MORE) {
-                elAddMillisecondsToNow(retval, &te->when_sec, &te->when_ms);
-            } else {
-                te->id = EVENT_DELETION_ID;
-            }
-            processed++;
+        if (te->sec > nowSec || (te->ms == nowMs && te->ms > nowMs)) {
+            te = next;
+            continue;
+        }
+
+        long long retval = te->timerProc(el, te->id, te->clientData);
+        if (retval) {
+            addMilliSecondsToNow(retval, &te->sec, &te->ms);
+        } else {
+            te->id = EL_TIMER_DELETED;
         }
 
         te = next;
+        processed++;
     }
+
 
     return processed;
 
 }
 
-void elMain(eventLoop *el, int flag) {
 
-    el->stop = 0;
-    while (!el->stop) {
-        elProcessEvents(el, flag);
+int elProcessEvents(eventLoop *el) {
+
+    timerEvent *nearest = elSearchNearestTimer(el);
+    struct timeval tv;
+    struct timeval *tvp = NULL;
+
+    if (nearest) {
+        long now_sec, now_ms;
+        elGetTime(&now_sec, &now_ms);
+
+        long long ms = nearest->sec * 1000 + nearest->ms - (now_sec * 1000 + now_ms);
+
+        if (ms > 0) {
+            tv.tv_sec = ms / 1000;
+            tv.tv_usec = (ms % 1000) * 1000;
+        } else {
+            tv.tv_sec = 0;
+            tv.tv_usec = 0;
+        }
+        tvp = &tv;
     }
+
+    long nums = elApiPoll(el, tvp);
+
+    if (el->afterSleepProc)
+        el->afterSleepProc(el);
+
+    int j;
+    firedEvent *fired;
+    fileEvent *event;
+    int processed = 0;
+    for (j=0; j<nums; j++) {
+
+        fired = &el->fired[j];
+        event = &el->events[fired->fd];
+        int proc = 0;
+        int invert = event->mask & EL_BARRIER;
+        if (!invert && fired->mask & event->mask & EL_READABLE) {
+            event->rfileProc(el, fired->fd, EL_READABLE, event->clientData);
+            proc++;
+        }
+
+
+        if (fired->mask & event->mask & EL_WRITABLE) {
+            if (!proc || event->rfileProc != event->wfileProc) {
+                event->wfileProc(el, fired->fd, EL_READABLE, event->clientData);
+                proc++;
+            }
+        }
+
+        if (invert && fired->mask & event->mask & EL_READABLE ) {
+            if (!proc || event->rfileProc != event->wfileProc) {
+                event->rfileProc(el, fired->fd, EL_READABLE, event->clientData);
+                proc++;
+            }
+        }
+
+        processed++;
+    }
+
+    processed+= elProcessTimerEvents(el);
+
+    return processed;
 }
 
-void elWait(eventLoop *el, long long milliseconds) {
-
-
-
-
+void elStop(eventLoop *el, int stop) {
+    el->stop = stop;
 }
+
+void elMain(eventLoop *el) {
+    while (!el->stop) {
+        elProcessEvents(el);
+    }
+
+    elDeleteEventLoop(el);
+}
+
+void elSetBeforeSleepProc(eventLoop *el, beforeSleepProc proc) {
+    el->beforeSleepProc = proc;
+}
+
+void elSetAfterSleepProc(eventLoop *el, beforeSleepProc proc) {
+    el->afterSleepProc = proc;
+}
+
+int elWait(int fd, int mask, long long milliseconds) {
+
+    struct pollfd pollfd;
+    int retmask = 0, retval;
+    memset(&pollfd, 0, sizeof(pollfd));
+    pollfd.fd = fd;
+    if (mask & EL_READABLE) pollfd.events |= POLLIN;
+    if (mask & EL_WRITABLE) pollfd.events |= POLLOUT;
+    if ((retval = poll(&pollfd, 1, milliseconds)) > 0) {
+        if (pollfd.revents & POLLIN)  retmask |= EL_READABLE;
+        if (pollfd.revents & POLLOUT) retmask |= EL_WRITABLE;
+        if (pollfd.revents & POLLHUP) retmask |= EL_WRITABLE;
+        return retmask;
+    }
+    return retval;
+}
+
+

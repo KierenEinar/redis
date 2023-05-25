@@ -1,0 +1,3 @@
+/Users/kieren/Projects/myredis/redis/cmake-build-debug/CMakeFiles/redis.dir
+/Users/kieren/Projects/myredis/redis/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/kieren/Projects/myredis/redis/cmake-build-debug/CMakeFiles/rebuild_cache.dir

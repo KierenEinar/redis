@@ -7,9 +7,18 @@
 
 static pthread_mutex_t thread_mutex[BIO_NUMS_OPS];
 static pthread_cond_t thread_newjob_cond[BIO_NUMS_OPS];
+static pthread_cond_t thread_waitstep_cond[BIO_NUMS_OPS];
 static pthread_t threads[BIO_NUMS_OPS];
 static list *jobs[BIO_NUMS_OPS];
 static unsigned long bio_pending[BIO_NUMS_OPS];
+
+unsigned long bioPendingJobsOfType(int type) {
+    unsigned long val;
+    pthread_mutex_lock(&thread_mutex[type]);
+    val = bio_pending[type];
+    pthread_mutex_unlock(&thread_mutex[type]);
+    return val;
+}
 
 void bioInit(void) {
 
@@ -19,6 +28,7 @@ void bioInit(void) {
     for (int i=0; i<BIO_NUMS_OPS; i++) {
         pthread_mutex_init(&thread_mutex[i], NULL);
         pthread_cond_init(&thread_newjob_cond[i], NULL);
+        pthread_cond_init(&thread_waitstep_cond[i], NULL);
         jobs[i] = listCreate();
     }
 
@@ -60,11 +70,10 @@ void bioProcessBackgroundJobs(void *argv) {
     sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGALRM);
-    // block the alarm signal, make sure that only the main thread would the watchdog signal
+    // block the alarm signal, make sure that only the main thread would receive the watchdog signal
     if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0) {
         // todo server error log
     }
-
 
 
     while (1) {
@@ -76,6 +85,7 @@ void bioProcessBackgroundJobs(void *argv) {
 
         ln = listFirst(&jobs[type]);
         job = ln->value;
+
         pthread_mutex_unlock(&thread_mutex[type]);
 
         if (type == BIO_CLOSE_FILE) {
@@ -88,10 +98,54 @@ void bioProcessBackgroundJobs(void *argv) {
 
         }
 
+        zfree(job);
         pthread_mutex_lock(&thread_mutex[type]);
         listDelNode(&jobs[type], ln);
         bio_pending[type]--;
+        pthread_cond_broadcast(&thread_waitstep_cond[type]);
     }
 
+
+}
+
+void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3) {
+
+    bio_job *job = zmalloc(sizeof(*job));
+    job->time = time(NULL);
+    job->arg1 = arg1;
+    job->arg2 = arg2;
+    job->arg3 = arg3;
+
+    pthread_mutex_lock(&thread_mutex[type]);
+    listAddNodeTail(jobs[type], job);
+    pthread_cond_signal(&thread_newjob_cond[type]);
+    pthread_mutex_unlock(&thread_mutex[type]);
+}
+
+unsigned long waitStepOfType(int type) {
+    pthread_mutex_lock(&thread_mutex[type]);
+    unsigned long val = bio_pending[val];
+    if (val > 0) {
+        pthread_cond_wait(&thread_waitstep_cond[type], &thread_mutex[type]);
+        val = bio_pending[val];
+    }
+
+    pthread_mutex_unlock(&thread_mutex[type]);
+    return val;
+}
+
+void bioKillThreads(void) {
+
+    for (int i=0; i<BIO_NUMS_OPS; i++) {
+        if (pthread_cancel(&threads[i]) == 0) {
+            if (pthread_join(&threads[i], NULL) == 0) {
+                // join success
+            } else {
+                // todo server log join failed
+            }
+        } else {
+            // todo server log cancel failed
+        }
+    }
 
 }

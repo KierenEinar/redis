@@ -8,8 +8,10 @@
 #include <stdarg.h>
 #include <sys/time.h>
 void bioInit(void);
-unsigned long long bioPendingJobsOfType(int type);
+unsigned long bioPendingJobsOfType(int type);
 void bioProcessBackgroundJobs(void *argv);
+unsigned long waitStepOfType(int type);
+void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3);
 void bioKillThreads(void);
 
 #define BIO_CLOSE_FILE 0
@@ -20,6 +22,8 @@ void bioKillThreads(void);
 typedef struct bio_job {
     time_t time;
     void *arg1;
+    void *arg2;
+    void *arg3;
 }bio_job;
 
 

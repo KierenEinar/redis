@@ -51,6 +51,11 @@ typedef struct dict {
     unsigned long hash0; // for rand hash function
 } dict;
 
+typedef struct dictIterator {
+
+}dictIterator;
+
+
 //------------API-------------
 dict* dictCreate(dictType *type);
 int dictAdd(dict *d, void *key, void *val);
@@ -60,7 +65,7 @@ int dictReplace(dict *d, void *key, void *val);
 dictEntry* dictFind(dict *d, const void *key);
 void* dictFetchValue(dict *d, const void *key);
 uint64_t dictFetchUnsignedInteger(dict *d, void *key);
-int64_t dictFetchSignedInteger(dict *d, void *key);
+int64_t dictFetchSignedInteger(dictEntry *de);
 int dictSetUnsignedInteger(dict *d, void *key, uint64_t us);
 int dictSetSignedInteger(dict *d, void *key, int64_t s);
 int dictDelete(dict *d, const void *key);
@@ -74,6 +79,9 @@ dictEntry *dictGetRandomKey(dict *d);
 int dictGetSomeKeys(dict *d, dictEntry **de, int count);
 size_t dictSize(dict *d);
 
+dictIterator* dictGetSafeIterator(dict *d);
+dictEntry* dictNext(dictIterator *di);
+void dictReleaseIterator(dictIterator *di);
 //-----------private prototype-------
 
 

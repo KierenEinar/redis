@@ -19,12 +19,12 @@ int processMultiBulkBuffer(client *c) {
                 // todo add reply error
                 // todo set protocol error
             }
-            return REDIS_ERR;
+            return C_ERR;
         }
 
         // buffer should contain \n
         if (newline - c->query_buf > qblen - 2) {
-            return REDIS_ERR;
+            return C_ERR;
         }
 
         long long ll;
@@ -32,11 +32,11 @@ int processMultiBulkBuffer(client *c) {
         if (!ok || ll > 1024 * 1024) {
             // todo add reply error
             // todo set protocol error
-            return REDIS_ERR;
+            return C_ERR;
         }
 
         if (ll <= 0) {
-            return REDIS_OK;
+            return C_OK;
         }
 
         c->multibulklen = (long)ll;
@@ -57,7 +57,7 @@ int processMultiBulkBuffer(client *c) {
                     // bulk count invalid
                     // todo add reply error
                     // todo set protocol error
-                    return REDIS_ERR;
+                    return C_ERR;
                 }
                 break;
             }
@@ -71,7 +71,7 @@ int processMultiBulkBuffer(client *c) {
             if (c->query_buf+pos != '$') {
                 // todo add reply error
                 // todo set protocol error
-                return REDIS_ERR;
+                return C_ERR;
             }
 
             long long ll;
@@ -79,7 +79,7 @@ int processMultiBulkBuffer(client *c) {
             if (!ok || ll < 0 || ll > PROTO_MAX_BULK_SIZE) {
                 // todo add reply error
                 // todo set protocol error
-                return REDIS_ERR;
+                return C_ERR;
             }
 
             c->bulklen = ll;
@@ -123,9 +123,9 @@ int processMultiBulkBuffer(client *c) {
 
     if (pos) sdsrange(c->query_buf, pos, -1);
 
-    if (c->multibulklen == 0 ) return REDIS_OK;
+    if (c->multibulklen == 0 ) return C_OK;
 
-    return REDIS_ERR;
+    return C_ERR;
 
 }
 
@@ -140,7 +140,7 @@ void processInputBuffer(client *c) {
         }
 
         if (c->reqtype == PROTO_REQ_MULTI_BULK) {
-            if (processMultiBulkBuffer(c) != REDIS_OK) {
+            if (processMultiBulkBuffer(c) != C_OK) {
                 break;
             }
         } else {

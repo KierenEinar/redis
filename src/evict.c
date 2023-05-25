@@ -32,7 +32,7 @@ void evictionPoolAlloc(void) {
 unsigned int getLRUClock() {
 
     // todo add cache
-    return ms_now() / CLOCK_RESOLUTION & CLOCK_MAX;
+    return mstime() / CLOCK_RESOLUTION & CLOCK_MAX;
 }
 
 long long estimateIdleTime(robj *o) {
@@ -122,7 +122,7 @@ int freeMemoryIfNeeded(void) {
     mem_reported = zmalloc_used_memory();
 
     if (mem_reported < server.maxmemorry) {
-        return REDIS_OK;
+        return C_OK;
     }
 
     if (server.maxmemorry_policy == MAXMEMORY_NOEVICTION) {

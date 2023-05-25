@@ -1,90 +1,86 @@
 //
-// Created by kieren jiang on 2023/3/30.
+// Created by kieren jiang on 2023/5/15.
 //
 
-#ifndef REDIS_EL_H
-#define REDIS_EL_H
+#ifndef CMAKE_DEMO_EL_H
+#define CMAKE_DEMO_EL_H
 
-// writable or readable flag
-#define EL_NONE     0
+#include <time.h>
+#include <sys/time.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <stdio.h>
+
+// define file event mask
+#define EL_NONE 0
 #define EL_READABLE 1
 #define EL_WRITABLE 2
+#define EL_BARRIER 4
 
-// file or time events
-#define FILE_EVENTS 1
-#define TIME_EVENTS 2
-#define ALL_EVENTS (FILE_EVENTS | TIME_EVENTS)
-#define DONT_WAIT 4
+// define time event
+#define EL_TIMER_DELETED -1
 
-#define EVENT_DELETION_ID -1
-#define EL_NO_MORE -1
-
-
-// status
+// define ok and error
 #define EL_OK 0
 #define EL_ERR -1
 
-#include <time.h>
-#include "zmalloc.h"
-#include <errno.h>
-#include <sys/time.h>
 struct eventLoop;
 
-typedef void fileProc(struct eventLoop *eventLoop, int fd, int mask, void *clientData);
-typedef long timeProc(struct eventLoop *eventLoop, int id, void *clientData);
-typedef void finalizeTimeProc(struct eventLoop *eventLoop, int id, void *clientData);
+typedef void(fileProc) (struct eventLoop *el, int fd, int mask, void *clientData);
+typedef long long (timerProc) (struct eventLoop *el, int id, void *clientData);
+typedef void(timerFinalizeProc) (struct eventLoop *el, void *clientData);
+typedef void(beforeSleepProc) (struct eventLoop *el);
+
+typedef struct timerEvent {
+    long long id;
+    long sec;
+    long ms;
+    timerProc *timerProc;
+    timerFinalizeProc *timerFinalizeProc;
+    struct timerEvent *prev;
+    struct timerEvent *next;
+    void *clientData;
+}timerEvent;
 
 typedef struct fileEvent {
+    int mask;
+    fileProc *rfileProc;
+    fileProc *wfileProc;
+    void *clientData;
+}fileEvent;
+
+typedef struct firedEvent {
     int fd;
     int mask;
-    fileProc *wFileProc;
-    fileProc *rFileProc;
-    void *clientData;
-} fileEvent;
-
-typedef struct timeEvent {
-    long long id;
-    unsigned long when_sec;
-    unsigned long long when_ms;
-    timeProc *timeProc;
-    finalizeTimeProc *finalize;
-    void *clientData;
-    struct timeEvent *prev;
-    struct timeEvent *next;
-} timeEvent;
-
-typedef struct fireEvent {
-    int fd;
-    int mask;
-}fireEvent;
+}firedEvent;
 
 typedef struct eventLoop {
-    int maxfd;
+    unsigned long nextTimerEventId;
+    timerEvent *timerHead;
+    beforeSleepProc *beforeSleepProc;
+    beforeSleepProc *afterSleepProc;
+    time_t lastTime;
     int setsize;
-    fileEvent *events;
-    fireEvent *fires;
-
-    int nextEventId;
-    timeEvent *timerHead;
-    time_t lasttime;
+    int maxfd;
     int stop;
-
+    fileEvent  *events;
+    firedEvent *fired;
     void *apiData;
-
-} eventLoop;
+}eventLoop;
 
 eventLoop* elCreateEventLoop(int setsize);
-int elAddFileEvent(eventLoop *el, int fd, int mask, fileProc proc, void *clientData);
-void elDeleteFileEvent(eventLoop *el, int fd, int mask);
+void elDeleteEventLoop(eventLoop* el);
+int elCreateFileEvent(eventLoop* el, int fd, int mask, fileProc proc, void *clientData);
+int elDeleteFileEvent(eventLoop* el, int fd, int mask);
+int elGetFileEvent(eventLoop* el, int fd, int mask);
+long long elCreateTimerEvent(eventLoop* el, long long ms, timerProc proc, timerFinalizeProc finalizeProc, void *clientData);
+int elDeleteTimerEvent(eventLoop* el, long long id);
+int elProcessEvents(eventLoop *el);
 
-int elAddTimeEvent(eventLoop *el, long long milliseconds, timeProc proc, finalizeTimeProc finalize,void *clientData);
-int elDeleteTimeEvent(eventLoop *el, int id);
+void elMain(eventLoop *el);
+int  elWait(int fd, int mask, long long milliseconds);
 
-void elMain(eventLoop *el, int flag);
-void elWait(eventLoop *el, long long milliseconds);
-int elProcessEvents(eventLoop *el, int flags);
-int elProcessTimeEvents(eventLoop *el, int flags);
-
-
-
-#endif //REDIS_EL_H
+void elStop(eventLoop *el, int stop);
+void elSetBeforeSleepProc(eventLoop *el, beforeSleepProc proc);
+void elSetAfterSleepProc(eventLoop *el, beforeSleepProc proc);
+#endif //CMAKE_DEMO_EL_H

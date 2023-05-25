@@ -3,13 +3,11 @@
 //
 #include "server.h"
 
-int getExpire(db *db, robj *key, mstime_t *expireMilliSeconds) {
-    dictEntry *de = dictFind(db->expires, key->ptr);
-    if (!de) return -1;
-    mstime_t now = ms_now();
-    mstime_t val = de->v.s_64 - now;
-    if (expireMilliSeconds) *expireMilliSeconds = val;
-    return val <= 0 ? 1 : 0;
+long long getExpire(db *db, robj *key) {
+    dictEntry *de;
+    if ((de = dictFind(db->expires, key->ptr)) == NULL) return -1;
+    // todo  assert db->dict containse key
+    return dictFetchSignedInteger(de);
 }
 
 int dbSyncDelete(db *db, robj *key) {

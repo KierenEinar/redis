@@ -27,6 +27,7 @@
 #include "bio.h"
 #include "config.h"
 #include "adlist.h"
+#include "rio.h"
 
 #define LRUBITS 24
 // define obj type
@@ -68,17 +69,25 @@
 #define PROTO_REQ_INLINE 2
 
 // define result
-#define REDIS_OK 1
-#define REDIS_ERR -1
+#define C_OK 1
+#define C_ERR -1
 
 // aof state
 #define AOF_ON 1
 #define AOF_OFF 0
+#define AOF_READDIFF_PER_INTERVAL_BYTES (1024 * 10)
+
 
 // aof fsync policy
 #define AOF_FSYNC_NO 0
 #define AOF_FSYNC_EVERYSEC 1
 #define AOF_FSYNC_ALWAYS 2
+
+// aof rewrite block size
+#define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
+
+// sync wait
+#define REDIS_WAIT_RESOLUTION 10
 
 #define REDIS_THREAD_STACK_SIZE 1024 * 1024 * 4
 
@@ -129,6 +138,9 @@ typedef struct redisServer {
     int maxmemorry_policy; // max memorry policy, see define maxmemorry policy
     int maxmemorry_samples; // max memorry samples keys count each time
 
+    // event loop
+    eventLoop *el;
+
     // aof fd
     int aof_fd;
 
@@ -137,8 +149,21 @@ typedef struct redisServer {
     sds aof_buf;
     int aof_state;
 
+    long long aof_rewrite_incremental_fsync;
+
     // aof child rewtite
     pid_t aof_child_pid;
+    int aof_rewrite_readdiff_from_parent;
+    int aof_rewrite_writediff_to_child;
+    int aof_rewrite_readack_from_child;
+    int aof_rewrite_writeack_to_parent;
+    int aof_rewrite_readack_from_parent;
+    int aof_rewrite_writeack_to_child;
+    int aof_stop_send_diff;
+    // parent write rewrite diff block list
+    list *aof_rewrite_diff_block;
+    // child read rewrite diff
+    sds aof_child_diff;
 
     // aof flush
     int aof_fsync;
@@ -148,6 +173,8 @@ typedef struct redisServer {
     int aof_last_write_errno;
     int aof_last_write_status;
     time_t aof_last_fsync;
+
+
 
     time_t unix_time;
 
@@ -172,7 +199,7 @@ extern struct redisServer server;
 extern struct sharedObject shared;
 // --------------mstime---------------
 typedef int64_t mstime_t;
-mstime_t ms_now();
+mstime_t mstime();
 
 //--------------command-----------------
 void setCommand(client *c);
@@ -193,6 +220,13 @@ robj* getDecodedObject(robj *o);
 int getLongLongFromObject(robj *obj, long long *target);
 int getLongFromObject(robj *obj, long *target);
 
+static inline void initStaticStringObject(robj *o, void *ptr) {
+    o->refcount = 1;
+    o->type = OBJECT_STRING;
+    o->encoding = OBJECT_ENCODING_RAW;
+    o->ptr = ptr;
+}
+
 //----------------client method----------------------
 void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData);
 void processInputBuffer(client *c);
@@ -205,16 +239,27 @@ int expireIfNeeded(db *db, robj *key);
 //---------------aof persistent ------------
 void feedAppendOnlyFile(struct redisCommand *cmd, int seldb, robj **argv, int argc);
 void flushAppendOnlyFile(int force);
+int rewriteAppendOnlyFileBackground(void);
 
+// -------------fd cntl----------
+int fdSetNonBlock(int fd);
+int closeListeningFds();
 
 #define LOOKUP_NOTOUCH 1 << 0
 #define LOOKUP_TOUCH 1 << 1
+
+// -------------db method--------------
 robj* lookupKey(db *db, robj *key, int flags);
-int getExpire(db *db, robj *key, mstime_t *expireMilliSeconds);
+long long getExpire(db *db, robj *key);
 int dbSyncDelete(db *db, robj *key);
 
 void setKey(db *db, robj *key, robj *val);
 
 int dbAdd(db *db, robj *key, robj *val);
 int dbOverwrite(db *db, robj *key, robj *val);
+
+
+//-------------syncio-------------------
+size_t syncRead(int fd, char *ptr, size_t size, long long timeout);
+
 #endif //REDIS_SERVER_H

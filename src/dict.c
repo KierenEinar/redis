@@ -155,9 +155,8 @@ uint64_t dictFetchUnsignedInteger(dict *d, void *key) {
     return (entry) ? entry->v.u_64 : 0;
 }
 
-int64_t dictFetchSignedInteger(dict *d, void *key) {
-    dictEntry *entry = dictFind(d, key);
-    return (entry) ? entry->v.s_64 : 0;
+int64_t dictFetchSignedInteger(dictEntry *de) {
+    return de->v.s_64;
 }
 
 int dictSetUnsignedInteger(dict *d, void *key, uint64_t us) {
