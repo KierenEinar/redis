@@ -43,6 +43,11 @@ mstime_t mstime() {
 }
 
 
+void exitFromChild(int code) {
+    _exit(code);
+}
+
+
 int main(int argc, char **argv) {
     unsigned long long value = 18446744073709551615UL;
     char *c = putUVarInt64(value);

@@ -245,6 +245,10 @@ int rewriteAppendOnlyFileBackground(void);
 int fdSetNonBlock(int fd);
 int closeListeningFds();
 
+//-------------utils--------------
+void exitFromChild(int code);
+
+
 #define LOOKUP_NOTOUCH 1 << 0
 #define LOOKUP_TOUCH 1 << 1
 

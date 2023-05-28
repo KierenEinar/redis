@@ -19,12 +19,13 @@ static aofrwblock* initblock() {
 
 void aofChildWriteDiff() {
 
-
     while (1) {
 
         listNode *node = listFirst(server.aof_rewrite_diff_block);
-        if (!node || server.aof_stop_send_diff)
+        if (!node || server.aof_stop_send_diff) {
             elDeleteFileEvent(server.el, server.aof_rewrite_writediff_to_child, EL_WRITABLE);
+            return;
+        }
 
         aofrwblock *block = node->value;
         size_t nwriten =  write(server.aof_rewrite_writediff_to_child, block->buf, block->used);
@@ -366,6 +367,21 @@ cerr:
     return C_ERR;
 }
 
+void aofClosePipes() {
+
+    elDeleteFileEvent(server.el, server.aof_rewrite_writediff_to_child, EL_WRITABLE);
+    elDeleteFileEvent(server.el, server.aof_rewrite_readack_from_parent, EL_READABLE);
+
+    close(server.aof_rewrite_writediff_to_child);
+    close(server.aof_rewrite_readdiff_from_parent);
+    close(server.aof_rewrite_readack_from_parent);
+    close(server.aof_rewrite_writeack_to_child);
+    close(server.aof_rewrite_readack_from_child);
+    close(server.aof_rewrite_writeack_to_parent);
+
+}
+
+
 int rewriteAppendOnlyFileRio(rio *r) {
 
     int j;
@@ -516,14 +532,20 @@ int rewriteAppendOnlyFileBackground(void) {
         snprintf(tmp, "temp-aof-rewrite-bg-%d", getpid());
         closeListeningFds();
         if (rewriteAppendOnlyFile(tmp) == C_ERR) {
-
-
-
+            exitFromChild(-1);
+        } else {
+            exitFromChild(0);
         }
-
     } else {
 
+        if (childPid == -1) {
+            aofClosePipes();
+            return C_ERR;
+        }
+
         server.aof_child_pid = childPid;
+
+        server.select_db = -1;
 
     }
 
