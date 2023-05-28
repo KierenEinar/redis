@@ -41,25 +41,6 @@
 #define STRING_INT_LIMIT_LEN 20
 #define EMBSTR_LEN_LIMIT 39
 
-// define redis eviction strategy
-#define MAXMEMORY_FLAG_LRU 1 << 0
-#define MAXMEMORY_FLAG_LFU 1 << 1
-#define MAXMEMORY_ALLKEYS 1 << 2
-
-// define maxmemorry policy
-#define MAXMEMORY_VOLATILE_LRU 0 << 8 | MAXMEMORY_FLAG_LRU
-#define MAXMEMORY_VOLATILE_LFU 1 << 8 | MAXMEMORY_FLAG_LFU
-#define MAXMEMORY_VOLATILE_TTL 2 << 8
-#define MAXMEMORY_VOLATILE_RANDOM 3 << 8
-
-#define MAXMEMORY_ALLKEYS_LRU 4 << 8 | MAXMEMORY_FLAG_LRU | MAXMEMORY_ALLKEYS
-#define MAXMEMORY_ALLKEYS_LFU 5 << 8 | MAXMEMORY_FLAG_LFU | MAXMEMORY_ALLKEYS
-#define MAXMEMORY_ALLKEYS_RANDOM 6 << 8 | MAXMEMORY_ALLKEYS
-#define MAXMEMORY_NOEVICTION 7 << 8
-
-#define CLOCK_RESOLUTION 1000
-#define CLOCK_MAX ((1<<24) -1)
-
 // define protocol
 #define PROTO_IO_BUF_SIZE 1024 * 16
 #define PROTO_MAX_INLINE_SIZE 1024 * 32
@@ -71,23 +52,6 @@
 // define result
 #define C_OK 1
 #define C_ERR -1
-
-// aof state
-#define AOF_ON 1
-#define AOF_OFF 0
-#define AOF_READDIFF_PER_INTERVAL_BYTES (1024 * 10)
-
-
-// aof fsync policy
-#define AOF_FSYNC_NO 0
-#define AOF_FSYNC_EVERYSEC 1
-#define AOF_FSYNC_ALWAYS 2
-
-// aof rewrite block size
-#define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
-
-// sync wait
-#define REDIS_WAIT_RESOLUTION 10
 
 #define REDIS_THREAD_STACK_SIZE 1024 * 1024 * 4
 
@@ -134,50 +98,11 @@ typedef struct redisServer {
     db *db; // arrays of redisdb
     int db_nums; // nums of db, set default 16
     client **client; // arrays of client ptr
-    unsigned long long maxmemorry; // max memorry
-    int maxmemorry_policy; // max memorry policy, see define maxmemorry policy
-    int maxmemorry_samples; // max memorry samples keys count each time
 
     // event loop
     eventLoop *el;
 
-    // aof fd
-    int aof_fd;
-
-    // aof buf append
-    int select_db;
-    sds aof_buf;
-    int aof_state;
-
-    long long aof_rewrite_incremental_fsync;
-
-    // aof child rewtite
-    pid_t aof_child_pid;
-    int aof_rewrite_readdiff_from_parent;
-    int aof_rewrite_writediff_to_child;
-    int aof_rewrite_readack_from_child;
-    int aof_rewrite_writeack_to_parent;
-    int aof_rewrite_readack_from_parent;
-    int aof_rewrite_writeack_to_child;
-    int aof_stop_send_diff;
-    // parent write rewrite diff block list
-    list *aof_rewrite_diff_block;
-    // child read rewrite diff
-    sds aof_child_diff;
-
-    // aof flush
-    int aof_fsync;
-    unsigned long long aof_fsync_delayed;
-    unsigned long long aof_current_size;
-    time_t aof_flush_postponed_start;
-    int aof_last_write_errno;
-    int aof_last_write_status;
-    time_t aof_last_fsync;
-
-
-
     time_t unix_time;
-
 
 };
 
@@ -193,17 +118,12 @@ int dictSdsComparer(const void *key1, const void *key2);
 void dictSdsDestructor(void *val);
 void dictObjectDestructor(void *val);
 
-// global vars
-extern dictType dbDictType;
 extern struct redisServer server;
 extern struct sharedObject shared;
+
 // --------------mstime---------------
 typedef int64_t mstime_t;
 mstime_t mstime();
-
-//--------------command-----------------
-void setCommand(client *c);
-void setGenericCommand(client *c, robj *key, robj *value, robj *expire, int unit, int flags);
 
 //--------------redisObject public method ---------------
 robj* createObject(int type, void *ptr);
@@ -231,36 +151,6 @@ static inline void initStaticStringObject(robj *o, void *ptr) {
 void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData);
 void processInputBuffer(client *c);
 int processMultiBulkBuffer(client *c);
-
-//-----------------db public method----------------------
-robj* lookupKeyWrite(db *db, robj *key);
-int expireIfNeeded(db *db, robj *key);
-
-//---------------aof persistent ------------
-void feedAppendOnlyFile(struct redisCommand *cmd, int seldb, robj **argv, int argc);
-void flushAppendOnlyFile(int force);
-int rewriteAppendOnlyFileBackground(void);
-
-// -------------fd cntl----------
-int fdSetNonBlock(int fd);
-int closeListeningFds();
-
-//-------------utils--------------
-void exitFromChild(int code);
-
-
-#define LOOKUP_NOTOUCH 1 << 0
-#define LOOKUP_TOUCH 1 << 1
-
-// -------------db method--------------
-robj* lookupKey(db *db, robj *key, int flags);
-long long getExpire(db *db, robj *key);
-int dbSyncDelete(db *db, robj *key);
-
-void setKey(db *db, robj *key, robj *val);
-
-int dbAdd(db *db, robj *key, robj *val);
-int dbOverwrite(db *db, robj *key, robj *val);
 
 
 //-------------syncio-------------------

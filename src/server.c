@@ -6,22 +6,6 @@
 #include "varint.h"
 #include <limits.h>
 
-uint64_t dictSdsHash(const void *key) {
-    return 2ul;
-}
-
-int dictSdsComparer(const void *key1, const void *key2) {
-    return 1;
-}
-
-void dictObjectDestructor(void *data) {
-
-}
-
-void dictSdsDestructor(void *data) {
-
-}
-
 // global vars
 dictType dbDictType = {
         dictSdsHash,
