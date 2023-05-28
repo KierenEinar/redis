@@ -9,7 +9,7 @@
 #include <sys/time.h>
 void bioInit(void);
 unsigned long bioPendingJobsOfType(int type);
-void bioProcessBackgroundJobs(void *argv);
+void *bioProcessBackgroundJobs(void *argv);
 unsigned long waitStepOfType(int type);
 void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3);
 void bioKillThreads(void);

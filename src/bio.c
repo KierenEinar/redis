@@ -41,15 +41,19 @@ void bioInit(void) {
         // todo server log set stack failed
     }
 
-    for (int i=0; i<BIO_NUMS_OPS; i++) {
-        void *argv = (long)i;
-        pthread_create(&threads[i], &attr, bioProcessBackgroundJobs, argv);
+    for (long i=0; i<BIO_NUMS_OPS; i++) {
+        void *argv = (void*)(i);
+        pthread_t thread;
+        if (pthread_create(&thread, &attr, bioProcessBackgroundJobs, argv) == 0) {
+            exit(1);
+        }
+        threads[i] = thread;
     }
 
 
 }
 
-void bioProcessBackgroundJobs(void *argv) {
+void* bioProcessBackgroundJobs(void *argv) {
 
     listNode *ln;
     bio_job *job;
@@ -59,7 +63,7 @@ void bioProcessBackgroundJobs(void *argv) {
 
     if (type >= BIO_NUMS_OPS) {
         // todo serverlog error
-        return;
+        return NULL;
     }
     // todo server log thread self
     pthread_setcanceltype(PTHREAD_CANCEL_ENABLE, NULL);
@@ -78,12 +82,13 @@ void bioProcessBackgroundJobs(void *argv) {
 
     while (1) {
 
-        if (listLength(&jobs[type]) == 0) {
+
+        if (listLength(jobs[type]) == 0) {
             pthread_cond_wait(&thread_newjob_cond[type], &thread_mutex[type]);
             continue;
         }
 
-        ln = listFirst(&jobs[type]);
+        ln = listFirst(jobs[type]);
         job = ln->value;
 
         pthread_mutex_unlock(&thread_mutex[type]);
@@ -100,7 +105,7 @@ void bioProcessBackgroundJobs(void *argv) {
 
         zfree(job);
         pthread_mutex_lock(&thread_mutex[type]);
-        listDelNode(&jobs[type], ln);
+        listDelNode(jobs[type], ln);
         bio_pending[type]--;
         pthread_cond_broadcast(&thread_waitstep_cond[type]);
     }
@@ -137,8 +142,8 @@ unsigned long waitStepOfType(int type) {
 void bioKillThreads(void) {
 
     for (int i=0; i<BIO_NUMS_OPS; i++) {
-        if (pthread_cancel(&threads[i]) == 0) {
-            if (pthread_join(&threads[i], NULL) == 0) {
+        if (pthread_cancel(threads[i]) == 0) {
+            if (pthread_join(threads[i], NULL) == 0) {
                 // join success
             } else {
                 // todo server log join failed

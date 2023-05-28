@@ -3,8 +3,6 @@ project(redis C)
 
 set(CMAKE_C_STANDARD 11)
 
-aux_source_directory(${PROJECT_SOURCE_DIR}/src SRC_LIST)
-
-add_executable(redis ${SRC_LIST})
+add_executable(redis src/adlist.c src/bio.c src/config.c src/el.c src/rio.c src/sds.c src/server.c src/syncio.c src/utils.c src/varint.c src/zmalloc.c)
 
 
