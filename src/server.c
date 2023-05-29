@@ -20,10 +20,63 @@ void exitFromChild(int code) {
     _exit(code);
 }
 
+int listenPort(int backlog) {
+
+    int unsupported = 0;
+
+    // bind and listen inet_v6
+    server.ipfd[server.ipfd_count] = anetTcp6Server(server.neterr, server.port, backlog);
+    if (server.ipfd[server.ipfd_count] != ANET_ERR) {
+        anetNonBlock(server.ipfd[server.ipfd_count], 0);
+        fprintf(stdout, "server listen, fd=%d\r\n", server.ipfd[server.ipfd_count]);
+        server.ipfd_count++;
+    } else if (errno == EAFNOSUPPORT) {
+        unsupported++;
+    }
+
+    // bind and listen inet_v4
+    server.ipfd[server.ipfd_count] = anetTcpServer(server.neterr, server.port, backlog);
+    if (server.ipfd[server.ipfd_count] != ANET_ERR) {
+        anetNonBlock(server.ipfd[server.ipfd_count], 0);
+        fprintf(stdout, "server listen, fd=%d\r\n", server.ipfd[server.ipfd_count]);
+        server.ipfd_count++;
+    } else if (errno == EAFNOSUPPORT) {
+        unsupported++;
+    }
+
+    if (server.ipfd_count == 0) {
+        return C_ERR; // non ip address binded
+    }
+
+    return C_OK;
+}
+
+
+
+void initServer() {
+    server.backlog = DEFAULT_BACKLOG;
+    server.port = DEFAULT_BIND_PORT;
+    server.unix_time = time(NULL);
+    server.el = elCreateEventLoop(1024);
+    if (listenPort(server.backlog) == C_ERR) {
+        exit(1);
+    }
+
+    for (int i=0; i<server.ipfd_count; i++) {
+        int fd = server.ipfd[i];
+        if (elCreateFileEvent(server.el, fd, EL_READABLE, acceptTcpHandler, NULL) == EL_ERR) {
+            exit(1);
+        }
+    }
+
+}
 
 int main(int argc, char **argv) {
-    printf("server start....\r\n");
-    server.el = elCreateEventLoop(1024);
+    printf("server start...., pid=%d\r\n", getpid());
+    initServer();
     elMain(server.el);
     return 0;
 }
+
+
+

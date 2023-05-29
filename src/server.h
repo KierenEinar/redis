@@ -17,6 +17,11 @@
 #include <string.h>
 #include <pthread.h>
 #include <signal.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <stdarg.h>
+#include <fcntl.h>
 
 #include "varint.h"
 #include "utils.h"
@@ -27,8 +32,15 @@
 #include "rio.h"
 #include "adlist.h"
 #include "sds.h"
+#include "anet.h"
 
 #define LRUBITS 24
+
+// define networking
+#define SERVER_NETWORK_ERR_LEN 255
+#define DEFAULT_BACKLOG 511
+#define DEFAULT_BIND_PORT 6379
+#define SERVER_NETWORK_IP_FD_LEN 16
 
 // define result
 #define C_OK 1
@@ -62,6 +74,16 @@ typedef struct redisServer {
 
     time_t unix_time;
 
+    // networking
+    int ipfd_count;
+    int ipfd[SERVER_NETWORK_IP_FD_LEN];
+    char neterr[SERVER_NETWORK_ERR_LEN];
+    int port;
+    int backlog;
+
+
+
+
 }redisServer;
 
 #define OBJ_SHARED_INTEGERS 10000
@@ -94,5 +116,9 @@ int getLongLongFromObject(robj *obj, long long *target);
 
 //-------------syncio-------------------
 size_t syncRead(int fd, char *ptr, size_t size, long long timeout);
+
+//-------------networking----------------
+void acceptTcpHandler(struct eventLoop *el, int fd, int mask, void *clientData);
+void acceptCommandHandler(int cfd, char *ip, int port);
 
 #endif //REDIS_SERVER_H
