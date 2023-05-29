@@ -8,11 +8,10 @@ void readTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
 
     char buf[128];
     ssize_t nwritten = 0;
-    printf("hello ???\r\n");
     while (1) {
         nwritten = read(fd, buf, sizeof(buf)-1);
         if (nwritten <= 0) return;
-        printf("nwritten = %d\r\n", nwritten);
+        printf("nwritten = %ld\r\n", nwritten);
         buf[nwritten] = '\0';
         fprintf(stdout, "get from client, content=%s\r\n", buf);
         write(fd, "success\r\n", strlen("success\r\n"));
