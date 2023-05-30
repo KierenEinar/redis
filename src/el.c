@@ -104,8 +104,8 @@ int elCreateFileEvent(eventLoop* el, int fd, int mask, fileProc proc, void *clie
 
     fileEvent *event = &el->events[fd];
     event->mask |= mask;
-    if (event->mask & EL_READABLE) event->rfileProc = proc;
-    if (event->mask & EL_WRITABLE) event->wfileProc = proc;
+    if (mask & EL_READABLE) event->rfileProc = proc;
+    if (mask & EL_WRITABLE) event->wfileProc = proc;
     event->clientData = clientData;
 
     if (fd > el->maxfd) {
@@ -128,7 +128,6 @@ int elDeleteFileEvent(eventLoop* el, int fd, int mask) {
     if (mask & EL_WRITABLE) mask |= EL_BARRIER;
 
     event->mask &= ~mask;
-
     if (elApiDeleteEvent(el, fd, mask) == -1) {
         return EL_ERR;
     }
@@ -151,7 +150,7 @@ int elDeleteFileEvent(eventLoop* el, int fd, int mask) {
 
 int elGetFileEvent(eventLoop* el, int fd, int mask) {
 
-    if (el->setsize >= fd) return -1;
+    if (el->setsize <= fd) return -1;
     if (el->events[fd].mask & mask) return 1;
     return 0;
 }

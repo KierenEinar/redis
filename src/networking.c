@@ -4,6 +4,12 @@
 
 #include "server.h"
 
+void writeTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
+    write(fd, "success\r\n", strlen("success\r\n"));
+    elDeleteFileEvent(el, fd, EL_WRITABLE);
+    return;
+}
+
 void readTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
 
     char buf[128];
@@ -14,7 +20,9 @@ void readTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
         printf("nwritten = %ld\r\n", nwritten);
         buf[nwritten] = '\0';
         fprintf(stdout, "get from client, content=%s\r\n", buf);
-        write(fd, "success\r\n", strlen("success\r\n"));
+
+        if (!elGetFileEvent(el, fd, EL_WRITABLE))
+            elCreateFileEvent(server.el, fd, EL_WRITABLE, writeTcpHandler, NULL);
     }
 
 }
