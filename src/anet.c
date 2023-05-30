@@ -122,7 +122,7 @@ int anetTcpAccept(char *err, int fd, char *ip, size_t iplen, int *port) {
 
     if (addr.ss_family == AF_INET6) {
         struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)&addr;
-        if (ip) inet_ntop(AF_INET, &in6->sin6_addr, ip, iplen);
+        if (ip) inet_ntop(AF_INET6, &in6->sin6_addr, ip, iplen);
         if (port) *port = ntohs(in6->sin6_port);
     }
 
