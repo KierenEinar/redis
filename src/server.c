@@ -27,7 +27,7 @@ int listenPort(int backlog) {
     // bind and listen inet_v6
     server.ipfd[server.ipfd_count] = anetTcp6Server(server.neterr, server.port, backlog);
     if (server.ipfd[server.ipfd_count] != ANET_ERR) {
-        anetNonBlock(server.ipfd[server.ipfd_count], 0);
+        anetNonBlock(server.ipfd[server.ipfd_count]);
         fprintf(stdout, "server listen, fd=%d\r\n", server.ipfd[server.ipfd_count]);
         server.ipfd_count++;
     } else if (errno == EAFNOSUPPORT) {
@@ -37,7 +37,7 @@ int listenPort(int backlog) {
     // bind and listen inet_v4
     server.ipfd[server.ipfd_count] = anetTcpServer(server.neterr, server.port, backlog);
     if (server.ipfd[server.ipfd_count] != ANET_ERR) {
-        anetNonBlock(server.ipfd[server.ipfd_count], 0);
+        anetNonBlock(server.ipfd[server.ipfd_count]);
         fprintf(stdout, "server listen, fd=%d\r\n", server.ipfd[server.ipfd_count]);
         server.ipfd_count++;
     } else if (errno == EAFNOSUPPORT) {

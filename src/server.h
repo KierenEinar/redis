@@ -50,6 +50,10 @@
 
 #define REDIS_THREAD_STACK_SIZE 1024 * 1024 * 4
 
+#define PROTO_REQ_INLINE 1
+#define PROTO_REQ_MULTI 2
+#define PROTO_NREAD     (1024 * 16)
+
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -70,13 +74,17 @@ typedef struct client {
     char err[255];
     char *querybuf;
     size_t buflen;
+    size_t bufcap;
     long multilen;
     long bulklen;
-    char **argv;
+    char **argv; // array of string
     long argvlen;
     int argc;
-} client;
 
+    int reqtype; // protocol is inline or multibulk
+
+    int fd;
+} client;
 
 
 typedef struct redisServer {
@@ -131,5 +139,5 @@ void acceptTcpHandler(struct eventLoop *el, int fd, int mask, void *clientData);
 void acceptCommandHandler(int cfd, char *ip, int port);
 
 int processMultiBulkBuffer(client *client);
-
+int processInlineBuffer(client *client);
 #endif //REDIS_SERVER_H

@@ -11,7 +11,8 @@
 #define ANET_OK 0
 
 
-void anetNonBlock(int fd, int block);
+void anetNonBlock(int fd);
+void anetBlock(int fd);
 int anetTcpServer(char *err, int port, int backlog);
 int anetTcp6Server(char *err, int port, int backlog);
 int anetTcpAccept(char *err, int fd, char *ip, size_t iplen, int *port);

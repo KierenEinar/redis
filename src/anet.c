@@ -77,7 +77,7 @@ end:
     return s;
 }
 
-void anetNonBlock(int fd, int block) {
+void anetSetBlock(int fd, int block) {
     int flag = fcntl(fd, F_GETFL);
     if (block) {
         flag &= ~O_NONBLOCK;
@@ -86,6 +86,14 @@ void anetNonBlock(int fd, int block) {
     }
 
     fcntl(fd, F_SETFL, flag);
+}
+
+void anetNonBlock(int fd) {
+    anetSetBlock(fd, 0);
+}
+
+void anetBlock(int fd) {
+    anetSetBlock(fd, 1);
 }
 
 int anetTcpServer(char *err, int port, int backlog) {
@@ -126,6 +134,7 @@ int anetTcpAccept(char *err, int fd, char *ip, size_t iplen, int *port) {
         if (port) *port = ntohs(in6->sin6_port);
     }
 
+    fprintf(stdout, "accept, ip=%s, port=%d\r\n", ip, *port);
     return cfd;
 }
 
