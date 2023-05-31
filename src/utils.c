@@ -5,6 +5,9 @@
 #include "utils.h"
 #include <limits.h>
 #include <string.h>
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
 int string2ll(const char *s, size_t slen, long long *value) {
 
     const char *p = s;

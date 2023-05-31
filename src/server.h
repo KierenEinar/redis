@@ -66,6 +66,18 @@ typedef struct redisObject {
 //    redisCommandProc *proc;
 //}redisCommand;
 
+typedef struct client {
+    char err[255];
+    char *querybuf;
+    size_t buflen;
+    long multilen;
+    long bulklen;
+    char **argv;
+    long argvlen;
+    int argc;
+} client;
+
+
 
 typedef struct redisServer {
 
@@ -80,9 +92,6 @@ typedef struct redisServer {
     char neterr[SERVER_NETWORK_ERR_LEN];
     int port;
     int backlog;
-
-
-
 
 }redisServer;
 
@@ -120,5 +129,7 @@ size_t syncRead(int fd, char *ptr, size_t size, long long timeout);
 //-------------networking----------------
 void acceptTcpHandler(struct eventLoop *el, int fd, int mask, void *clientData);
 void acceptCommandHandler(int cfd, char *ip, int port);
+
+int processMultiBulkBuffer(client *client);
 
 #endif //REDIS_SERVER_H
