@@ -8,6 +8,101 @@
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <ctype.h>
+
+typedef struct _cstring {
+    char *s;
+    size_t used;
+    size_t free;
+}_cstring;
+
+static _cstring *cstringnew(size_t cap) {
+    _cstring *cstr = malloc(sizeof(*cstr));
+    cstr->free = cap;
+    cstr->s = malloc(sizeof(char) * (cap + 1));
+    cstr->used = 0;
+    return cstr;
+}
+
+static void cstrfree(_cstring *cstr) {
+    zfree(cstr->s);
+    zfree(cstr);
+}
+
+static _cstring *cstringcatstr(_cstring *cstr, const char *s, size_t len) {
+
+    if (cstr->free < len) {
+        size_t incr_cap = cstr->free + cstr->used;
+        if (incr_cap < len) {
+            incr_cap = len * 2;
+        }
+        cstr->s = zrealloc(cstr->s, cstr->free + cstr->used + incr_cap + 1);
+        cstr->free += incr_cap;
+    }
+
+    memcpy(cstr->s + cstr->used, s, len);
+    cstr->used+=len;
+    cstr->free-=len;
+    cstr->s[cstr->used] = '\0';
+    return cstr;
+}
+
+static char* cstringcopystr(_cstring *cstr) {
+    char *s = zmalloc(cstr->used);
+    memcpy(s, cstr->s, cstr->used+1);
+    return s;
+}
+
+int is_hex_digit(char c) {
+    return  (c >= '0' && c <= '9') ||
+            (c >= 'A' && c <= 'Z') ||
+            (c >= 'a' && c <= 'z') ? 1 : 0;
+}
+
+int hex_digit_to_int(char c) {
+    switch (c) {
+        case '0':
+            return 0;
+        case '1':
+            return 1;
+        case '2':
+            return 2;
+        case '3':
+            return 3;
+        case '4':
+            return 4;
+        case '5':
+            return 5;
+        case '6':
+            return 6;
+        case '7':
+            return 7;
+        case '8':
+            return 8;
+        case '9':
+            return 9;
+        case 'a':
+        case 'A':
+            return 10;
+        case 'b':
+        case 'B':
+            return 11;
+        case 'c':
+        case 'C':
+            return 12;
+        case 'd':
+        case 'D':
+            return 13;
+        case 'e':
+        case 'E':
+            return 14;
+        case 'f':
+        case 'F':
+            return 15;
+
+    }
+}
+
 int string2ll(const char *s, size_t slen, long long *value) {
 
     const char *p = s;
@@ -144,6 +239,130 @@ size_t ll2string(char *s, size_t slen, long long value) {
     *ss = '\0';
     return vlen;
 }
+
+// split a line into multi args
+char** stringsplitargs(const char *line, int *argc) {
+
+
+    char *p = line;
+    char **vector = NULL;
+    _cstring *current = NULL;
+
+    *argc = 0;
+
+    while (1) {
+
+        int done = 0;
+        int inq = 0; // is in quote context
+        int insq = 0; // is in single quote context
+
+        if (*p && isspace(*p)) p++;
+
+        if (*p) {
+
+            if (current == NULL) {
+                current = cstringnew(32);
+            }
+
+            while (!done) {
+                if (inq) {
+
+                    if (*p == '\\' && *(p+1) == 'x' && is_hex_digit(*(p+2)) && is_hex_digit(*(p+3))) {
+                        unsigned char byte;
+                        byte = hex_digit_to_int(*(p+2)) * 16
+                                + hex_digit_to_int(*(p+3));
+
+                        current = cstringcatstr(current, &byte, 1);
+                        p+=3;
+                    } else if (*p == '\\' && *(p+1)) {
+                        unsigned char byte;
+                        p++;
+                        switch (*p) {
+                            case 'r': byte = '\r'; break;
+                            case 'n': byte = '\n'; break;
+                            case 't': byte = '\t'; break;
+                            case 'a': byte = '\a'; break;
+                            case 'b': byte = '\b'; break;
+                            default:
+                                byte = *p;
+                                break;
+                        }
+                        current = cstringcatstr(current, &byte, 1);
+                    } else if (*p == '"') {
+                        if (*(p+1) && !isspace(*(p+1))) goto err;
+                        done = 1;
+                    } else if (!*p) {
+                        goto err;
+                    } else {
+                        current = cstringcatstr(current, *p, 1);
+                    }
+
+                } else if (insq) {
+                    if (*p == '\\' && *(p+1) == '\'') {
+                        current = cstringcatstr(current, '\'', 1);
+                        p++;
+                    } else if (*p == '\'') {
+                        if (*(p+1) && !isspace(*(p+1))) goto err;
+                        done = 1;
+                    } else if (!*p) {
+                        goto err;
+                    } else {
+                        current = cstringcatstr(current, *p, 1);
+                    }
+
+                } else {
+
+                    switch (*p) {
+                        case ' ':
+                        case '\t':
+                        case '\r':
+                        case '\n':
+                        case '\0':
+                            done = 1;
+                            break;
+                        case '"':
+                            inq = 1;
+                            break;
+                        case '\'':
+                            insq = 1;
+                            break;
+                        default:
+                            current = cstringcatstr(current, *p, 1);
+                            break;
+                    }
+                }
+
+                if (*p) p++;
+
+            }
+
+            if (current->used > 0) {
+                vector = realloc(vector, sizeof(char*) * (*argc) + 1);
+                vector[*argc++] = cstringcopystr(current);
+            }
+
+            cstrfree(current);
+            current = NULL;
+
+        } else {
+            if (vector == NULL) return malloc(sizeof(void*));
+            return vector;
+        }
+    }
+
+err:
+    if (current != NULL) {
+        cstrfree(current);
+        current = NULL;
+    }
+
+    for (int i=0; i<*argc; i++) {
+        zfree(vector[i]);
+    }
+    zfree(vector);
+    return NULL;
+}
+
 
 #ifdef RUN_UT
 int main(int argc, char **argv) {
