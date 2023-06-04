@@ -244,7 +244,6 @@ size_t ll2string(char *s, size_t slen, long long value) {
 // split a line into multi args
 char** stringsplitargs(const char *line, int *argc) {
 
-
     const char *p = line;
     char **vector = NULL;
     _cstring *current = NULL;
@@ -270,7 +269,7 @@ char** stringsplitargs(const char *line, int *argc) {
                     if (*p == '\\' && *(p+1) == 'x' && is_hex_digit(*(p+2)) && is_hex_digit(*(p+3))) {
                         unsigned char byte;
                         byte = hex_digit_to_int(*(p+2)) * 16
-                                + hex_digit_to_int(*(p+3));
+                               + hex_digit_to_int(*(p+3));
 
                         current = cstringcatstr(current, (char *)&byte, 1);
                         p+=3;
@@ -337,8 +336,9 @@ char** stringsplitargs(const char *line, int *argc) {
             }
 
             if (current->used > 0) {
-                vector = realloc(vector, sizeof(char*) * (*argc) + 1);
-                vector[*argc++] = cstringcopystr(current);
+                vector = realloc(vector, sizeof(char*) * ((*argc) + 1));
+                vector[*argc] = cstringcopystr(current);
+                (*argc)++;
             }
 
             cstrfree(current);
@@ -350,7 +350,7 @@ char** stringsplitargs(const char *line, int *argc) {
         }
     }
 
-err:
+    err:
     if (current != NULL) {
         cstrfree(current);
         current = NULL;
@@ -362,7 +362,6 @@ err:
     zfree(vector);
     return NULL;
 }
-
 
 #ifdef RUN_UT
 int main(int argc, char **argv) {
