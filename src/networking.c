@@ -250,11 +250,56 @@ int processMultiBulkBuffer(client *c){
     return RESP_PROCESS_ERR;
 }
 
-int processInlineBuffer(client *client) {
+int processInlineBuffer(client *c) {
 
-    fprintf(stdout, "receive msg=%s\r\n", client->querybuf);
-    memset(client->querybuf, 0, client->buflen);
-    client->buflen = 0;
-    client->reqtype = 0;
+    char *newline = strchr(c->querybuf, '\n');
+    size_t nread;
+    if (newline == NULL) {
+        if (c->buflen >= RESP_PROTO_MAX_INLINE_SEG) {
+            char errmsg[] = "inline len limit 64k";
+            memcpy(c->err, errmsg, sizeof(errmsg));
+        }
+        return RESP_PROCESS_ERR;
+    }
+
+    nread = newline - c->querybuf + 1;
+
+    if (*(newline-1) == '\r') {
+        newline--;
+    }
+
+    size_t auxlen = newline-c->querybuf;
+
+    char aux[auxlen+1];
+    memcpy(aux, c->querybuf, auxlen);
+    aux[auxlen] = '\0';
+
+    int argc = 0;
+    char **vector = stringsplitargs(aux, &argc);
+    if (vector == NULL) {
+        char errmsg[] = "inline buffer split args failed";
+        memcpy(c->err, errmsg, sizeof(errmsg));
+        return RESP_PROCESS_ERR;
+    }
+
+
+    if (c->argv) {
+        for (int i=0; i<c->argc; i++) {
+            zfree(c->argv[i]);
+        }
+        zfree(c->argv);
+    }
+
+    c->argc = argc;
+    c->argv = malloc(sizeof(char *) * argc);
+
+    for (int i=0; i<argc; i++) {
+        c->argv[i] = vector[i];
+    }
+    zfree(vector);
+
+    memmove(c->querybuf, c->querybuf+nread, c->buflen - nread);
+    c->buflen-=nread;
     return RESP_PROCESS_OK;
+
 }
