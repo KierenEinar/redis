@@ -99,7 +99,8 @@ int hex_digit_to_int(char c) {
         case 'f':
         case 'F':
             return 15;
-
+        default:
+            return 0;
     }
 }
 
@@ -244,12 +245,11 @@ size_t ll2string(char *s, size_t slen, long long value) {
 char** stringsplitargs(const char *line, int *argc) {
 
 
-    char *p = line;
+    const char *p = line;
     char **vector = NULL;
     _cstring *current = NULL;
 
     *argc = 0;
-
     while (1) {
 
         int done = 0;
@@ -272,7 +272,7 @@ char** stringsplitargs(const char *line, int *argc) {
                         byte = hex_digit_to_int(*(p+2)) * 16
                                 + hex_digit_to_int(*(p+3));
 
-                        current = cstringcatstr(current, &byte, 1);
+                        current = cstringcatstr(current, (char *)&byte, 1);
                         p+=3;
                     } else if (*p == '\\' && *(p+1)) {
                         unsigned char byte;
@@ -287,19 +287,19 @@ char** stringsplitargs(const char *line, int *argc) {
                                 byte = *p;
                                 break;
                         }
-                        current = cstringcatstr(current, &byte, 1);
+                        current = cstringcatstr(current, (char *)&byte, 1);
                     } else if (*p == '"') {
                         if (*(p+1) && !isspace(*(p+1))) goto err;
                         done = 1;
                     } else if (!*p) {
                         goto err;
                     } else {
-                        current = cstringcatstr(current, *p, 1);
+                        current = cstringcatstr(current, p, 1);
                     }
 
                 } else if (insq) {
                     if (*p == '\\' && *(p+1) == '\'') {
-                        current = cstringcatstr(current, '\'', 1);
+                        current = cstringcatstr(current, "'", 1);
                         p++;
                     } else if (*p == '\'') {
                         if (*(p+1) && !isspace(*(p+1))) goto err;
@@ -307,7 +307,7 @@ char** stringsplitargs(const char *line, int *argc) {
                     } else if (!*p) {
                         goto err;
                     } else {
-                        current = cstringcatstr(current, *p, 1);
+                        current = cstringcatstr(current, p, 1);
                     }
 
                 } else {
@@ -327,7 +327,7 @@ char** stringsplitargs(const char *line, int *argc) {
                             insq = 1;
                             break;
                         default:
-                            current = cstringcatstr(current, *p, 1);
+                            current = cstringcatstr(current, p, 1);
                             break;
                     }
                 }
