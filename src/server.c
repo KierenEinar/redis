@@ -58,6 +58,7 @@ void initServer() {
     server.port = DEFAULT_BIND_PORT;
     server.unix_time = time(NULL);
     server.el = elCreateEventLoop(1024);
+    server.client_pending_writes = listCreate();
     if (listenPort(server.backlog) == C_ERR) {
         exit(1);
     }

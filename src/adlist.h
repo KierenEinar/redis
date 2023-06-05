@@ -30,7 +30,7 @@ typedef struct list {
 list* listCreate();
 void listDelNode(list* l, listNode* ln);
 void listAddNodeTail(list* l, void *value);
-
-
+void listAddNodeHead(list* l, void *value);
+void listEmpty(list *l);
 
 #endif //REDIS_ADLIST_H

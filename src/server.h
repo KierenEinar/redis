@@ -50,9 +50,16 @@
 
 #define REDIS_THREAD_STACK_SIZE 1024 * 1024 * 4
 
+// proto read
 #define PROTO_REQ_INLINE 1
 #define PROTO_REQ_MULTI 2
 #define PROTO_NREAD     (1024 * 16)
+
+// proto reply
+#define PROTO_REPLY_CHUNK_BYTES (1024 * 16)
+
+// client flag
+#define CLIENT_PENDING_WRITE (1 << 0)
 
 typedef struct redisObject {
     unsigned type:4;
@@ -82,8 +89,18 @@ typedef struct client {
     int argc;
 
     int reqtype; // protocol is inline or multibulk
-
     int fd;
+
+    unsigned long long flag; // client flag
+
+    // reply list
+    list *reply;
+    unsigned long long reply_bytes;
+
+    // reply
+    off_t bufpos;
+    char  buf[PROTO_REPLY_CHUNK_BYTES];
+
 } client;
 
 
@@ -100,6 +117,9 @@ typedef struct redisServer {
     char neterr[SERVER_NETWORK_ERR_LEN];
     int port;
     int backlog;
+
+    list *client_pending_writes; // client pending write list
+
 
 }redisServer;
 

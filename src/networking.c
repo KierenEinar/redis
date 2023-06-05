@@ -26,6 +26,43 @@ void readTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
     }
 }
 
+int prepareClientToWrite(client *c) {
+    if (!(c->flag & CLIENT_PENDING_WRITE)) {
+        c->flag |= CLIENT_PENDING_WRITE;
+        listAddNodeTail(server.client_pending_writes, c);
+    }
+    return C_OK;
+}
+
+int _addReplyStringToBuffer(client *c, const char *str, size_t len) {
+
+    size_t avaliable = PROTO_REPLY_CHUNK_BYTES - c->bufpos;
+
+    if (listLength(c->reply) > 0)
+        return C_ERR;
+
+    if (len > avaliable)
+        return C_ERR;
+
+    memcpy(c->buf + c->bufpos, str, len);
+    c->querybuf+=len;
+
+    return C_OK;
+}
+
+int _addReplyStringToList (client *c, const char *str, size_t len) {
+    return C_OK;
+}
+
+
+void addReplyString(client *c, const char *str, size_t len) {
+
+    if (prepareClientToWrite(c) == C_OK)
+        if (_addReplyStringToBuffer(c, str, len) != C_OK)
+            _addReplyStringToList(c, str, len);
+}
+
+
 
 void acceptTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
 
@@ -57,6 +94,8 @@ void processInputBuffer(client *c) {
         } else {
            if (processInlineBuffer(c) != RESP_PROCESS_OK) break;
         }
+
+        c->reqtype = 0;
 
         if (c->argc == 0) {
             // todo reset client and process next command
@@ -131,8 +170,14 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
     c->argv = NULL;
     c->argc = 0;
 
+    c->flag = 0;
+
     c->fd = cfd;
     c->reqtype = 0;
+
+    c->bufpos = 0;
+    c->reply = listCreate();
+    c->reply_bytes = 0ll;
 }
 
 int processMultiBulkBuffer(client *c){
