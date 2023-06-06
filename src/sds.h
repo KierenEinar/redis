@@ -9,6 +9,12 @@
 
 typedef char* sds;
 
+typedef struct sdshdr {
+    size_t  used;
+    size_t  free;
+    char    str[];
+}sdshdr;
+
 sds sdsnewlen(const char *c, size_t len);
 sds sdsempty();
 sds sdsMakeRoomFor(sds s, size_t len);

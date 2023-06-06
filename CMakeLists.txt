@@ -3,7 +3,7 @@ project(redis C)
 
 set(CMAKE_C_STANDARD 11)
 
-add_executable(redis src/adlist.c src/bio.c src/config.c src/el.c src/rio.c src/sds.c src/server.c
-        src/syncio.c src/utils.c src/varint.c src/zmalloc.c src/anet.c src/networking.c)
+add_executable(redis src/zmalloc.c src/adlist.c src/bio.c src/config.c src/el.c src/rio.c src/sds.c src/server.c
+        src/syncio.c src/utils.c src/varint.c src/anet.c src/networking.c)
 
 

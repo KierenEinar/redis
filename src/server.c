@@ -51,7 +51,11 @@ int listenPort(int backlog) {
     return C_OK;
 }
 
+void beforeSleep (struct eventLoop *el) {
 
+    handleClientsPendingWrite();
+
+}
 
 void initServer() {
     server.backlog = DEFAULT_BACKLOG;
@@ -69,6 +73,9 @@ void initServer() {
             exit(1);
         }
     }
+
+    elSetBeforeSleepProc(server.el, beforeSleep);
+
 
 }
 

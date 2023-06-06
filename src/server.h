@@ -97,6 +97,8 @@ typedef struct client {
     list *reply;
     unsigned long long reply_bytes;
 
+    off_t sentlen;
+
     // reply
     off_t bufpos;
     char  buf[PROTO_REPLY_CHUNK_BYTES];
@@ -160,4 +162,14 @@ void acceptCommandHandler(int cfd, char *ip, int port);
 
 int processMultiBulkBuffer(client *client);
 int processInlineBuffer(client *client);
+
+int clientHasPendingWrites(client *c);
+int writeToClient(client *client, int handler_installed);
+void handleClientsPendingWrite(void);
+
+//-------------reply--------------------
+void addReplyString(client *c, const char *str, size_t len);
+void addReplyError(client *c, const char *str);
+void addReplyErrorLength(client *c, const char *str, size_t len);
+
 #endif //REDIS_SERVER_H

@@ -45,12 +45,36 @@ int _addReplyStringToBuffer(client *c, const char *str, size_t len) {
         return C_ERR;
 
     memcpy(c->buf + c->bufpos, str, len);
-    c->querybuf+=len;
+    c->bufpos+=len;
 
     return C_OK;
 }
 
 int _addReplyStringToList (client *c, const char *str, size_t len) {
+
+    //todo use sds to throttle up on get the char length
+
+    if (listLength(c->reply) == 0) {
+        char *copy = zmalloc(len+1);
+        memcpy(copy, str, len);
+        copy[len] = '\0';
+        listAddNodeHead(c->reply, copy);
+    } else {
+
+        listNode *current = listLast(c->reply);
+        char *cstr = (char *)current->value;
+        size_t slen = strlen(str);
+        if (slen + len < PROTO_REPLY_CHUNK_BYTES) {
+            cstr = realloc(cstr, slen + len);
+            memcpy(cstr+slen, str, len);
+            current->value = cstr;
+        } else {
+            char *copy = zmalloc(len+1);
+            memcpy(copy, str, len);
+            copy[len] = '\0';
+            listAddNodeTail(c->reply, copy);
+        }
+    }
     return C_OK;
 }
 
@@ -62,6 +86,16 @@ void addReplyString(client *c, const char *str, size_t len) {
             _addReplyStringToList(c, str, len);
 }
 
+
+void addReplyError(client *c, const char *str) {
+    addReplyErrorLength(c, str, strlen(str));
+}
+
+void addReplyErrorLength(client *c, const char *str, size_t len) {
+    addReplyString(c, "-ERR ", 5);
+    addReplyString(c, str, len);
+    addReplyString(c, "\r\n", 2);
+}
 
 
 void acceptTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
@@ -107,8 +141,9 @@ void processInputBuffer(client *c) {
                 fprintf(stdout, "argv=%s\r\n", c->argv[j]);
             }
 
-        }
+            addReplyString(c, "+OK\r\n", 5);
 
+        }
     }
 
 
@@ -156,7 +191,7 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
 
     client *c = zmalloc(sizeof(c));
     anetNonBlock(cfd);
-    if (!elCreateFileEvent(server.el, cfd, EL_READABLE, readQueryFromClient, c)) {
+    if (EL_ERR == elCreateFileEvent(server.el, cfd, EL_READABLE, readQueryFromClient, c)) {
         // todo free something
         return;
     }
@@ -176,6 +211,7 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
     c->reqtype = 0;
 
     c->bufpos = 0;
+    c->sentlen = 0;
     c->reply = listCreate();
     c->reply_bytes = 0ll;
 }
@@ -301,8 +337,9 @@ int processInlineBuffer(client *c) {
     size_t nread;
     if (newline == NULL) {
         if (c->buflen >= RESP_PROTO_MAX_INLINE_SEG) {
-            char errmsg[] = "inline len limit 64k";
-            memcpy(c->err, errmsg, sizeof(errmsg));
+//            char errmsg[] = "inline len limit 64k";
+//            memcpy(c->err, errmsg, sizeof(errmsg));
+            addReplyError(c, "inline len limit 64k");
         }
         return RESP_PROCESS_ERR;
     }
@@ -322,8 +359,7 @@ int processInlineBuffer(client *c) {
     int argc = 0;
     char **vector = stringsplitargs(aux, &argc);
     if (vector == NULL) {
-        char errmsg[] = "inline buffer split args failed";
-        memcpy(c->err, errmsg, sizeof(errmsg));
+        addReplyError(c, "inline buffer split args failed");
         return RESP_PROCESS_ERR;
     }
 
@@ -346,5 +382,105 @@ int processInlineBuffer(client *c) {
     memmove(c->querybuf, c->querybuf+nread, c->buflen - nread);
     c->buflen-=nread;
     return RESP_PROCESS_OK;
+
+}
+
+int clientHasPendingWrites(client *c) {
+    return c->bufpos > 0 || listLength(c->reply);
+}
+
+
+int writeToClient(client *c, int handler_installed) {
+
+    size_t totwritten;
+    size_t nwritten;
+    while (clientHasPendingWrites(c)) {
+
+        if (c->bufpos) {
+            nwritten = write(c->fd, c->buf + c->sentlen, c->bufpos - c->sentlen);
+            if (nwritten <= 0) break;
+            c->sentlen+=nwritten;
+            if (c->sentlen == c->bufpos) {
+                c->bufpos = 0;
+                c->sentlen = 0;
+            }
+
+        } else {
+            listNode *node = listFirst(c->reply);
+            char *s = listNodeValue(node);
+            size_t slen = strlen(s);
+            if (slen == 0) {
+                listDelNode(c->reply, node);
+                continue;
+            }
+
+            nwritten = write(c->fd, s+c->sentlen, slen - c->sentlen);
+            if (nwritten <= 0) break;
+
+            c->sentlen+=nwritten;
+            c->reply_bytes-= nwritten;
+            if (c->sentlen == slen) {
+                c->sentlen = 0;
+                listDelNode(c->reply, node);
+            }
+        }
+
+        totwritten+=nwritten;
+    }
+
+    if (nwritten <= 0) {
+        if (errno == EAGAIN) {
+            nwritten = 0;
+        } else {
+
+            // todo free client
+            return C_ERR;
+        }
+    }
+
+    if (!clientHasPendingWrites(c)) {
+
+        if (handler_installed) {
+            if (elGetFileEvent(server.el, c->fd, EL_WRITABLE))
+                if (elDeleteFileEvent(server.el, c->fd, EL_WRITABLE) == EL_ERR) {
+                    // todo free client
+                    return C_ERR;
+                }
+        }
+    }
+
+    return C_OK;
+
+}
+
+void sendClientData (struct eventLoop *el, int fd, int mask, void *clientData) {
+    client *c = (client*)clientData;
+    writeToClient(c, 1);
+}
+
+void handleClientsPendingWrite(void) {
+
+    listIter li;
+    listNode *ln;
+    list *l = server.client_pending_writes;
+    listRewind(l, &li);
+    while ((ln=listNext(&li))) {
+
+        client *c = listNodeValue(ln);
+        c->flag &= ~CLIENT_PENDING_WRITE;
+        listDelNode(l, ln);
+
+        // return C_ERR if client has been freed, return C_OK while client still valid
+        if (writeToClient(c, 0) == C_ERR) continue;
+
+        if (clientHasPendingWrites(c)) {
+
+            if (elGetFileEvent(server.el, c->fd, EL_WRITABLE) == 0) {
+                if (elCreateFileEvent(server.el, c->fd, EL_WRITABLE, sendClientData, c) != EL_OK) {
+                    // todo free client async
+                }
+            }
+        }
+    }
 
 }

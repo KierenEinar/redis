@@ -334,6 +334,9 @@ void elStop(eventLoop *el, int stop) {
 
 void elMain(eventLoop *el) {
     while (!el->stop) {
+
+        if (el->beforeSleepProc)
+            el->beforeSleepProc(el);
         elProcessEvents(el);
     }
 
