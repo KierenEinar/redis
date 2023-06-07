@@ -460,7 +460,8 @@ int writeToClient(client *c, int handler_installed) {
 
 
         if (c->flag & CLIENT_CLOSE_AFTER_REPLY) {
-
+            freeClient(c);
+            return C_ERR;
         }
 
 
