@@ -60,6 +60,9 @@
 
 // client flag
 #define CLIENT_PENDING_WRITE (1 << 0)
+#define CLIENT_CLOSE_ASAP (1 << 1)
+#define CLIENT_CLOSE_AFTER_REPLY (1 << 2)
+
 
 typedef struct redisObject {
     unsigned type:4;
@@ -103,6 +106,9 @@ typedef struct client {
     off_t bufpos;
     char  buf[PROTO_REPLY_CHUNK_BYTES];
 
+    listNode *client_list_node;
+
+
 } client;
 
 
@@ -121,6 +127,9 @@ typedef struct redisServer {
     int backlog;
 
     list *client_pending_writes; // client pending write list
+
+    list *client_list; // entire client node list
+    list *client_close_list; // for the close asap client list
 
 
 }redisServer;
@@ -171,5 +180,15 @@ void handleClientsPendingWrite(void);
 void addReplyString(client *c, const char *str, size_t len);
 void addReplyError(client *c, const char *str);
 void addReplyErrorLength(client *c, const char *str, size_t len);
+void setProtocolError(client *c);
+
+// ------------free client--------------
+void freeClient(client *c);
+void freeClientAsync(client *c);
+void freeClientInFreeQueueAsync(void);
+
+//-------------cron job-----------------
+void serverCron(void);
+
 
 #endif //REDIS_SERVER_H

@@ -64,6 +64,17 @@ void listAddNodeHead(list* l, void *value) {
     l->len++;
 }
 
+listNode *listSearchKey(list *l, void *value) {
+
+    listNode *ln = l->head;
+    while (ln) {
+        if (ln->value == value)
+            return ln;
+        ln = ln->next;
+    }
+    return NULL;
+}
+
 void listEmpty(list *l) {
     listNode *current = listFirst(l);
     listNode *next;

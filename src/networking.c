@@ -97,6 +97,9 @@ void addReplyErrorLength(client *c, const char *str, size_t len) {
     addReplyString(c, "\r\n", 2);
 }
 
+void setProtocolError(client *c) {
+    c->flag |= CLIENT_CLOSE_AFTER_REPLY;
+}
 
 void acceptTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
 
@@ -141,6 +144,8 @@ void processInputBuffer(client *c) {
                 fprintf(stdout, "argv=%s\r\n", c->argv[j]);
             }
 
+            c->flag |= CLIENT_CLOSE_AFTER_REPLY;
+
             addReplyString(c, "+OK\r\n", 5);
 
         }
@@ -154,6 +159,8 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
     client *c = (client*) clientData;
     size_t nread;
     size_t readlen = PROTO_NREAD;
+
+    if (c->flag & CLIENT_CLOSE_AFTER_REPLY | c->flag & CLIENT_CLOSE_ASAP) return;
 
     if (c->bufcap - c->buflen < readlen) {
         if (c->querybuf == NULL) {
@@ -169,13 +176,11 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
     }
     fprintf(stdout, "fd=%d, mask=%d\r\n", fd, mask);
     nread = read(fd, c->querybuf+c->buflen, readlen);
-    if (nread == -1) {
-        fprintf(stdout, "readQueryFromClient, err=%s\r\n", strerror(errno));
-        if (errno == EAGAIN) return;
-        return;
-    } else if (nread == 0) {
-        // client fin connect
-        // todo releaseclient
+    if (nread <= 0) {
+        if (nread == -1) {
+            if (errno == EAGAIN) return;
+        }
+        freeClient(c);
         return;
     }
 
@@ -213,7 +218,12 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
     c->bufpos = 0;
     c->sentlen = 0;
     c->reply = listCreate();
+    listSetFreeMethod(c->reply, zfree);
     c->reply_bytes = 0ll;
+
+    listAddNodeTail(server.client_list, c);
+    c->client_list_node = listLast(server.client_list);
+
 }
 
 int processMultiBulkBuffer(client *c){
@@ -337,9 +347,8 @@ int processInlineBuffer(client *c) {
     size_t nread;
     if (newline == NULL) {
         if (c->buflen >= RESP_PROTO_MAX_INLINE_SEG) {
-//            char errmsg[] = "inline len limit 64k";
-//            memcpy(c->err, errmsg, sizeof(errmsg));
-            addReplyError(c, "inline len limit 64k");
+            addReplyError(c, "protocol read too big");
+            setProtocolError(c);
         }
         return RESP_PROCESS_ERR;
     }
@@ -359,7 +368,8 @@ int processInlineBuffer(client *c) {
     int argc = 0;
     char **vector = stringsplitargs(aux, &argc);
     if (vector == NULL) {
-        addReplyError(c, "inline buffer split args failed");
+        addReplyError(c, "protocol read too big");
+        setProtocolError(c);
         return RESP_PROCESS_ERR;
     }
 
@@ -443,10 +453,17 @@ int writeToClient(client *c, int handler_installed) {
         if (handler_installed) {
             if (elGetFileEvent(server.el, c->fd, EL_WRITABLE))
                 if (elDeleteFileEvent(server.el, c->fd, EL_WRITABLE) == EL_ERR) {
-                    // todo free client
+                    freeClient(c);
                     return C_ERR;
                 }
         }
+
+
+        if (c->flag & CLIENT_CLOSE_AFTER_REPLY) {
+
+        }
+
+
     }
 
     return C_OK;
@@ -484,3 +501,65 @@ void handleClientsPendingWrite(void) {
     }
 
 }
+
+void unlinkClient(client *c) {
+
+    elDeleteFileEvent(server.el, c->fd, EL_WRITABLE);
+    elDeleteFileEvent(server.el, c->fd, EL_READABLE);
+
+    if (c->argc > 0) {
+        for (int j = 0; j < c->argc; j++) {
+            zfree(c->argv[j]);
+        }
+        zfree(c->argv);
+    }
+
+    close(c->fd);
+
+}
+
+
+void freeClient(client *c) {
+
+    if (c->querybuf) zfree(c->querybuf);
+
+    listRelease(c->reply);
+
+    if (c->fd != -1) {
+        unlinkClient(c);
+    }
+
+    if (c->flag & CLIENT_CLOSE_ASAP) {
+        c->flag &= ~CLIENT_CLOSE_ASAP;
+        listDelNode(server.client_close_list, c);
+    }
+
+    if (c->flag & CLIENT_PENDING_WRITE) {
+        c->flag &= ~CLIENT_PENDING_WRITE;
+        listNode *ln = listSearchKey(server.client_pending_writes, c);
+        listDelNode(server.client_pending_writes, ln);
+    }
+
+    listDelNode(server.client_list, c->client_list_node);
+
+}
+
+void freeClientAsync(client *c) {
+    if (c->flag & CLIENT_CLOSE_ASAP) return;
+    c->flag |= CLIENT_CLOSE_ASAP;
+    listAddNodeTail(server.client_close_list, c);
+}
+
+
+void freeClientInFreeQueueAsync(void) {
+    listNode *ln = server.client_close_list;
+    while (ln) {
+        client *c = (client*)ln->value;
+        c->flag &= ~CLIENT_CLOSE_ASAP;
+        freeClient(c);
+        ln = ln->next;
+    }
+}
+
+
+

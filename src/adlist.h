@@ -41,6 +41,8 @@ void listDelNode(list* l, listNode* ln);
 void listAddNodeTail(list* l, void *value);
 void listAddNodeHead(list* l, void *value);
 void listEmpty(list *l);
+void listRelease(list *l);
+listNode *listSearchKey(list *l, void *value);
 void listRewind(list *l, listIter *li);
 listNode *listNext(listIter *li);
 #endif //REDIS_ADLIST_H

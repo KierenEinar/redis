@@ -52,10 +52,13 @@ int listenPort(int backlog) {
 }
 
 void beforeSleep (struct eventLoop *el) {
-
     handleClientsPendingWrite();
-
 }
+
+void serverCron(void) {
+    freeClientInFreeQueueAsync();
+}
+
 
 void initServer() {
     server.backlog = DEFAULT_BACKLOG;
@@ -63,6 +66,10 @@ void initServer() {
     server.unix_time = time(NULL);
     server.el = elCreateEventLoop(1024);
     server.client_pending_writes = listCreate();
+    server.client_list = listCreate();
+    server.client_close_list = listCreate();
+    listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
+
     if (listenPort(server.backlog) == C_ERR) {
         exit(1);
     }
@@ -76,8 +83,13 @@ void initServer() {
 
     elSetBeforeSleepProc(server.el, beforeSleep);
 
+    elCreateTimerEvent(server.el, 100, serverCron, NULL, NULL);
+
 
 }
+
+
+
 
 int main(int argc, char **argv) {
     printf("server start...., pid=%d\r\n", getpid());
