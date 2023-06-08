@@ -1,7 +1,7 @@
 # Prerequisites
 .idea
 *.d
-./cmake-build-debug/
+cmake-build-debug/
 # Object files
 *.o
 *.ko
@@ -55,4 +55,6 @@ dkms.conf
 cmake_install.cmake
 CMakeCache.txt
 CMakeFiles
-.redis
+redis
+
+Makefile

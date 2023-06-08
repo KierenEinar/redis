@@ -532,7 +532,7 @@ void freeClient(client *c) {
 
     if (c->flag & CLIENT_CLOSE_ASAP) {
         c->flag &= ~CLIENT_CLOSE_ASAP;
-        listDelNode(server.client_close_list, c);
+        listDelNode(server.client_close_list, c->client_list_node);
     }
 
     if (c->flag & CLIENT_PENDING_WRITE) {
@@ -553,7 +553,7 @@ void freeClientAsync(client *c) {
 
 
 void freeClientInFreeQueueAsync(void) {
-    listNode *ln = server.client_close_list;
+    listNode *ln = listFirst(server.client_close_list);
     while (ln) {
         client *c = (client*)ln->value;
         c->flag &= ~CLIENT_CLOSE_ASAP;

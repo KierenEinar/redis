@@ -63,6 +63,8 @@
 #define CLIENT_CLOSE_ASAP (1 << 1)
 #define CLIENT_CLOSE_AFTER_REPLY (1 << 2)
 
+// server cron period
+#define SERVER_CRON_PERIOD_MS 100
 
 typedef struct redisObject {
     unsigned type:4;
@@ -188,7 +190,7 @@ void freeClientAsync(client *c);
 void freeClientInFreeQueueAsync(void);
 
 //-------------cron job-----------------
-void serverCron(void);
+long long serverCron(struct eventLoop *el, int id, void *clientData);
 
 
 #endif //REDIS_SERVER_H

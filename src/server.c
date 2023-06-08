@@ -55,8 +55,10 @@ void beforeSleep (struct eventLoop *el) {
     handleClientsPendingWrite();
 }
 
-void serverCron(void) {
+long long serverCron(struct eventLoop *el, int id, void *clientData) {
     freeClientInFreeQueueAsync();
+
+    return SERVER_CRON_PERIOD_MS;
 }
 
 
@@ -83,7 +85,7 @@ void initServer() {
 
     elSetBeforeSleepProc(server.el, beforeSleep);
 
-    elCreateTimerEvent(server.el, 100, serverCron, NULL, NULL);
+    elCreateTimerEvent(server.el, SERVER_CRON_PERIOD_MS, serverCron, NULL, NULL);
 
 
 }
