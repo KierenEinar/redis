@@ -5,8 +5,6 @@
 #include "utils.h"
 #include <limits.h>
 #include <string.h>
-#include <stdio.h>
-#include <errno.h>
 #include <stdlib.h>
 #include <ctype.h>
 
@@ -16,20 +14,21 @@ typedef struct _cstring {
     size_t free;
 }_cstring;
 
-static _cstring *cstringnew(size_t cap) {
-    _cstring *cstr = malloc(sizeof(*cstr));
+_cstring *cstringnew(size_t cap) {
+    _cstring *cstr;
+    cstr = zmalloc(sizeof(*cstr));
     cstr->free = cap;
-    cstr->s = malloc(sizeof(char) * (cap + 1));
+    cstr->s = zmalloc(sizeof(char) * (cap + 1));
     cstr->used = 0;
     return cstr;
 }
 
-static void cstrfree(_cstring *cstr) {
+void cstrfree(_cstring *cstr) {
     zfree(cstr->s);
     zfree(cstr);
 }
 
-static _cstring *cstringcatstr(_cstring *cstr, const char *s, size_t len) {
+_cstring *cstringcatstr(_cstring *cstr, const char *s, size_t len) {
 
     if (cstr->free < len) {
         size_t incr_cap = cstr->free + cstr->used;
@@ -47,8 +46,8 @@ static _cstring *cstringcatstr(_cstring *cstr, const char *s, size_t len) {
     return cstr;
 }
 
-static char* cstringcopystr(_cstring *cstr) {
-    char *s = zmalloc(cstr->used);
+char* cstringcopystr(_cstring *cstr) {
+    char *s = zmalloc(cstr->used+1);
     memcpy(s, cstr->s, cstr->used+1);
     return s;
 }
@@ -345,12 +344,12 @@ char** stringsplitargs(const char *line, int *argc) {
             current = NULL;
 
         } else {
-            if (vector == NULL) return malloc(sizeof(void*));
+            if (vector == NULL) return zmalloc(sizeof(void*));
             return vector;
         }
     }
 
-    err:
+err:
     if (current != NULL) {
         cstrfree(current);
         current = NULL;

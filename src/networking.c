@@ -179,8 +179,8 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
     if (nread <= 0) {
         if (nread == -1) {
             if (errno == EAGAIN) return;
+            freeClient(c);
         }
-        freeClient(c);
         return;
     }
 
@@ -194,7 +194,8 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
 
 void acceptCommandHandler(int cfd, char *ip, int port) {
 
-    client *c = zmalloc(sizeof(c));
+    client *c;
+    c = zmalloc(sizeof(*c));
     anetNonBlock(cfd);
     if (EL_ERR == elCreateFileEvent(server.el, cfd, EL_READABLE, readQueryFromClient, c)) {
         // todo free something
@@ -374,15 +375,19 @@ int processInlineBuffer(client *c) {
     }
 
 
-    if (c->argv) {
+    if (c->argc) {
+        fprintf(stdout, "argc=%d\r\n", c->argc);
         for (int i=0; i<c->argc; i++) {
             zfree(c->argv[i]);
         }
         zfree(c->argv);
+        c->argc = 0;
+        c->argv = NULL;
     }
 
     c->argc = argc;
-    c->argv = malloc(sizeof(char *) * argc);
+    c->argv = malloc(sizeof(char*) * argc);
+
 
     for (int i=0; i<argc; i++) {
         c->argv[i] = vector[i];
@@ -510,21 +515,30 @@ void unlinkClient(client *c) {
 
     if (c->argc > 0) {
         for (int j = 0; j < c->argc; j++) {
-            zfree(c->argv[j]);
+            char *ptr = c->argv[j];
+            zfree(ptr);
         }
         zfree(c->argv);
+        c->argv = NULL;
     }
 
     close(c->fd);
-
+    c->fd = -1;
 }
 
 
 void freeClient(client *c) {
 
-    if (c->querybuf) zfree(c->querybuf);
+    fprintf(stdout, "free client, c=%p\r\n", c);
+
+    if (c->querybuf) {
+        zfree(c->querybuf);
+        c->querybuf = NULL;
+    }
+
 
     listRelease(c->reply);
+    c->reply = NULL;
 
     if (c->fd != -1) {
         unlinkClient(c);

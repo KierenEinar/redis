@@ -4,6 +4,7 @@
 
 #include "zmalloc.h"
 #include "stdlib.h"
+#include <stdio.h>
 
 void* zmalloc(size_t size) {
     return malloc(size);
@@ -22,6 +23,6 @@ size_t zmalloc_used_memory () {
 }
 
 void zfree(void *ptr) {
-    if (!ptr) return;
+    if (ptr==NULL) return;
     free(ptr);
 }

@@ -7,8 +7,8 @@
 
 #include <stdlib.h>
 list* listCreate() {
-
-    list *l = zmalloc(sizeof(*l));
+    list *l;
+    l = zmalloc(sizeof(*l));
     l->len = 0l;
     l->head = NULL;
     l->tail = NULL;
@@ -31,10 +31,14 @@ void listDelNode(list* l, listNode* ln) {
 
     l->len--;
 
+    if (l->free) l->free(ln);
+
 }
 
 void listAddNodeTail(list* l, void *value) {
-    listNode *node = zmalloc(sizeof(node));
+    listNode *node;
+
+    node = zmalloc(sizeof(*node));
     node->value = value;
     if (l->len == 0) {
         l->head = l->tail = node;
@@ -49,7 +53,8 @@ void listAddNodeTail(list* l, void *value) {
 }
 
 void listAddNodeHead(list* l, void *value) {
-    listNode *node = zmalloc(sizeof(node));
+    listNode *node;
+    node = zmalloc(sizeof(*node));
 
     node->value = value;
     if (l->len == 0) {
