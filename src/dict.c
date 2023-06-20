@@ -45,7 +45,7 @@ static int _dictExpandIfNeeded(dict *d) {
 
     if (d->ht[0].used >= d->ht[0].size &&
         (dict_can_resize || d->ht[0].used / d->ht[0].size > dict_force_resize_ratio)) {
-        return dictExpand(d, d->ht[0].used);
+        return dictExpand(d, d->ht[0].used * 2);
     }
 
     return DICT_OK;
@@ -81,7 +81,90 @@ static long _dictKeyIndex(dict *d, uint64_t keyhash, void *key, dictEntry **exis
 
     return idx;
 
+}
 
+static void _dictRehashStep(dict *d) {
+    if (d->iterators == 0) dictRehash(d, 1);
+}
+
+static void _dictSetKey(dict *d, dictEntry *entry, void *key) {
+    if (d->dictType->dupKey) {
+        entry->key= d->dictType->dupKey(key);
+    } else {
+        entry->key = key;
+    }
+}
+
+
+static void _dictSetVal(dict *d, dictEntry *entry, void *val) {
+    if (d->dictType->dupValue) {
+        entry->value.ptr = d->dictType->dupValue(val);
+    } else {
+        entry->value.ptr = val;
+    }
+}
+
+static void _dictSetSignedInteger(dictEntry *entry, int64_t val) {
+    entry->value.s64 = val;
+}
+
+static void _dictSetUnSignedInteger(dictEntry *entry, uint64_t val) {
+    entry->value.u64 = val;
+}
+
+static void _dictFreeVal(dict *d, dictEntry *entry) {
+    if (d->dictType->freeValue) {
+        d->dictType->freeValue(entry->value.ptr);
+    }
+}
+
+static void _dictFreeKey(dict *d, dictEntry *entry) {
+    if (d->dictType->freeKey) {
+        d->dictType->freeKey(entry->key);
+    }
+}
+
+static dictEntry* _dictGenericDelete(dict *d, void *key, int nofree) {
+
+    dictEntry *de;
+    int table;
+    uint64_t hash = dictKeyHash(d, key);
+    unsigned long idx;
+    for (table = 0; table <=1; table++) {
+
+        dictEntry *pre = NULL;
+        idx = hash & d->ht[table].mask;
+        dictEntry *de = d->ht[table].table[idx];
+
+        while (de) {
+
+            if (d->dictType->hashFunction(key) == de->hash || key == de->key) {
+
+                if (pre)
+                    pre->next = de->next;
+                else
+                    d->ht[table].table[idx]->next = de->next;
+
+                if (!nofree) {
+                    _dictFreeKey(d, de);
+                    _dictFreeVal(d, de);
+                    zfree(de);
+                }
+
+                d->ht[table].used--;
+
+                return de;
+            }
+
+            pre = de;
+            de = de->next;
+        }
+
+        if (!dictIsRehashing(d)) break;
+
+    }
+
+    return NULL;
 }
 
 // ----------------- public function ---------------
@@ -159,37 +242,142 @@ int dictAdd(dict *d, void *key, void *value) {
     return DICT_OK;
 }
 
+void dictReplace(dict *d, void *key, void *value) {
+
+    dictEntry *existing, *entry, aux;
+
+    entry = dictAddRow(d, key, &existing);
+    if (entry) {
+        _dictSetVal(d, entry, value);
+        return;
+    }
+
+    aux = *existing;
+    _dictSetVal(d, entry, value);
+    _dictFreeVal(d, &aux);
+
+}
+
+dictEntry* dictFind(dict *d, const void *key) {
+
+    dictht *ht;
+    int i;
+    uint64_t hash;
+    unsigned long bucket;
+    dictEntry *de;
+
+    if (dictIsRehashing(d)) _dictRehashStep(d);
+
+    hash = dictKeyHash(d, key);
+
+    for (i=0; i<=1; i++) {
+        ht = &d->ht[i];
+        bucket = hash & ht->mask;
+        de = ht->table[bucket];
+        while (de) {
+            if (de->hash == hash || de->key == key) {
+                return de;
+            }
+            de = de->next;
+        }
+        if (!dictIsRehashing(d)) break;
+    }
+
+    return NULL;
+}
+
+void* dictFetchValue(dict *d, const void *key) {
+
+    dictEntry *de = dictFind(d, key);
+    if (!de) return NULL;
+    return de->value.ptr;
+}
+
 
 dictEntry* dictAddRow(dict *d, void *key, dictEntry** existing) {
 
     dictht *n;
-
-    if (dictIsRehashing(d)) dictRehashStep(d, 1);
-
+    if (dictIsRehashing(d)) _dictRehashStep(d);
     uint64_t keyhash = dictKeyHash(d, key);
-
     long idx = _dictKeyIndex(d, keyhash, key, existing);
-
     if (idx == -1) return NULL;
-
     dictEntry *de = zmalloc(sizeof(*de));
-
-    if (d->dictType->dupKey)
-        de->key = d->dictType->dupKey(key);
-    else
-        de->key = key;
-
+    _dictSetKey(d, de, key);
     de->hash = keyhash;
-
     n = &d->ht[0];
-
     if (dictIsRehashing(d))
         n = &d->ht[1];
 
+    n->used++;
     de->next = n->table[idx];
     return de;
 }
 
-int dictRehashStep(dict *d, int n) {
-    return DICT_ERR;
+int dictRehash(dict *d, int n) {
+
+    int empty_visit = n * 10;
+    if (!dictIsRehashing(d)) return 0;
+
+    dictEntry *de;
+    unsigned long bucket;
+    dictht ht = d->ht[0];
+
+    while (n-- && ht.used != 0) {
+
+        // we are sure there is elements en dict because ht.used != 0
+        while ((de = (ht.table[d->rehash_idx])) == NULL && empty_visit) {
+            d->rehash_idx++;
+            if (--empty_visit == 0) return 1;
+        }
+
+        dictEntry *next;
+
+        while (de) {
+            next = de->next;
+            bucket = de->hash & d->ht[1].mask;
+            de->next = d->ht[1].table[bucket];
+            d->ht[1].table[bucket] = de;
+            de = next;
+            d->ht[0].used--;
+            d->ht[1].used++;
+        }
+
+        d->ht[0].table[d->rehash_idx++] = NULL;
+
+        if (d->ht[0].used == 0) {
+            zfree(d->ht[0].table);
+            _dictReset(&d->ht[0]);
+            d->ht[0] = d->ht[1];
+            _dictReset(&d->ht[0]);
+            d->rehash_idx = -1;
+            return 0;
+        }
+
+    }
+
+    return 1;
+
+}
+
+int dictDelete(dict *d, void *key) {
+    return _dictGenericDelete(d, key, 0) ? DICT_OK : DICT_ERR;
+}
+
+dictEntry* dictUnlink(dict *d, void *key) {
+    return _dictGenericDelete(d, key, 1);
+}
+
+void freeUnlinkEntry(dict *d, dictEntry* de) {
+    _dictFreeKey(d, de);
+    _dictFreeVal(d, de);
+    zfree(de);
+}
+
+void dictSafeGetIterator(dict *d, dictIter *di) {
+
+}
+
+void dictGetIterator(dict *d, dictIter *di) {
+
+
 }

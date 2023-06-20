@@ -30,8 +30,8 @@ typedef struct dictEntry {
     void *key;
     union {
         void *ptr;
-        int64_t s;
-        uint64_t us;
+        int64_t s64;
+        uint64_t u64;
         double d;
     } value;
     struct dictEntry *next;
@@ -73,14 +73,14 @@ dictEntry* dictAddRow(dict *d, void *key, dictEntry** existing);
 int dictAdd(dict *d, void *key, void *value);
 
 // replace the entry if key exists.
-int dictReplace(dict *d, void *key, void *value, dictEntry **existing);
+void dictReplace(dict *d, void *key, void *value);
 
 // delete the entry from the dict and free it.
 int dictDelete(dict *d, void *key);
 // delete the entry from the dict but not free it, it's responsible caller call the freeUnlinkEntry free entry.
 dictEntry* dictUnlink(dict *d, void *key);
 
-void freeUnlinkEntry(dictEntry* de);
+void freeUnlinkEntry(dict *d, dictEntry* de);
 // clear the dict, but not release the space.
 void dictEmpty(dict *d, void (callback)(const void*));
 // clear the dict, and free the space allocated from heap.
@@ -91,11 +91,11 @@ dictEntry* dictFind(dict *d, const void *key);
 // fetch the value which key exists from the table, return the ptr persist int the table.
 void* dictFetchValue(dict *d, const void *key);
 // fetch the value which key exists from the table, return the us persist int the table.
-uint64_t dictFetchUnsignedInt64(dict *d, const void *key);
-// fetch the value which key exists from the table, return the s persist int the table.
-int64_t dictFetchSignedInt64(dict *d, const void *key);
-// fetch the value which key exists from the table, return the double persist int the table.
-double dictFetchDouble(dict *d, const void *key);
+//uint64_t dictGetUnsignedInteger(dict *d, const void *key);
+//// fetch the value which key exists from the table, return the s persist int the table.
+//int64_t dictGetSignedInteger(dict *d, const void *key);
+//// fetch the value which key exists from the table, return the double persist int the table.
+//double dictFetchDouble(dict *d, const void *key);
 
 // dict resize, if the dict is rehashing or the size eq than the d[0].size, DICT_ERR return.
 // otherwise rehash_idx set to 0 and, d[1]->table is created, DICT_OK return.
@@ -105,7 +105,7 @@ int dictResize(dict *d);
 int dictExpand(dict *d, unsigned long size);
 
 // dict rehash by n step, if done 0 return, more to rehash 1 return.
-int dictRehashStep(dict *d, int step);
+int dictRehash(dict *d, int step);
 
 // enable dict rehash.
 void dictEnableResize(void);
@@ -113,9 +113,9 @@ void dictEnableResize(void);
 void dictDisableResize(void);
 
 // create the dict iterator
-void safeGetIterator(dict *d, dictIter *di);
+void dictSafeGetIterator(dict *d, dictIter *di);
 // create the unsafe iterator
-void getIterator(dict *d, dictIter *di);
+void dictGetIterator(dict *d, dictIter *di);
 // get the next dict entry
 dictEntry* dictNext(dictIter *di);
 
