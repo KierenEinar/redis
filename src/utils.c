@@ -374,7 +374,7 @@ unsigned long u_rev(unsigned long value) {
         //  00110011 00110011   xor <<2
         //  01010101 01010101   xor <<1
         m^=(m<<t);
-        value = ((value & m) << t) | ((value & (m<<t)) >> t);
+        value = ((value >> t) & m) | ((value << t) & ~m);
     }
     return value;
 }
