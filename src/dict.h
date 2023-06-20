@@ -8,8 +8,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <memory.h>
 #include "zmalloc.h"
-
+#include "crc16.h"
 #define DICT_OK 0
 #define DICT_ERR -1
 
@@ -56,6 +57,8 @@ typedef struct dictIter {
     dict *d;
     dictEntry *iter;
     dictEntry *nextIter;
+    int index;
+    int table;
     int safe;
     uint16_t fingerPrint;
 }dictIter;
@@ -118,6 +121,8 @@ void dictSafeGetIterator(dict *d, dictIter *di);
 void dictGetIterator(dict *d, dictIter *di);
 // get the next dict entry
 dictEntry* dictNext(dictIter *di);
+// release iter
+void dictReleaseIter(dictIter *di);
 
 // scan the dict
 unsigned long dictScan(dict *d, unsigned long cursor, void (*dictScanFunction)(dictEntry *de));

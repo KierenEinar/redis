@@ -21,4 +21,8 @@ size_t ll2string(char *s, size_t slen, long long value);
 // split string to tokens
 char** stringsplitargs(const char *line, int *argc);
 
+// reverse long value
+// http://graphics.stanford.edu/~seander/bithacks.html#ReverseParallel
+unsigned long u_rev(unsigned long value);
+
 #endif //REDIS_UTILS_H

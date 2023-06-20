@@ -167,6 +167,23 @@ static dictEntry* _dictGenericDelete(dict *d, void *key, int nofree) {
     return NULL;
 }
 
+static uint16_t dictFingerPrint(dict *d) {
+
+    size_t size = sizeof(unsigned long);
+
+    char buf[size*6];
+    memcpy(buf+size*0, d->ht[0].used, size);
+    memcpy(buf+size*1, d->ht[0].size, size);
+    memcpy(buf+size*2, d->ht[0].mask, size);
+    memcpy(buf+size*3, d->ht[1].used, size);
+    memcpy(buf+size*4, d->ht[1].size, size);
+    memcpy(buf+size*5, d->ht[1].mask, size);
+
+    return crc16(buf, size * 6);
+}
+
+
+
 // ----------------- public function ---------------
 
 dict* dictCreate(dictType *dictType) {
@@ -374,10 +391,72 @@ void freeUnlinkEntry(dict *d, dictEntry* de) {
 }
 
 void dictSafeGetIterator(dict *d, dictIter *di) {
-
+    dictGetIterator(d, di);
+    di->safe = 1;
 }
 
 void dictGetIterator(dict *d, dictIter *di) {
+    di->iter = NULL;
+    di->nextIter = NULL;
+    di->safe = 0;
+    di->index = -1;
+    di->table = 0;
+    di->d = d;
+}
 
+dictEntry* dictNext(dictIter *di) {
+
+    dict *d = di->d;
+
+    while (1) {
+
+        if (di->iter == NULL) {
+
+            if (di->table == 0 && di->index == -1) {
+                if (di->safe)
+                    d->iterators++;
+                else
+                    di->fingerPrint = dictFingerPrint(d);
+            }
+
+            di->index++;
+
+            if (di->index >= d->ht[di->table].size) {
+
+                if (di->table == 0 && dictIsRehashing(d)) {
+                    di->table++;
+                    di->index = 0;
+                } else {
+                    break;
+                }
+            }
+
+            di->iter = d->ht[di->table].table[di->index];
+
+        } else {
+            di->iter = di->nextIter;
+        }
+
+        if (di->iter) {
+            di->nextIter = di->iter->next;
+            return di->iter;
+        }
+
+    }
+
+
+    return NULL;
 
 }
+
+void dictReleaseIter(dictIter *di) {
+    if (di->safe) {
+        di->d->iterators--;
+    }
+}
+
+
+unsigned long dictScan(dict *d, unsigned long cursor, void (*dictScanFunction)(dictEntry *de)) {
+
+}
+

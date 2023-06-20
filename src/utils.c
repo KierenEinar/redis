@@ -362,6 +362,24 @@ err:
     return NULL;
 }
 
+unsigned long u_rev(unsigned long value) {
+
+    int t = sizeof(value) * 8;
+    unsigned long m = ~0UL;
+    while (t>>=1>0) {
+        // e.g. 16bits
+        //  11111111 11111111
+        //  00000000 11111111   xor <<8
+        //  00001111 00001111   xor <<4
+        //  00110011 00110011   xor <<2
+        //  01010101 01010101   xor <<1
+        m^=(m<<t);
+        value = ((value & m) << t) | ((value & (m<<t)) >> t);
+    }
+    return value;
+}
+
+
 #ifdef RUN_UT
 int main(int argc, char **argv) {
 
