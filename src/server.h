@@ -109,6 +109,7 @@ typedef struct client {
     char  buf[PROTO_REPLY_CHUNK_BYTES];
 
     listNode *client_list_node;
+    listNode *client_close_node;
 
 
 } client;

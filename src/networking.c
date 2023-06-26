@@ -164,15 +164,14 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
 
     if (c->bufcap - c->buflen < readlen) {
         if (c->querybuf == NULL) {
-            c->querybuf = malloc(readlen);
-            c->bufcap += readlen;
+            c->querybuf = zmalloc(readlen);
         } else {
             // todo realloc fail, set protocol error
             if ((c->querybuf = zrealloc(c->querybuf, c->bufcap+readlen)) == NULL) {
                 return;
             }
-            c->bufcap += readlen;
         }
+        c->bufcap += readlen;
     }
     fprintf(stdout, "fd=%d, mask=%d\r\n", fd, mask);
     nread = read(fd, c->querybuf+c->buflen, readlen);
@@ -188,7 +187,6 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
     c->querybuf[c->buflen] = '\0';
     processInputBuffer(c);
 
-    return;
 }
 
 
@@ -270,11 +268,11 @@ int processMultiBulkBuffer(client *c){
 
         if (c->argv) {
             for (long j =0; j<c->multilen; j++) {
-                free(c->argv[j]);
+                zfree(c->argv[j]);
             }
-            free(c->argv);
+            zfree(c->argv);
         }
-        c->argv = malloc(sizeof(char*) * c->multilen);
+        c->argv = zmalloc(sizeof(char*) * c->multilen);
     }
 
     while (c->multilen) {
@@ -315,7 +313,7 @@ int processMultiBulkBuffer(client *c){
         if (c->bulklen > (c->buflen-pos) + 2) {
             break;
         } else {
-            char *str = malloc(sizeof(char) * (c->bulklen + 1));
+            char *str = zmalloc(sizeof(char) * (c->bulklen + 1));
             memcpy(str, c->querybuf+pos, c->bulklen);
             str[c->bulklen] = '\0';
             c->argv[c->argvlen++] = str;
@@ -386,7 +384,7 @@ int processInlineBuffer(client *c) {
     }
 
     c->argc = argc;
-    c->argv = malloc(sizeof(char*) * argc);
+    c->argv = zmalloc(sizeof(char*) * argc);
 
 
     for (int i=0; i<argc; i++) {
@@ -447,8 +445,7 @@ int writeToClient(client *c, int handler_installed) {
         if (errno == EAGAIN) {
             nwritten = 0;
         } else {
-
-            // todo free client
+            freeClient(c);
             return C_ERR;
         }
     }
@@ -468,7 +465,6 @@ int writeToClient(client *c, int handler_installed) {
             freeClient(c);
             return C_ERR;
         }
-
 
     }
 
@@ -500,7 +496,7 @@ void handleClientsPendingWrite(void) {
 
             if (elGetFileEvent(server.el, c->fd, EL_WRITABLE) == 0) {
                 if (elCreateFileEvent(server.el, c->fd, EL_WRITABLE, sendClientData, c) != EL_OK) {
-                    // todo free client async
+                    freeClientAsync(c);
                 }
             }
         }
@@ -546,7 +542,7 @@ void freeClient(client *c) {
 
     if (c->flag & CLIENT_CLOSE_ASAP) {
         c->flag &= ~CLIENT_CLOSE_ASAP;
-        listDelNode(server.client_close_list, c->client_list_node);
+        listDelNode(server.client_close_list, c->client_close_node);
     }
 
     if (c->flag & CLIENT_PENDING_WRITE) {
@@ -556,23 +552,25 @@ void freeClient(client *c) {
     }
 
     listDelNode(server.client_list, c->client_list_node);
-
 }
 
 void freeClientAsync(client *c) {
     if (c->flag & CLIENT_CLOSE_ASAP) return;
     c->flag |= CLIENT_CLOSE_ASAP;
     listAddNodeTail(server.client_close_list, c);
+    c->client_close_node = listLast(server.client_close_list);
+
 }
 
 
 void freeClientInFreeQueueAsync(void) {
     listNode *ln = listFirst(server.client_close_list);
+    listNode *next;
     while (ln) {
         client *c = (client*)ln->value;
-        c->flag &= ~CLIENT_CLOSE_ASAP;
+        next = ln->next;
         freeClient(c);
-        ln = ln->next;
+        ln = next;
     }
 }
 
