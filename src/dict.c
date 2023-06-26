@@ -172,12 +172,12 @@ static uint16_t dictFingerPrint(dict *d) {
     size_t size = sizeof(unsigned long);
 
     char buf[size*6];
-    memcpy(buf+size*0, d->ht[0].used, size);
-    memcpy(buf+size*1, d->ht[0].size, size);
-    memcpy(buf+size*2, d->ht[0].mask, size);
-    memcpy(buf+size*3, d->ht[1].used, size);
-    memcpy(buf+size*4, d->ht[1].size, size);
-    memcpy(buf+size*5, d->ht[1].mask, size);
+    memcpy(buf+size*0, &d->ht[0].used, size);
+    memcpy(buf+size*1, &d->ht[0].size, size);
+    memcpy(buf+size*2, &d->ht[0].mask, size);
+    memcpy(buf+size*3, &d->ht[1].used, size);
+    memcpy(buf+size*4, &d->ht[1].size, size);
+    memcpy(buf+size*5, &d->ht[1].mask, size);
 
     return crc16(buf, size * 6);
 }
@@ -287,7 +287,7 @@ dictEntry* dictFind(dict *d, const void *key) {
 
     if (dictIsRehashing(d)) _dictRehashStep(d);
 
-    hash = dictKeyHash(d, key);
+    hash = dictKeyHash(d, (void *)key);
 
     for (i=0; i<=1; i++) {
         ht = &d->ht[i];
