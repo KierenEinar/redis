@@ -11,12 +11,14 @@
 #include <memory.h>
 #include "zmalloc.h"
 #include "crc16.h"
+#include "utils.h"
+
 #define DICT_OK 0
 #define DICT_ERR -1
 
 #define dictIsRehashing(d) (((d)->rehash_idx) > 0)
 #define dictKeyHash(d, k) (((d)->dictType)->hashFunction(k))
-#define HT_MIN_SIZE 16
+#define HT_MIN_SIZE 4
 typedef struct dictType {
     uint64_t (*hashFunction) (void *key); // hash function
     int (*compare) (void *key, void *ptr); // compare dictEntry

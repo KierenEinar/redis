@@ -182,7 +182,9 @@ static uint16_t dictFingerPrint(dict *d) {
     return crc16(buf, size * 6);
 }
 
-
+static unsigned long _dictSize(dict *d) {
+    return d->ht[0].used + d->ht[1].used;
+}
 
 // ----------------- public function ---------------
 
@@ -455,8 +457,89 @@ void dictReleaseIter(dictIter *di) {
     }
 }
 
-
+// for more details, see https://gentryhuang.com/posts/c1861d8c/index.html (chinese)
 unsigned long dictScan(dict *d, unsigned long cursor, void (*dictScanFunction)(dictEntry *de)) {
+
+    if (_dictSize(d) == 0) return 0;
+
+    unsigned long m0, m1;
+    dictht *t0, *t1;
+    dictEntry *de;
+
+    // using binary msb bits reverse auto increment
+    if (!dictIsRehashing(d)) {
+
+        t0 = &d->ht[0];
+        m0 = d->ht[0].mask;
+
+        de = t0->table[cursor & m0];
+        while (de) {
+            dictScanFunction(de);
+            de = de->next;
+        }
+
+        // reverse cursor
+        cursor |= ~m0;
+        cursor = u_rev(cursor);
+        // auto increment
+        cursor++;
+        cursor = u_rev(cursor);
+    } else {
+
+        t0 = &d->ht[0];
+        t1 = &d->ht[1];
+
+        m0 = d->ht[0].mask;
+        m1 = d->ht[1].mask;
+
+        // ensure m0 is the small one
+        if (m0 > m1) { // dict shrink case ...
+            m0 = d->ht[1].mask;
+            m1 = d->ht[0].mask;
+
+            t0 = &d->ht[1];
+            t1 = &d->ht[0];
+        }
+
+        // iterate the small one, might be the t0 (for grow) or t1 (for shrink)
+        de = t0->table[cursor & m0];
+        while (de) {
+            dictScanFunction(de);
+            de = de->next;
+        }
+
+        // every time we should iterate all the bucket with connection
+        // i.e.
+        // case 1
+        // dict is growth
+        // mask = 15
+        // cursor = 3 and cursor = 11 must be all iterate (t1) .
+        //
+        // case 2
+        // dict is shrink
+        // mask = 7
+        // cursor = 1 and cursor = 5 must be all iterate (t0) .
+
+        do {
+
+            de = t1->table[cursor & m1];
+            while (de) {
+                dictScanFunction(de);
+                de = de->next;
+            }
+
+            // reverse cursor
+            cursor |= ~m1;
+            cursor = u_rev(cursor);
+            // auto increment
+            cursor++;
+            cursor = u_rev(cursor);
+
+        } while (cursor & (m0 ^ m1));
+
+    }
+
+    return cursor;
 
 }
 
