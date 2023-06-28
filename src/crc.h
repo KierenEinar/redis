@@ -30,13 +30,15 @@ uint8_t crc8(const char *buf, size_t len);
 uint16_t crc16(const char *buf, size_t len);
 
 /**
- * name: redis hash32
+ * name: crc-32/mpeg-2
  * width: 32
  * poly: 04C11DB7
- * init: 0x0000
+ * init: FFFFFFFF
  * reflect input byte: false
  * reflect output CRC: false
  * xor constant to output CRC : 0x0000
+ * input: hello world
+ * output hex: BB08EC87
  * */
 uint32_t crc32(const char *buf, size_t len);
 

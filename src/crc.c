@@ -54,7 +54,7 @@ uint16_t crc16(const char *buf, size_t len) {
 
 uint32_t crc32(const char *buf, size_t len) {
     uint32_t poly = 0x4C11DB7;
-    uint32_t reg = 0x00;
+    uint32_t reg =  0xFFFFFFFF;
     uint8_t byte;
     short j;
     while (len--) {
