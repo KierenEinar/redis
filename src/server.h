@@ -33,6 +33,7 @@
 #include "adlist.h"
 #include "sds.h"
 #include "anet.h"
+#include "crc.h"
 
 #define LRUBITS 24
 

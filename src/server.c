@@ -95,6 +95,8 @@ void initServer() {
 
 int main(int argc, char **argv) {
     printf("server start...., pid=%d\r\n", getpid());
+    // printf("crc32 = %x\r\n", crc32("hello world 1234444", strlen("hello world 1234444")));
+
     initServer();
     elMain(server.el);
     return 0;

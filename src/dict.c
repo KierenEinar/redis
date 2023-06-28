@@ -186,6 +186,10 @@ static unsigned long _dictSize(dict *d) {
     return d->ht[0].used + d->ht[1].used;
 }
 
+static int _dictCompareKey(dict *d, const void *key1, const void *key2) {
+    return d->dictType->compare ? d->dictType->compare(key1, key2) : key1 == key2;
+}
+
 // ----------------- public function ---------------
 
 dict* dictCreate(dictType *dictType) {
@@ -294,7 +298,7 @@ dictEntry* dictFind(dict *d, const void *key) {
         bucket = hash & ht->mask;
         de = ht->table[bucket];
         while (de) {
-            if (de->hash == hash || de->key == key) {
+            if (de->hash == hash && _dictCompareKey(d, de->key, key) == 0) {
                 return de;
             }
             de = de->next;
