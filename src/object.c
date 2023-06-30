@@ -110,7 +110,7 @@ void makeObjectShared(robj *o) {
 
 robj* tryObjectEncoding(robj *obj) {
 
-    long long value;
+    long value;
     size_t len;
 
 
@@ -123,8 +123,8 @@ robj* tryObjectEncoding(robj *obj) {
 
     len =  sdslen(obj->ptr);
 
-    // try encoding to long long
-    if (len <= 20 && string2ll((char*)(obj->ptr), len, &value)) {
+    // try encoding to long
+    if (len <= 20 && string2l((char*)(obj->ptr), len, &value)) {
 
         if (obj->encoding == REDIS_ENCODING_RAW) sdsfree(obj->ptr);
         obj->ptr = (void*)(value);
@@ -148,22 +148,25 @@ robj* getDecodedObject(robj *o) {
 int getLongLongFromObject(robj *obj, long long *target) {
 
     //todo assert obj type is string
+    long long value;
 
-    switch (obj->encoding) {
-        case REDIS_ENCODING_INT:
-            if (target) *target = (long long)obj->ptr;
-            return 1;
-        case REDIS_ENCODING_EMBED:
-        case REDIS_ENCODING_RAW:
-            if (sdslen(obj->ptr) <= 20) {
-                return string2ll(obj->ptr, sdslen(obj->ptr), target);
-            }
-            return 0;
-        default:
-            // todo panic
-            break;
+    if (obj == NULL)
+        value = 0;
+    else {
+        switch (obj->encoding) {
+            case REDIS_ENCODING_INT:
+                value = (long)(obj->ptr);
+            case REDIS_ENCODING_EMBED:
+            case REDIS_ENCODING_RAW:
+                if (string2ll(obj->ptr, sdslen(obj->ptr), &value) == 0) return C_ERR;
+            default:
+                // todo panic
+                break;
+        }
     }
 
-    return 0;
+    if (target) *target = value;
+
+    return C_OK;
 
 }

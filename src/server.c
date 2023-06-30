@@ -5,7 +5,14 @@
 #include "server.h"
 #include "varint.h"
 
+
+// global vars
 struct redisServer server;
+struct redisSharedObject shared;
+
+struct redisCommand redisCommandTable[] = {
+    {"get", getCommand, 2},
+};
 
 mstime_t mstime() {
     struct timeval t;
@@ -14,6 +21,27 @@ mstime_t mstime() {
     milliseconds = t.tv_sec * 1000 + t.tv_usec / 1000;
     return milliseconds;
 }
+
+
+void createSharedObject(void) {
+
+    shared.crlf = createStringObject("\r\n", 2);
+    shared.ok = createStringObject("+ok\r\n", 5);
+    shared.syntaxerr = createStringObject("-ERR syntax err\r\n", 17);
+    shared.nullbulk = createStringObject("$-1\r\n", 5);
+    for (long j=0; j<OBJ_SHARED_INTEGERS; j++) {
+        shared.integers[j] = createObject(REDIS_OBJECT_STRING, (void*)(j));
+        shared.integers[j]->encoding = REDIS_ENCODING_INT;
+        makeObjectShared(shared.integers[j]);
+    }
+
+    makeObjectShared(shared.crlf);
+    makeObjectShared(shared.ok);
+    makeObjectShared(shared.syntaxerr);
+    makeObjectShared(shared.nullbulk);
+}
+
+
 
 
 void exitFromChild(int code) {
@@ -63,6 +91,8 @@ long long serverCron(struct eventLoop *el, int id, void *clientData) {
 
 
 void initServer() {
+
+    createSharedObject();
     server.backlog = DEFAULT_BACKLOG;
     server.port = DEFAULT_BIND_PORT;
     server.unix_time = time(NULL);
@@ -86,7 +116,6 @@ void initServer() {
     elSetBeforeSleepProc(server.el, beforeSleep);
 
     elCreateTimerEvent(server.el, SERVER_CRON_PERIOD_MS, serverCron, NULL, NULL);
-
 
 }
 

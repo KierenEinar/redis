@@ -86,11 +86,6 @@ typedef struct redisObject {
     void *ptr;
 }robj;
 
-
-typedef struct redisCommandTable {
-
-};
-
 //typedef void redisCommandProc(struct client* c);
 //
 //typedef struct redisCommand {
@@ -154,10 +149,19 @@ typedef struct redisServer {
 
 }redisServer;
 
+// redis command prototype
+typedef void redisCommandProc (client *c);
+
+struct redisCommand {
+    char *name;
+    redisCommandProc *proc;
+    int arity;
+};
+
 #define OBJ_SHARED_INTEGERS 10000
 #define OBJ_SHARED_REFCOUNT INT_MAX
 struct redisSharedObject {
-    robj *crlf, *ok, *syntaxerr, *integers[OBJ_SHARED_INTEGERS];
+    robj *crlf, *ok, *syntaxerr, *nullbulk, *integers[OBJ_SHARED_INTEGERS];
 };
 
 extern struct redisServer server;
@@ -208,6 +212,15 @@ robj* tryObjectEncoding(robj *obj);
 
 robj* getDecodedObject(robj *o);
 int getLongLongFromObject(robj *obj, long long *target);
+
+// create the golbal shared object
+void createSharedObject(void);
+
+// redis command process prototype
+
+// getCommand get the value from kv, if key exists but not string type, client will receive wrong type error.
+// as side effect, key will delete when go expire, client will receive nullbulk.
+void getCommand(client *c);
 
 
 //-------------syncio-------------------

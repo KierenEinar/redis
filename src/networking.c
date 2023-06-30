@@ -522,8 +522,8 @@ void unlinkClient(client *c) {
 
     if (c->argc > 0) {
         for (int j = 0; j < c->argc; j++) {
-            char *ptr = c->argv[j];
-            zfree(ptr);
+            robj *obj = c->argv[j];
+            decrRefCount(obj);
         }
         zfree(c->argv);
         c->argv = NULL;
