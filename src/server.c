@@ -90,7 +90,9 @@ void initServer() {
 
 }
 
-
+int processCommand(client *c) {
+    return C_OK;
+}
 
 
 int main(int argc, char **argv) {

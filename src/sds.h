@@ -12,11 +12,13 @@ typedef char* sds;
 typedef struct sdshdr {
     size_t  used;
     size_t  free;
-    char    str[];
-}sdshdr;
+    char    buf[];
+} __attribute__((packed)) sdshdr ;
 
 sds sdsnewlen(const char *c, size_t len);
+sds sdsdup(sds s);
 sds sdsempty();
+void sdsfree(sds s);
 sds sdsMakeRoomFor(sds s, size_t len);
 sds sdscatlen(const char *c, size_t len);
 sds sdscatsds(sds s);

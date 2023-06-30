@@ -67,6 +67,17 @@
 // server cron period
 #define SERVER_CRON_PERIOD_MS 100
 
+// redis object encoding
+#define REDIS_ENCODING_RAW 1
+#define REDIS_ENCODING_EMBED 2
+#define REDIS_ENCODING_INT 3
+
+// redis object type
+#define REDIS_OBJECT_STRING 1
+
+// redis share object ref_count
+#define REDIS_SHARED_OBJECT_REF INT_MAX
+
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -74,6 +85,11 @@ typedef struct redisObject {
     int refcount;
     void *ptr;
 }robj;
+
+
+typedef struct redisCommandTable {
+
+};
 
 //typedef void redisCommandProc(struct client* c);
 //
@@ -90,7 +106,7 @@ typedef struct client {
     size_t bufcap;
     long multilen;
     long bulklen;
-    char **argv; // array of string
+    robj **argv; // array of string
     long argvlen;
     int argc;
 
@@ -140,28 +156,56 @@ typedef struct redisServer {
 
 #define OBJ_SHARED_INTEGERS 10000
 #define OBJ_SHARED_REFCOUNT INT_MAX
-struct sharedObject {
-    robj *integers[OBJ_SHARED_INTEGERS];
+struct redisSharedObject {
+    robj *crlf, *ok, *syntaxerr, *integers[OBJ_SHARED_INTEGERS];
 };
 
 extern struct redisServer server;
-extern struct sharedObject shared;
+extern struct redisSharedObject shared;
 
 // --------------mstime---------------
 typedef int64_t mstime_t;
 mstime_t mstime();
 
 //--------------redisObject public method ---------------
+
+// note: caller should call decrRefCount to release the ref count of robj using create* family
+
+// create string type robj, callers needs to specify the encoding, the robj ref count set to 1.
+// it is responsibility that caller should use decrRefCount to decr the ref count.
 robj* createObject(int type, void *ptr);
+
+// create string type robj, s is an embstr with robj, we suggest that is better
+// use emstr when slen less or equal than 39.
+// why 39, sdshdr is 8bytes, robj is 16bytes, so 64bytes - 24bytes - 1bytes('\0'), is 39.
 robj* createEmbeddedStringObject(const char *s, size_t len);
+
+// create string type robj, s is an raw string with robj, which robj->ptr = s ptr
 robj* createRawStringObject(const char *s, size_t len);
+
+// create a string type object, the encoding is raw or embstr
 robj* createStringObject(const char *s, size_t len);
+
+// create a string type object, the encoding is INT, robj ptr is the value.
 robj* createStringObjectFromLongLong(long long value);
 
+// incr the refcount, will do nothing when o is a shared object.
+void incrRefCount(robj *o);
+
+// decr the refcount, will do nothing when o is a shared object, and free the object when ref count is 0.
 void decrRefCount(robj *o);
+
+// free the string type robj, only work on encoding raw string.
 void freeStringObject(robj *o);
+
+// update the ref count to specify this object is a share object.
 void makeObjectShared(robj *o);
+
+// try the best encoding to the robj, i.e. raw => embstr when len less than or eq 39,
+// encoding raw or embstr when value is a integer.
 robj* tryObjectEncoding(robj *obj);
+
+
 robj* getDecodedObject(robj *o);
 int getLongLongFromObject(robj *obj, long long *target);
 
@@ -193,6 +237,10 @@ void freeClientInFreeQueueAsync(void);
 
 //-------------cron job-----------------
 long long serverCron(struct eventLoop *el, int id, void *clientData);
+
+// ------------process command -------------
+int processCommand(client *c);
+
 
 
 #endif //REDIS_SERVER_H

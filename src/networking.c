@@ -138,15 +138,17 @@ void processInputBuffer(client *c) {
             // todo reset client and process next command
         } else {
 
-            // todo process command
-
-            for (int j=0; j<c->argc; j++) {
-                fprintf(stdout, "argv=%s\r\n", c->argv[j]);
+            if (processCommand(c) == C_OK) {
+                // resetClient(c);
             }
 
-            c->flag |= CLIENT_CLOSE_AFTER_REPLY;
-
-            addReplyString(c, "+OK\r\n", 5);
+//            for (int j=0; j<c->argc; j++) {
+//                fprintf(stdout, "argv=%s\r\n", c->argv[j]);
+//            }
+//
+//            c->flag |= CLIENT_CLOSE_AFTER_REPLY;
+//
+//            addReplyString(c, "+OK\r\n", 5);
 
         }
     }
@@ -244,6 +246,8 @@ int processMultiBulkBuffer(client *c){
             if (c->buflen >= RESP_PROTO_MAX_INLINE_SEG) {
                 char errmsg[] = "inline len limit 64k";
                 memcpy(c->err, errmsg, sizeof(errmsg));
+                addReplyError(c, errmsg);
+                setProtocolError(c);
             }
             return RESP_PROCESS_ERR;
         }
@@ -259,6 +263,8 @@ int processMultiBulkBuffer(client *c){
         if (!ok || value <=0 || value >= 1024 * 1024) {
             char errmsg[] = "multi len limit";
             memcpy(c->err, errmsg, sizeof(errmsg));
+            addReplyError(c, errmsg);
+            setProtocolError(c);
             return RESP_PROCESS_ERR;
         }
 
@@ -268,11 +274,11 @@ int processMultiBulkBuffer(client *c){
 
         if (c->argv) {
             for (long j =0; j<c->multilen; j++) {
-                zfree(c->argv[j]);
+                decrRefCount(c->argv[j]);
             }
             zfree(c->argv);
         }
-        c->argv = zmalloc(sizeof(char*) * c->multilen);
+        c->argv = zmalloc(sizeof(robj*) * c->multilen);
     }
 
     while (c->multilen) {
@@ -286,6 +292,8 @@ int processMultiBulkBuffer(client *c){
                 if (c->buflen >= RESP_PROTO_MAX_INLINE_SEG) {
                     char errmsg[] = "inline len limit 64k";
                     memcpy(c->err, errmsg, sizeof(errmsg));
+                    addReplyError(c, errmsg);
+                    setProtocolError(c);
                 }
                 break;
             }
@@ -300,6 +308,8 @@ int processMultiBulkBuffer(client *c){
             if (!ok || value <= 0 || value >= RESP_PROTO_MAX_BULK_SEG) {
                 char errmsg[] = "bulklen limit 512M";
                 memcpy(c->err, errmsg, sizeof(errmsg));
+                addReplyError(c, errmsg);
+                setProtocolError(c);
                 return RESP_PROCESS_ERR;
             }
 
@@ -316,7 +326,8 @@ int processMultiBulkBuffer(client *c){
             char *str = zmalloc(sizeof(char) * (c->bulklen + 1));
             memcpy(str, c->querybuf+pos, c->bulklen);
             str[c->bulklen] = '\0';
-            c->argv[c->argvlen++] = str;
+            c->argv[c->argvlen++] = createStringObject(str, strlen(str));
+            zfree(str);
             pos+=c->bulklen+2;
             c->bulklen = -1;
             c->multilen--;
@@ -376,7 +387,7 @@ int processInlineBuffer(client *c) {
     if (c->argc) {
         fprintf(stdout, "argc=%d\r\n", c->argc);
         for (int i=0; i<c->argc; i++) {
-            zfree(c->argv[i]);
+            decrRefCount(c->argv[i]);
         }
         zfree(c->argv);
         c->argc = 0;
@@ -384,11 +395,11 @@ int processInlineBuffer(client *c) {
     }
 
     c->argc = argc;
-    c->argv = zmalloc(sizeof(char*) * argc);
-
+    c->argv = zmalloc(sizeof(robj *) * argc);
 
     for (int i=0; i<argc; i++) {
-        c->argv[i] = vector[i];
+        c->argv[i] = createStringObject(vector[i], strlen(vector[i]));
+        zfree(vector[i]);
     }
     zfree(vector);
 

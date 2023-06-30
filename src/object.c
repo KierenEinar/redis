@@ -1,0 +1,169 @@
+//
+// Created by kieren jiang on 2023/6/29.
+//
+
+#include "server.h"
+
+int sdsEncodedObject(robj *r) {
+    return r->encoding == REDIS_ENCODING_RAW || r->encoding == REDIS_ENCODING_EMBED;
+}
+
+
+robj* createObject(int type, void *ptr) {
+    robj *r = zmalloc(sizeof(*r));
+    r->refcount = 1;
+    r->type = type;
+    r->ptr = ptr;
+    // todo update lru
+    return r;
+}
+
+robj* createEmbeddedStringObject(const char *s, size_t len) {
+
+    size_t hdrlen = sizeof(sdshdr);
+    robj *r = zmalloc(sizeof(robj) + hdrlen + len + 1);
+    sdshdr *sh = (void *)(r+1);
+    sds sds = (char*)(sh) + hdrlen;
+
+    if (s) {
+        memcpy(sds, s, len);
+        sds[len] = '\0';
+    } else {
+        memset(sds, 0, len+1);
+    }
+
+    r->refcount = 1;
+    r->type = REDIS_OBJECT_STRING;
+    r->encoding = REDIS_ENCODING_EMBED;
+    r->ptr = sds;
+    return  r;
+}
+
+robj* createRawStringObject(const char  *s, size_t len) {
+    robj *r = zmalloc(sizeof(robj));
+    r->ptr = sdsnewlen(s, len);
+    r->type = REDIS_OBJECT_STRING;
+    r->encoding = REDIS_ENCODING_RAW;
+    r->refcount = 1;
+    return r;
+}
+
+#define EMBSTR_LIMIT 39
+robj* createStringObject(const char *s, size_t len) {
+
+    if (len <= EMBSTR_LIMIT) {
+        return createEmbeddedStringObject(s, len);
+    } else {
+        return createRawStringObject(s, len);
+    }
+}
+
+robj* createStringObjectFromLongLong(long long value) {
+    robj *r = zmalloc(sizeof(*r));
+    r->refcount = 1;
+    r->type = REDIS_OBJECT_STRING;
+    r->encoding = REDIS_ENCODING_INT;
+    r->ptr = (void*)value;
+    return r;
+}
+
+void incrRefCount(robj *o) {
+    if (o->refcount == REDIS_SHARED_OBJECT_REF)
+        return;
+    o->refcount++;
+}
+
+void decrRefCount(robj *o) {
+
+    if (o->refcount == REDIS_SHARED_OBJECT_REF)
+        return;
+
+    // todo assert  o->refcount >= 1
+
+    if (--o->refcount) {
+        return;
+    }
+
+    switch (o->type) {
+        case REDIS_OBJECT_STRING:
+            freeStringObject(o);
+            break;
+        default:
+            // todo panic
+            break;
+    }
+
+    zfree(o);
+
+}
+
+void freeStringObject(robj *o) {
+    if (o->encoding == REDIS_ENCODING_RAW) {
+        zfree(o->ptr);
+    }
+}
+
+void makeObjectShared(robj *o) {
+    o->refcount = REDIS_SHARED_OBJECT_REF;
+}
+
+
+robj* tryObjectEncoding(robj *obj) {
+
+    long long value;
+    size_t len;
+
+
+    // not safe to encode the object
+    if (obj->refcount != 1) return obj;
+
+    if (!sdsEncodedObject(obj)) return obj;
+
+    if (obj->encoding == REDIS_ENCODING_INT) return obj;
+
+    len =  sdslen(obj->ptr);
+
+    // try encoding to long long
+    if (len <= 20 && string2ll((char*)(obj->ptr), len, &value)) {
+
+        if (obj->encoding == REDIS_ENCODING_RAW) sdsfree(obj->ptr);
+        obj->ptr = (void*)(value);
+        return obj;
+    }
+
+    if (obj->encoding == REDIS_ENCODING_RAW && len <= EMBSTR_LIMIT) {
+        robj *o = createEmbeddedStringObject(obj->ptr, len);
+        decrRefCount(obj);
+        return o;
+    }
+
+    return obj;
+
+}
+
+robj* getDecodedObject(robj *o) {
+    return NULL;
+}
+
+int getLongLongFromObject(robj *obj, long long *target) {
+
+    //todo assert obj type is string
+
+    switch (obj->encoding) {
+        case REDIS_ENCODING_INT:
+            if (target) *target = (long long)obj->ptr;
+            return 1;
+        case REDIS_ENCODING_EMBED:
+        case REDIS_ENCODING_RAW:
+            if (sdslen(obj->ptr) <= 20) {
+                return string2ll(obj->ptr, sdslen(obj->ptr), target);
+            }
+            return 0;
+        default:
+            // todo panic
+            break;
+    }
+
+    return 0;
+
+}
