@@ -79,7 +79,9 @@ void createSharedObject(void) {
 }
 
 
+void populateCommandTable(void) {
 
+}
 
 void exitFromChild(int code) {
     _exit(code);
@@ -131,8 +133,8 @@ void initServer(void) {
 
     createSharedObject();
 
-//    server.commands = dictCreate();
-//    populateCommandTable();
+    server.commands = dictCreate(&commandTableDictType);
+    populateCommandTable();
 
 
     server.dbnum = REDIS_DEFAULT_DB_NUM;

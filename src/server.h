@@ -218,7 +218,8 @@ int getLongLongFromObject(robj *obj, long long *target);
 // create the golbal shared object
 void createSharedObject(void);
 
-// redis command process prototype
+//-------------- redis command process prototype -----------
+void populateCommandTable(void);
 
 // getCommand get the value from kv, if key exists but not string type, client will receive wrong type error.
 // as side effect, key will delete when go expire, client will receive nullbulk.
@@ -226,7 +227,6 @@ void getCommand(client *c);
 
 // utils for redis command prototype
 int getGenericCommand(client *c);
-
 
 // redis command prototype
 typedef void redisCommandProc(client *c);
