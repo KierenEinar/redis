@@ -186,11 +186,12 @@ static uint16_t dictFingerPrint(dict *d) {
     return crc16(buf, size * 6);
 }
 
-static unsigned long _dictSize(dict *d) {
-    return d->ht[0].used + d->ht[1].used;
-}
 
 // ----------------- public function ---------------
+
+unsigned long dictSize(dict *d) {
+    return d->ht[0].used + d->ht[1].used;
+}
 
 dict* dictCreate(dictType *dictType) {
     dict *d = zmalloc(sizeof(*d));
@@ -316,6 +317,13 @@ void* dictFetchValue(dict *d, const void *key) {
     return de->value.ptr;
 }
 
+int dictGetSignedInteger(dict *d, const void *key, int64_t *value) {
+    dictEntry *de = dictFind(d, key);
+    if (de && value) {
+        *value = de->value.s64;
+    }
+    return de ? DICT_OK :DICT_ERR;
+}
 
 dictEntry* dictAddRow(dict *d, void *key, dictEntry** existing) {
 
@@ -463,7 +471,7 @@ void dictReleaseIter(dictIter *di) {
 // for more details, see https://gentryhuang.com/posts/c1861d8c/index.html (chinese)
 unsigned long dictScan(dict *d, unsigned long cursor, void (*dictScanFunction)(dictEntry *de)) {
 
-    if (_dictSize(d) == 0) return 0;
+    if (dictSize(d) == 0) return 0;
 
     unsigned long m0, m1;
     dictht *t0, *t1;

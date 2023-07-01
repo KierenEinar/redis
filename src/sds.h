@@ -15,6 +15,8 @@ typedef struct sdshdr {
     char    buf[];
 } __attribute__((packed)) sdshdr ;
 
+
+sds sdsnew(const char *c);
 sds sdsnewlen(const char *c, size_t len);
 sds sdsdup(sds s);
 sds sdsempty();

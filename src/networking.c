@@ -215,7 +215,8 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
 
     c->fd = cfd;
     c->reqtype = 0;
-
+    selectDb(c, 0);
+    c->cmd = NULL;
     c->bufpos = 0;
     c->sentlen = 0;
     c->reply = listCreate();

@@ -66,6 +66,9 @@ typedef struct dictIter {
 
 // ---------------------- public functions -----------------------
 
+// return the size of dict.
+unsigned long dictSize(dict *d);
+
 // create the dict.
 dict* dictCreate(dictType *dictType);
 
@@ -96,8 +99,8 @@ dictEntry* dictFind(dict *d, const void *key);
 void* dictFetchValue(dict *d, const void *key);
 // fetch the value which key exists from the table, return the us persist int the table.
 //uint64_t dictGetUnsignedInteger(dict *d, const void *key);
-//// fetch the value which key exists from the table, return the s persist int the table.
-//int64_t dictGetSignedInteger(dict *d, const void *key);
+// fetch the value which key exists from the table, return 0 if not exists, otherwise return 1, and value will fill if value not null.
+int dictGetSignedInteger(dict *d, const void *key, int64_t *value);
 //// fetch the value which key exists from the table, return the double persist int the table.
 //double dictFetchDouble(dict *d, const void *key);
 
@@ -136,5 +139,9 @@ uint64_t dictSdsHash(void *key);
 
 // free dict key sds
 void dictSdsDestructor(void *ptr);
+
+// free dict value robj
+void dictObjDestructor(void *ptr);
+
 
 #endif //REDIS_DICT_H

@@ -125,6 +125,8 @@ typedef struct client {
 
     redisDb *db;
 
+    struct redisCommand *cmd;
+
 } client;
 
 
@@ -163,7 +165,8 @@ struct redisSharedObject {
 
 extern struct redisServer server;
 extern struct redisSharedObject shared;
-
+extern struct dictType dbDictType;
+extern struct dictType keyptrDictType;
 // --------------mstime---------------
 typedef int64_t mstime_t;
 mstime_t mstime();
@@ -221,12 +224,40 @@ void createSharedObject(void);
 //-------------- redis command process prototype -----------
 void populateCommandTable(void);
 
+// lookup command by redis object, should be the string type object.
+struct redisCommand* lookupCommand(robj *o);
+
 // getCommand get the value from kv, if key exists but not string type, client will receive wrong type error.
 // as side effect, key will delete when go expire, client will receive nullbulk.
 void getCommand(client *c);
 
 // utils for redis command prototype
 int getGenericCommand(client *c);
+
+// client use which db.
+void selectDb(client *c, int id);
+
+// execute the command.
+void call(client *c);
+
+// ----------- command utils -------------
+
+// delete the key from expires set if exists, but logically has been expired.
+// return 1 if key remove from expires, 0 key not exists.
+int expireIfNeed(client *c, const robj *key);
+
+// lookup a key from select db, null received when key not exists or has been expired.
+// as a side effect, if key exists but logical expired, will delete by using dbSyncDelete or dbAsyncDelete.
+robj *lookupKeyRead(client *c, const robj *key);
+
+// lookup a key from select db, null received when key not exists or has been expired.
+// as a side effect, if key exists but logical expired, will delete by using dbSyncDelete or dbAsyncDelete.
+robj *lookupKeyWrite(client *c, const robj *key);
+
+// lookup a key from select db, null received when key not exists or has been expired.
+// as a side effect, if key exists but logical expired, will delete by using dbSyncDelete or dbAsyncDelete.
+// if key not exists or expired, reply will send to client if is not null.
+robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply);
 
 // redis command prototype
 typedef void redisCommandProc(client *c);

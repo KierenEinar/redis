@@ -32,6 +32,10 @@ void dictSdsDestructor(void *ptr) {
     sdsfree((sds)ptr);
 }
 
+void dictObjDestructor(void *ptr) {
+    decrRefCount(ptr);
+}
+
 // global vars
 struct redisServer server;
 struct redisSharedObject shared;
@@ -47,6 +51,25 @@ dictType commandTableDictType = {
         NULL,
         NULL,
         dictSdsDestructor,
+        NULL,
+};
+
+
+dictType dbDictType = {
+        dictSdsHash,
+        dictSdsCompare,
+        NULL,
+        NULL,
+        dictSdsDestructor,
+        dictObjDestructor,
+};
+
+dictType keyptrDictType = {
+        dictSdsHash,
+        dictSdsCompare,
+        NULL,
+        NULL,
+        NULL,
         NULL,
 };
 
@@ -80,7 +103,15 @@ void createSharedObject(void) {
 
 
 void populateCommandTable(void) {
+    int commandNums = sizeof(redisCommandTable) / sizeof(struct redisCommand);
+    for (int j=0; j<commandNums; j++) {
+        struct redisCommand *c = redisCommandTable+j;
+        dictAdd(server.commands, sdsnew(c->name), c);
+    }
+}
 
+struct redisCommand* lookupCommand(robj *o) {
+    return dictFetchValue(server.commands, o->ptr);
 }
 
 void exitFromChild(int code) {
@@ -133,11 +164,19 @@ void initServer(void) {
 
     createSharedObject();
 
+    // create commands
     server.commands = dictCreate(&commandTableDictType);
     populateCommandTable();
 
-
+    // create dbs
     server.dbnum = REDIS_DEFAULT_DB_NUM;
+    server.dbs = zmalloc(sizeof(redisDb) * server.dbnum);
+    for (int j=0; j<server.dbnum; j++) {
+        server.dbs[j].dict = dictCreate(&dbDictType);
+        server.dbs[j].expires = dictCreate(&keyptrDictType);
+    }
+
+
     server.backlog = DEFAULT_BACKLOG;
     server.port = DEFAULT_BIND_PORT;
     server.unix_time = time(NULL);
@@ -164,7 +203,42 @@ void initServer(void) {
 
 }
 
+void selectDb(client *c, int id) {
+    if (id < 0 || id >= server.dbnum) {
+        // todo server panic
+    }
+    c->db = &server.dbs[id];
+}
+
+void call(client *c) {
+
+    c->cmd->proc(c);
+}
+
 int processCommand(client *c) {
+
+    if (strcasecmp(c->argv[0]->ptr, "quit")) {
+        c->flag |= CLIENT_CLOSE_AFTER_REPLY;
+        return C_ERR;
+    }
+
+    c->cmd=lookupCommand(c->argv[0]);
+
+    if (c->cmd == NULL) {
+        addReplyError(c, "unknown command");
+        return C_OK;
+    }
+
+
+
+    if ( (c->cmd->arity > 0 && c->argc != c->cmd->arity)
+        || (c->cmd->arity <0 && c->argc < -c->cmd->arity)) {
+        addReplyError(c, "invalid argument");
+        return C_OK;
+    }
+
+    call(c);
+
     return C_OK;
 }
 

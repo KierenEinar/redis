@@ -7,6 +7,10 @@
 #include "sds.h"
 #include "zmalloc.h"
 
+sds sdsnew(const char *c) {
+    return sdsnewlen(c, strlen(c));
+}
+
 sds sdsnewlen(const char *c, size_t len) {
 
     sdshdr *sh;
