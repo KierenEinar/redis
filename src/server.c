@@ -14,10 +14,10 @@ struct redisCommand redisCommandTable[] = {
     {"get", getCommand, 2},
 };
 
-//dictType commandTableDictType = {
-//        dictSdsCaseHash,
-//
-//};
+dictType commandTableDictType = {
+        dictSdsCaseHash,
+
+};
 
 
 mstime_t mstime() {

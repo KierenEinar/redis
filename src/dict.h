@@ -29,7 +29,6 @@ typedef struct dictType {
 }dictType;
 
 typedef struct dictEntry {
-    uint64_t hash;
     void *key;
     union {
         void *ptr;

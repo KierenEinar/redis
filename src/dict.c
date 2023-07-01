@@ -10,6 +10,10 @@ static int dict_can_resize = 1;
 
 static int dict_force_resize_ratio = 5;
 
+static int _dictCompareKey(dict *d, const void *key1, const void *key2) {
+    return d->dictType->compare ? d->dictType->compare(key1, key2) : key1 == key2;
+}
+
 static void _dictReset(struct dictht* ht) {
     ht->used = 0;
     ht->size = 0;
@@ -138,7 +142,7 @@ static dictEntry* _dictGenericDelete(dict *d, void *key, int nofree) {
 
         while (de) {
 
-            if (d->dictType->hashFunction(key) == de->hash || key == de->key) {
+            if (key == de->key || _dictCompareKey(d, key, de->key)) {
 
                 if (pre)
                     pre->next = de->next;
@@ -184,10 +188,6 @@ static uint16_t dictFingerPrint(dict *d) {
 
 static unsigned long _dictSize(dict *d) {
     return d->ht[0].used + d->ht[1].used;
-}
-
-static int _dictCompareKey(dict *d, const void *key1, const void *key2) {
-    return d->dictType->compare ? d->dictType->compare(key1, key2) : key1 == key2;
 }
 
 // ----------------- public function ---------------
@@ -298,7 +298,7 @@ dictEntry* dictFind(dict *d, const void *key) {
         bucket = hash & ht->mask;
         de = ht->table[bucket];
         while (de) {
-            if (de->hash == hash && _dictCompareKey(d, de->key, key) == 0) {
+            if (key == de->key || _dictCompareKey(d, de->key, key) == 0) {
                 return de;
             }
             de = de->next;
@@ -326,7 +326,6 @@ dictEntry* dictAddRow(dict *d, void *key, dictEntry** existing) {
     if (idx == -1) return NULL;
     dictEntry *de = zmalloc(sizeof(*de));
     _dictSetKey(d, de, key);
-    de->hash = keyhash;
     n = &d->ht[0];
     if (dictIsRehashing(d))
         n = &d->ht[1];
@@ -357,7 +356,7 @@ int dictRehash(dict *d, int n) {
 
         while (de) {
             next = de->next;
-            bucket = de->hash & d->ht[1].mask;
+            bucket = d->dictType->hashFunction(de->key) & d->ht[1].mask;
             de->next = d->ht[1].table[bucket];
             d->ht[1].table[bucket] = de;
             de = next;
