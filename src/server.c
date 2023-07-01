@@ -5,6 +5,32 @@
 #include "server.h"
 #include "varint.h"
 
+// dict key type sds, ignore case-sensitive.
+uint64_t dictSdsCaseHash(void *key) {
+    return crc64_nocase((const unsigned char *)(key), sdslen((char *)(key)));
+}
+
+// dict key type sds, case-sensitive.
+uint64_t dictSdsHash(void *key) {
+    return crc64((const unsigned char *)(key), sdslen((char *)(key)));
+}
+
+// dict key type sds
+int dictSdsCompare(const void *ptr1, const void *ptr2) {
+    size_t s1len = sdslen((sds)ptr1);
+    size_t s2len = sdslen((sds)ptr2);
+    if (s1len != s2len) return 0;
+    return memcmp(ptr1, ptr2, s1len > s2len ? s2len : s1len) == 0;
+}
+
+// dict key type sds, case-insensitive
+int dictSdsCaseCompare(const void *ptr1, const void *ptr2) {
+    return strcasecmp((const char *)(ptr1), (const char *)(ptr2));
+}
+
+void dictSdsDestructor(void *ptr) {
+    sdsfree((sds)ptr);
+}
 
 // global vars
 struct redisServer server;
@@ -14,9 +40,14 @@ struct redisCommand redisCommandTable[] = {
     {"get", getCommand, 2},
 };
 
+// dict type for command table
 dictType commandTableDictType = {
         dictSdsCaseHash,
-
+        dictSdsCaseCompare,
+        NULL,
+        NULL,
+        dictSdsDestructor,
+        NULL,
 };
 
 
@@ -133,16 +164,6 @@ void initServer(void) {
 
 int processCommand(client *c) {
     return C_OK;
-}
-
-// dict key type sds, ignore case-sensitive.
-uint64_t dictSdsCaseHash(void *key) {
-    return crc64_nocase((const unsigned char *)(key), sdslen((char *)(key)));
-}
-
-// dict key type sds, case-sensitive.
-uint64_t dictSdsHash(void *key) {
-    return crc64((const unsigned char *)(key), sdslen((char *)(key)));
 }
 
 

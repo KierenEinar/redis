@@ -168,6 +168,11 @@ extern struct redisSharedObject shared;
 typedef int64_t mstime_t;
 mstime_t mstime();
 
+
+// -------------dictType functions------------
+int dictSdsCompare(const void *ptr1, const void *ptr2);
+int dictSdsCaseCompare(const void *ptr1, const void *ptr2);
+
 //--------------redisObject public method ---------------
 
 // note: caller should call decrRefCount to release the ref count of robj using create* family

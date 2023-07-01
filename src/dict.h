@@ -134,4 +134,7 @@ uint64_t dictSdsCaseHash(void *key);
 // dict key type sds, case-sensitive.
 uint64_t dictSdsHash(void *key);
 
+// free dict key sds
+void dictSdsDestructor(void *ptr);
+
 #endif //REDIS_DICT_H
