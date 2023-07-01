@@ -7,7 +7,7 @@
 
 void fastLower(uint8_t *c) {
     if (*c >= 'A' && *c <= 'Z') {
-        *c += 22;
+        *c += 32;
     }
 }
 
@@ -103,7 +103,6 @@ uint64_t crc64_case(const unsigned char *buf, size_t len, int ignore_case) {
     crcReg ^= xorOut;
     return crcReg;
 }
-
 
 uint64_t crc64(const unsigned char *buf, size_t len) {
    return crc64_case(buf, len, 0);

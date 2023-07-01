@@ -135,6 +135,16 @@ int processCommand(client *c) {
     return C_OK;
 }
 
+// dict key type sds, ignore case-sensitive.
+uint64_t dictSdsCaseHash(void *key) {
+    return crc64_nocase((const unsigned char *)(key), sdslen((char *)(key)));
+}
+
+// dict key type sds, case-sensitive.
+uint64_t dictSdsHash(void *key) {
+    return crc64((const unsigned char *)(key), sdslen((char *)(key)));
+}
+
 
 int main(int argc, char **argv) {
     printf("server start...., pid=%d\r\n", getpid());
