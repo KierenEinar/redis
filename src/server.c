@@ -14,6 +14,12 @@ struct redisCommand redisCommandTable[] = {
     {"get", getCommand, 2},
 };
 
+//dictType commandTableDictType = {
+//        dictSdsCaseHash,
+//
+//};
+
+
 mstime_t mstime() {
     struct timeval t;
     gettimeofday(&t, NULL);
@@ -90,9 +96,15 @@ long long serverCron(struct eventLoop *el, int id, void *clientData) {
 }
 
 
-void initServer() {
+void initServer(void) {
 
     createSharedObject();
+
+//    server.commands = dictCreate();
+//    populateCommandTable();
+
+
+    server.dbnum = REDIS_DEFAULT_DB_NUM;
     server.backlog = DEFAULT_BACKLOG;
     server.port = DEFAULT_BIND_PORT;
     server.unix_time = time(NULL);
@@ -126,8 +138,8 @@ int processCommand(client *c) {
 
 int main(int argc, char **argv) {
     printf("server start...., pid=%d\r\n", getpid());
-    // printf("crc32 = %x\r\n", crc32("hello world 12333", strlen("hello world 12333")));
-
+//    printf("crc64 = %llx\r\n", crc64((const unsigned char*)"Hello world", strlen("hello world")));
+//    printf("crc64_nocase = %llx\r\n", crc64_nocase((const unsigned char*)"Hello world", strlen("hello world")));
     initServer();
     elMain(server.el);
     return 0;

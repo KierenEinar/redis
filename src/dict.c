@@ -171,7 +171,7 @@ static uint16_t dictFingerPrint(dict *d) {
 
     size_t size = sizeof(unsigned long);
 
-    char buf[size*6];
+    unsigned char buf[size*6];
     memcpy(buf+size*0, &d->ht[0].used, size);
     memcpy(buf+size*1, &d->ht[0].size, size);
     memcpy(buf+size*2, &d->ht[0].mask, size);

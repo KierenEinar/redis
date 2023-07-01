@@ -34,6 +34,7 @@
 #include "sds.h"
 #include "anet.h"
 #include "crc.h"
+#include "dict.h"
 
 #define LRUBITS 24
 
@@ -78,6 +79,8 @@
 // redis share object ref_count
 #define REDIS_SHARED_OBJECT_REF INT_MAX
 
+#define REDIS_DEFAULT_DB_NUM 16
+
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -86,13 +89,10 @@ typedef struct redisObject {
     void *ptr;
 }robj;
 
-//typedef void redisCommandProc(struct client* c);
-//
-//typedef struct redisCommand {
-//    char *name;
-//    int arty;
-//    redisCommandProc *proc;
-//}redisCommand;
+typedef struct redisDb {
+    dict* dict;
+    dict* expires;
+}redisDb;
 
 typedef struct client {
     char err[255];
@@ -123,6 +123,7 @@ typedef struct client {
     listNode *client_list_node;
     listNode *client_close_node;
 
+    redisDb *db;
 
 } client;
 
@@ -146,17 +147,13 @@ typedef struct redisServer {
     list *client_list; // entire client node list
     list *client_close_list; // for the close asap client list
 
+    redisDb *dbs;
+    int dbnum;
+
+    dict *commands;
 
 }redisServer;
 
-// redis command prototype
-typedef void redisCommandProc (client *c);
-
-struct redisCommand {
-    char *name;
-    redisCommandProc *proc;
-    int arity;
-};
 
 #define OBJ_SHARED_INTEGERS 10000
 #define OBJ_SHARED_REFCOUNT INT_MAX
@@ -221,6 +218,19 @@ void createSharedObject(void);
 // getCommand get the value from kv, if key exists but not string type, client will receive wrong type error.
 // as side effect, key will delete when go expire, client will receive nullbulk.
 void getCommand(client *c);
+
+// utils for redis command prototype
+int getGenericCommand(client *c);
+
+
+// redis command prototype
+typedef void redisCommandProc(client *c);
+
+struct redisCommand {
+    char *name;
+    redisCommandProc *proc;
+    int arity;
+};
 
 
 //-------------syncio-------------------

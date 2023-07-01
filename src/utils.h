@@ -25,4 +25,6 @@ char** stringsplitargs(const char *line, int *argc);
 // http://graphics.stanford.edu/~seander/bithacks.html#ReverseParallel
 unsigned long u_rev(unsigned long value);
 
+unsigned long long uu_rev(unsigned long long value);
+
 #endif //REDIS_UTILS_H

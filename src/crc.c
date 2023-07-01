@@ -3,6 +3,13 @@
 //
 
 #include "crc.h"
+#include "utils.h"
+
+void fastLower(uint8_t *c) {
+    if (*c >= 'A' && *c <= 'Z') {
+        *c += 22;
+    }
+}
 
 /**
  *
@@ -13,7 +20,7 @@
  * reflect output CRC: False
  * xor constant to output CRC : 0x00
  * */
-uint8_t crc8(const char *buf, size_t len) {
+uint8_t crc8(const unsigned char *buf, size_t len) {
 
     uint8_t crc, i, poly;
     crc = 0x00;
@@ -31,7 +38,7 @@ uint8_t crc8(const char *buf, size_t len) {
     return crc;
 }
 
-uint16_t crc16(const char *buf, size_t len) {
+uint16_t crc16(const unsigned char *buf, size_t len) {
     uint16_t crc, poly;
     uint8_t i, byte;
 
@@ -52,7 +59,7 @@ uint16_t crc16(const char *buf, size_t len) {
     return crc;
 }
 
-uint32_t crc32(const char *buf, size_t len) {
+uint32_t crc32(const unsigned char *buf, size_t len) {
     uint32_t poly = 0x4C11DB7;
     uint32_t reg =  0xFFFFFFFF;
     uint8_t byte;
@@ -70,4 +77,38 @@ uint32_t crc32(const char *buf, size_t len) {
         }
     }
     return reg;
+}
+
+uint64_t crc64_case(const unsigned char *buf, size_t len, int ignore_case) {
+
+    uint8_t byte, j;
+    uint64_t refIn, xorOut = 0xFFFFFFFFFFFFFFFF, poly = 0x42F0E1EBA9EA3693, crcReg = 0xFFFFFFFFFFFFFFFF;
+
+    while (len--) {
+        byte = (*buf++);
+        if (ignore_case) {
+            fastLower(&byte);
+        }
+        crcReg ^= uu_rev(byte); // 8bit rev including left shift 56 bits.
+        for (j=0; j<8; j++) {
+            if (crcReg & 0x8000000000000000) {
+                crcReg = (crcReg << 1) ^ poly;
+            } else {
+                crcReg <<= 1;
+            }
+        }
+    }
+
+    crcReg = uu_rev(crcReg);
+    crcReg ^= xorOut;
+    return crcReg;
+}
+
+
+uint64_t crc64(const unsigned char *buf, size_t len) {
+   return crc64_case(buf, len, 0);
+}
+
+uint64_t crc64_nocase(const unsigned char *buf, size_t len) {
+    return crc64_case(buf, len, 1);
 }

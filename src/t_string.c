@@ -4,6 +4,13 @@
 
 #include "server.h"
 
-void getCommand(client *c) {
+int getGenericCommand(client *c) {
+//    robj *value = lookupKeyReadOrReply(c->argv[1], shared.nullbulk);
+//    if (value == NULL) return C_ERR;
+    return C_ERR;
+}
 
+
+void getCommand(client *c) {
+    getGenericCommand(c);
 }

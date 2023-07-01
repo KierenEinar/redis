@@ -16,7 +16,7 @@
  * reflect output CRC: false
  * xor constant to output CRC : 0x00
  * */
-uint8_t crc8(const char *buf, size_t len);
+uint8_t crc8(const unsigned char *buf, size_t len);
 
 /**
  * name: crc-16/xmodem
@@ -27,7 +27,7 @@ uint8_t crc8(const char *buf, size_t len);
  * reflect output CRC: false
  * xor constant to output CRC : 0x0000
  * */
-uint16_t crc16(const char *buf, size_t len);
+uint16_t crc16(const unsigned char *buf, size_t len);
 
 /**
  * name: crc-32/mpeg-2
@@ -40,6 +40,25 @@ uint16_t crc16(const char *buf, size_t len);
  * input: hello world
  * output hex: BB08EC87
  * */
-uint32_t crc32(const char *buf, size_t len);
+uint32_t crc32(const unsigned char *buf, size_t len);
+
+/**
+ * name: crc-64/ecma
+ * width: 64
+ * poly: 0x42F0E1EBA9EA3693
+ * init: 0xFFFFFFFFFFFFFFFF
+ * reflect input byte: true
+ * reflect output CRC: true
+ * xor constant to output CRC : 0xFFFFFFFFFFFFFFFF
+ * input: hello world
+ * output hex: 53037ECDEF2352DA
+ * */
+uint64_t crc64(const unsigned char *buf, size_t len);
+
+/**
+ *
+ * same algo with crc64, but input char is treat to low case.
+ * */
+uint64_t crc64_nocase(const unsigned char *buf, size_t len);
 
 #endif //REDIS_CRC_H

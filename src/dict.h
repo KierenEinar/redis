@@ -129,5 +129,10 @@ void dictReleaseIter(dictIter *di);
 // scan the dict
 unsigned long dictScan(dict *d, unsigned long cursor, void (*dictScanFunction)(dictEntry *de));
 
+// dict key type sds, ignore case-sensitive.
+uint64_t dictSdsCaseHash(void *key);
+
+// dict key type sds, case-sensitive.
+uint64_t dictSdsHash(void *key);
 
 #endif //REDIS_DICT_H
