@@ -22,20 +22,11 @@ robj* createEmbeddedStringObject(const char *s, size_t len) {
 
     size_t hdrlen = sizeof(sdshdr);
     robj *r = zmalloc(sizeof(robj) + hdrlen + len + 1);
-    sdshdr *sh = (void *)(r+1);
-    sds sds = (char*)(sh) + hdrlen;
-
-    if (s) {
-        memcpy(sds, s, len);
-        sds[len] = '\0';
-    } else {
-        memset(sds, 0, len+1);
-    }
-
+    sds str = sdsnewlen(s, len);
     r->refcount = 1;
     r->type = REDIS_OBJECT_STRING;
     r->encoding = REDIS_ENCODING_EMBED;
-    r->ptr = sds;
+    r->ptr = str;
     return  r;
 }
 

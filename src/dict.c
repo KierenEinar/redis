@@ -73,7 +73,7 @@ static long _dictKeyIndex(dict *d, uint64_t keyhash, void *key, dictEntry **exis
         idx = keyhash&ht.mask;
         de = ht.table[idx];
         while (de) {
-            if (dictEntryKeyHash(d, de) == keyhash || de->key == key) {
+            if (de->key == key || _dictCompareKey(d, de->key, key)) {
                 if (existing) *existing = de;
                 return -1;
             }

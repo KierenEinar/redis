@@ -217,7 +217,9 @@ void call(client *c) {
 
 int processCommand(client *c) {
 
-    if (strcasecmp(c->argv[0]->ptr, "quit")) {
+    if (strcasecmp(c->argv[0]->ptr, "quit") == 0) {
+        sds ok = shared.ok->ptr;
+        addReplyString(c, ok, sdslen(ok));
         c->flag |= CLIENT_CLOSE_AFTER_REPLY;
         return C_ERR;
     }

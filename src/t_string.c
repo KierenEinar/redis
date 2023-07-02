@@ -38,17 +38,27 @@ robj *lookupKeyRead(client *c, const robj *key) {
 }
 
 robj *lookupKeyWrite(client *c, const robj *key) {
-    return NULL;
+    expireIfNeed(c, key);
+    return lookupKey(c, key);
 }
 
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply) {
-    return NULL;
+    expireIfNeed(c, key);
+    robj *val = lookupKey(c, key);
+    if (!val) {
+        if (reply) {
+            // todo send reply to client
+        } else {
+            addReplyString(c, shared.nullbulk->ptr, sdslen(shared.nullbulk->ptr));
+        }
+    }
+    return val;
 }
 
 int getGenericCommand(client *c) {
-//    robj *value = lookupKeyReadOrReply(c->argv[1], shared.nullbulk);
-//    if (value == NULL) return C_ERR;
-    return C_ERR;
+    robj *value = lookupKeyReadOrReply(c, c->argv[1],NULL);
+    if (value == NULL) return C_ERR;
+    return C_OK;
 }
 
 

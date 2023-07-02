@@ -51,7 +51,10 @@ sds sdscatsds(sds s) {
     return NULL;
 }
 size_t sdslen(sds s) {
-    return 0;
+
+    sdshdr *sh;
+    sh = (sdshdr*)((char*)s - sizeof(sdshdr));
+    return sh->used;
 }
 sds sdscatfmt(sds s, const char *fmt, ...) {
     return NULL;
