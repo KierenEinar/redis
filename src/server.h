@@ -217,9 +217,14 @@ robj* tryObjectEncoding(robj *obj);
 // return 1 if redis object is encoding sds (embstr or raw format), otherwise return 0.
 int sdsEncodedObject(robj *r);
 
+// decoded the object, if o encoding is raw OR embstr, just incr the ref count, int encoding will try to encoding raw or emstr.
 robj* getDecodedObject(robj *o);
 
+// get long from redis object, obj must be encoding raw or embstr.
 int getLongLongFromObject(robj *obj, long long *target);
+
+// get long from redis object, reply on failed.
+int getLongLongFromObjectOrReply(robj *obj, long long *target, client *c, robj *reply);
 
 // create the golbal shared object
 void createSharedObject(void);
@@ -279,6 +284,22 @@ struct redisCommand {
     int arity;
 };
 
+// ------------ db prototype ----------
+
+// set key value
+void setKey(client *c, robj *key, robj *value);
+
+// set key expire
+void setExpire(client *c, robj *key, long long expire);
+
+// add db key value
+void dbAdd(client *c, robj *key, robj *value);
+
+// replace db key value
+void dbReplace(client *c, robj *key, robj *value);
+
+// remove db expire key
+void removeExpire(client *c, robj *key);
 
 //-------------syncio-------------------
 size_t syncRead(int fd, char *ptr, size_t size, long long timeout);
@@ -295,12 +316,17 @@ int writeToClient(client *client, int handler_installed);
 void handleClientsPendingWrite(void);
 
 //-------------reply--------------------
+void addReply(client *c, robj *r);
 void addReplyString(client *c, const char *str, size_t len);
 void addReplyError(client *c, const char *str);
 void addReplyErrorLength(client *c, const char *str, size_t len);
 void setProtocolError(client *c);
 
-// ------------free client--------------
+// ------------redis client--------------
+
+// reset the client so it can process command again.
+void resetClient(client *c);
+
 void freeClient(client *c);
 void freeClientAsync(client *c);
 void freeClientInFreeQueueAsync(void);

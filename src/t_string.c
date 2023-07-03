@@ -31,15 +31,18 @@ robj *lookupKey(client *c, const robj *key) {
     int64_t expired;
     if (dictSize(c->db->dict) == 0) return NULL;
 
-    robj *value = dictFetchValue(c->db->dict, key);
-    if (value == NULL) return NULL;
+    robj *value = dictFetchValue(c->db->dict, key->ptr);
 
-    int retval = dictGetSignedInteger(c->db->expires, key->ptr, &expired);
-    if (retval == 0) return value;
+    if (value && dictSize(c->db->expires) > 0) {
+        int retval = dictGetSignedInteger(c->db->expires, key->ptr, &expired);
+        if (retval > 0) {
+            dictDelete(c->db->expires, key->ptr);
+            dictDelete(c->db->dict, key->ptr);
+            value = NULL;
+        }
+    }
 
-    dictDelete(c->db->expires, key->ptr);
-    dictDelete(c->db->dict, key->ptr);
-    return NULL;
+    return value;
 }
 
 robj *lookupKeyRead(client *c, const robj *key) {
@@ -59,7 +62,7 @@ robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply) {
         if (reply) {
             // todo send reply to client
         } else {
-            addReplyString(c, shared.nullbulk->ptr, sdslen(shared.nullbulk->ptr));
+            addReply(c, shared.nullbulk);
         }
     }
     return val;
@@ -69,9 +72,10 @@ int getGenericCommand(client *c) {
     robj *value = lookupKeyReadOrReply(c, c->argv[1],NULL);
     if (value == NULL) return C_ERR;
     if (!sdsEncodedObject(value)) {
-        addReplyErrorLength(c, shared.wrongtypeerr->ptr, sdslen(shared.wrongtypeerr->ptr));
+        addReply(c, shared.wrongtypeerr);
         return C_ERR;
     }
+    addReply(c, value);
     return C_OK;
 }
 
@@ -81,13 +85,42 @@ void getCommand(client *c) {
 }
 
 int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expires, int unit, robj *ok_reply, robj *abort_reply) {
-    return C_ERR;
+
+    long long expire = 0;
+
+    if (expires) {
+
+        if (getLongLongFromObjectOrReply(expires, &expire, c, abort_reply) == C_ERR) {
+            if (!abort_reply) addReplyError(c, "integer invalid or out of bounds");
+            return C_ERR;
+        }
+
+        if (expire <= 0) {
+            addReplyError(c, "invalid expire time");
+            return C_ERR;
+        }
+
+        if (unit == UNIT_MILLISECONDS) {
+            expire *= 1000;
+        }
+    }
+
+    if (((flags & SET_OBJECT_NX) && lookupKeyWrite(c, key)) ||
+            ((flags & SET_OBJECT_XX) && !lookupKeyWrite(c, key))) {
+        addReply(c, shared.nullbulk);
+        return C_ERR;
+    }
+
+    setKey(c, key, value);
+    // if (expire) setExpire(c, key, expire);
+    addReply(c, shared.ok);
+    return C_OK;
 }
 
 void setCommand(client *c) {
 
 
-    robj *expires;
+    robj *expires = NULL;
     int unit = UNIT_SECONDS;
     int flags = SET_OBJECT_NO_FLAG, j;
 
@@ -107,14 +140,15 @@ void setCommand(client *c) {
             flags |= SET_OBJECT_EX;
             expires = next;
             j++;
-        } else if ((argv[0] == 'p' || argv[0] == 'E') &&
-                   (argv[1] == 'P' || argv[1] == 'X') && (argv[2] == '\0') && !(flags & SET_OBJECT_EX) && next) {
+        } else if ((argv[0] == 'p' || argv[0] == 'P') &&
+                   (argv[1] == 'x' || argv[1] == 'X') && (argv[2] == '\0') && !(flags & SET_OBJECT_EX) && next) {
             flags |= SET_OBJECT_PX;
             unit = UNIT_MILLISECONDS;
             expires = next;
             j++;
         } else {
-            addReplyErrorLength(c, shared.syntaxerr->ptr, sdslen(shared.syntaxerr->ptr));
+            addReply(c, shared.syntaxerr);
+            return;
         }
 
     }

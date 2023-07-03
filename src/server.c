@@ -25,7 +25,7 @@ int dictSdsCompare(const void *ptr1, const void *ptr2) {
 
 // dict key type sds, case-insensitive
 int dictSdsCaseCompare(const void *ptr1, const void *ptr2) {
-    return strcasecmp((const char *)(ptr1), (const char *)(ptr2));
+    return strcasecmp((const char *)(ptr1), (const char *)(ptr2)) == 0;
 }
 
 void dictSdsDestructor(void *ptr) {
@@ -42,6 +42,7 @@ struct redisSharedObject shared;
 
 struct redisCommand redisCommandTable[] = {
     {"get", getCommand, 2},
+    {"set", setCommand, -3},
 };
 
 // dict type for command table

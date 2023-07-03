@@ -68,7 +68,7 @@ static long _dictKeyIndex(dict *d, uint64_t keyhash, void *key, dictEntry **exis
 
     if (existing) *existing = NULL;
 
-    for (i=0; i<1; i++) {
+    for (i=0; i<2; i++) {
         ht = d->ht[i];
         idx = keyhash&ht.mask;
         de = ht.table[idx];
@@ -240,11 +240,11 @@ int dictExpand(dict *d, unsigned long size) {
     if (d->ht[0].table == NULL) {
         d->ht[0].size = realsize;
         d->ht[0].mask = realsize - 1;
-        d->ht[0].table = zmalloc(sizeof(dictht*) * realsize);
+        d->ht[0].table = zcalloc(realsize, sizeof(dictEntry*));
         return DICT_OK;
     }
 
-    d->ht[1].table = zmalloc(sizeof(dictht*) * realsize);
+    d->ht[1].table = zcalloc(realsize, sizeof(dictEntry*));
     d->ht[1].size = realsize;
     d->ht[1].mask = realsize - 1;
     d->rehash_idx = -1;
@@ -299,7 +299,7 @@ dictEntry* dictFind(dict *d, const void *key) {
         bucket = hash & ht->mask;
         de = ht->table[bucket];
         while (de) {
-            if (key == de->key || _dictCompareKey(d, de->key, key) == 0) {
+            if (key == de->key || _dictCompareKey(d, de->key, key)) {
                 return de;
             }
             de = de->next;
@@ -340,6 +340,7 @@ dictEntry* dictAddRow(dict *d, void *key, dictEntry** existing) {
 
     n->used++;
     de->next = n->table[idx];
+    n->table[idx] = de;
     return de;
 }
 

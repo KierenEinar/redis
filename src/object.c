@@ -133,7 +133,29 @@ robj* tryObjectEncoding(robj *obj) {
 }
 
 robj* getDecodedObject(robj *o) {
-    return NULL;
+
+    if (sdsEncodedObject(o)) {
+        incrRefCount(o);
+        return o;
+    } else if (o->encoding == REDIS_ENCODING_INT) {
+        char buf[32];
+        size_t len = ll2string(buf, sizeof(buf), (long)o->ptr);
+        return createStringObject(buf, len);
+    } else {
+        // todo server panic
+        exit(1);
+    }
+
+}
+
+int getLongLongFromObjectOrReply(robj *obj, long long *target, client *c, robj *reply) {
+
+    if (getLongLongFromObject(obj, target) == C_ERR) {
+        addReply(c, reply);
+        return C_ERR;
+    }
+
+    return C_OK;
 }
 
 int getLongLongFromObject(robj *obj, long long *target) {
@@ -161,3 +183,4 @@ int getLongLongFromObject(robj *obj, long long *target) {
     return C_OK;
 
 }
+

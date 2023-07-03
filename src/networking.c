@@ -78,6 +78,19 @@ int _addReplyStringToList (client *c, const char *str, size_t len) {
     return C_OK;
 }
 
+void addReply(client *c, robj *r) {
+
+    if (sdsEncodedObject(r)) {
+        addReplyString(c, r->ptr, sdslen(r->ptr));
+    } else if (r->encoding == REDIS_ENCODING_INT) {
+        r = getDecodedObject(r);
+        addReplyString(c, r->ptr, sdslen(r->ptr));
+        decrRefCount(r);
+    } else {
+        // todo server panic
+    }
+
+}
 
 void addReplyString(client *c, const char *str, size_t len) {
 
@@ -139,7 +152,7 @@ void processInputBuffer(client *c) {
         } else {
 
             if (processCommand(c) == C_OK) {
-                // resetClient(c);
+                resetClient(c);
             }
 
 //            for (int j=0; j<c->argc; j++) {
@@ -207,7 +220,6 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
     c->bufcap = 0;
     c->multilen = 0;
     c->bulklen = -1;
-    c->argvlen = 0;
     c->argv = NULL;
     c->argc = 0;
 
@@ -327,7 +339,7 @@ int processMultiBulkBuffer(client *c){
             char *str = zmalloc(sizeof(char) * (c->bulklen + 1));
             memcpy(str, c->querybuf+pos, c->bulklen);
             str[c->bulklen] = '\0';
-            c->argv[c->argvlen++] = createStringObject(str, strlen(str));
+            c->argv[c->argc++] = createStringObject(str, strlen(str));
             zfree(str);
             pos+=c->bulklen+2;
             c->bulklen = -1;
@@ -534,6 +546,19 @@ void unlinkClient(client *c) {
     c->fd = -1;
 }
 
+void resetClient(client *c) {
+
+    c->cmd = NULL;
+
+    if (c->argc) {
+        for (int j=0; j<c->argc; j++) {
+            decrRefCount(c->argv[j]);
+        }
+        zfree(c->argv);
+        c->argc = 0;
+    }
+
+}
 
 void freeClient(client *c) {
 
