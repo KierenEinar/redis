@@ -160,7 +160,7 @@ typedef struct redisServer {
 #define OBJ_SHARED_INTEGERS 10000
 #define OBJ_SHARED_REFCOUNT INT_MAX
 struct redisSharedObject {
-    robj *crlf, *ok, *syntaxerr, *nullbulk, *integers[OBJ_SHARED_INTEGERS];
+    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr,*integers[OBJ_SHARED_INTEGERS];
 };
 
 extern struct redisServer server;
@@ -214,8 +214,11 @@ void makeObjectShared(robj *o);
 // encoding raw or embstr when value is a integer.
 robj* tryObjectEncoding(robj *obj);
 
+// return 1 if redis object is encoding sds (embstr or raw format), otherwise return 0.
+int sdsEncodedObject(robj *r);
 
 robj* getDecodedObject(robj *o);
+
 int getLongLongFromObject(robj *obj, long long *target);
 
 // create the golbal shared object
@@ -231,8 +234,16 @@ struct redisCommand* lookupCommand(robj *o);
 // as side effect, key will delete when go expire, client will receive nullbulk.
 void getCommand(client *c);
 
+// setCommand set the kv,
+// set key value [EX EXPIRES] [PX milliseconds] [NX|XX]
+void setCommand(client *c);
+
 // utils for redis command prototype
+// generic get command
 int getGenericCommand(client *c);
+
+// generic set command
+int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expires, int unit, robj *ok_reply, robj *abort_reply);
 
 // client use which db.
 void selectDb(client *c, int id);

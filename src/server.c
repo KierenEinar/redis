@@ -88,6 +88,7 @@ void createSharedObject(void) {
     shared.crlf = createStringObject("\r\n", 2);
     shared.ok = createStringObject("+ok\r\n", 5);
     shared.syntaxerr = createStringObject("-ERR syntax err\r\n", 17);
+    shared.wrongtypeerr = createStringObject("-ERR wrong type against\r\n", 25);
     shared.nullbulk = createStringObject("$-1\r\n", 5);
     for (long j=0; j<OBJ_SHARED_INTEGERS; j++) {
         shared.integers[j] = createObject(REDIS_OBJECT_STRING, (void*)(j));
@@ -230,7 +231,6 @@ int processCommand(client *c) {
         addReplyError(c, "unknown command");
         return C_OK;
     }
-
 
 
     if ( (c->cmd->arity > 0 && c->argc != c->cmd->arity)
