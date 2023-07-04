@@ -75,7 +75,7 @@ int getGenericCommand(client *c) {
         addReply(c, shared.wrongtypeerr);
         return C_ERR;
     }
-    addReply(c, value);
+    addReplyBulk(c, value);
     return C_OK;
 }
 

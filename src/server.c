@@ -96,6 +96,10 @@ void createSharedObject(void) {
         shared.integers[j]->encoding = REDIS_ENCODING_INT;
         makeObjectShared(shared.integers[j]);
     }
+    for (int j=0; j<OBJ_BULK_LEN_SIZE; j++) {
+        shared.bulkhdr[j] = createObject(REDIS_OBJECT_STRING, sdscatfmt(sdsempty(), "$%i\r\n", j));
+        makeObjectShared(shared.bulkhdr[j]);
+    }
 
     makeObjectShared(shared.crlf);
     makeObjectShared(shared.ok);

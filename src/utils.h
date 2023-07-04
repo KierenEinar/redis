@@ -16,8 +16,8 @@
 int string2ll(const char *s, size_t slen, long long *value);
 int string2l(const char *s, size_t slen, long *value);
 // slen including '\0'
-size_t ll2string(char *s, size_t slen, long long value);
-
+size_t ll2string(char *s, long long value);
+size_t ull2string(char *s, unsigned long long value);
 // split string to tokens
 char** stringsplitargs(const char *line, int *argc);
 

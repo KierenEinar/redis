@@ -92,6 +92,55 @@ void addReply(client *c, robj *r) {
 
 }
 
+void addReplyLongLongPrefix(client *c, long long value, char prefix) {
+
+    if (prefix == '$' && value < OBJ_BULK_LEN_SIZE && value >= 0) {
+        addReply(c, shared.bulkhdr[value]);
+        return;
+    }
+
+    char buf[128];
+    buf[0] = prefix;
+    size_t slen = ll2string(buf+1, value);
+    memcpy(buf+1+slen, shared.crlf->ptr, sdslen(shared.crlf->ptr));
+    addReplyString(c, buf, slen+3);
+}
+
+void addReplyBulkLen(client *c, robj *r) {
+
+    size_t len = 0;
+
+    if (sdsEncodedObject(r)) {
+        len = sdslen(r->ptr);
+    } else if (r->encoding == REDIS_ENCODING_INT) {
+
+        len = 1;
+        long value = (long)r->ptr;
+        if (value < 0) {
+            len++;
+            value = -value;
+        }
+        while (value/=10 > 0) {
+            len++;
+        }
+    } else {
+        // todo server panic
+    }
+
+    if (len < OBJ_BULK_LEN_SIZE) {
+        addReply(c, shared.bulkhdr[len]);
+    } else {
+        addReplyLongLongPrefix(c, (long)len, '$');
+    }
+
+}
+
+void addReplyBulk(client *c, robj *r) {
+    addReplyBulkLen(c, r);
+    addReply(c, r);
+    addReply(c, shared.crlf);
+}
+
 void addReplyString(client *c, const char *str, size_t len) {
 
     if (prepareClientToWrite(c) == C_OK)

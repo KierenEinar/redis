@@ -3,9 +3,11 @@
 //
 
 #include <memory.h>
+#include <stdarg.h>
 
 #include "sds.h"
 #include "zmalloc.h"
+#include "utils.h"
 
 sds sdsnew(const char *c) {
     return sdsnewlen(c, strlen(c));
@@ -42,7 +44,24 @@ sds sdsempty() {
     return sdsnewlen(NULL, 0);
 }
 sds sdsMakeRoomFor(sds s, size_t len) {
-    return NULL;
+
+    if (sdsavail(s) >= len) {
+        return s;
+    }
+
+    sdshdr *sh;
+    sh = (sdshdr*)((char*)s - sizeof(sdshdr));
+
+    size_t reallen = sh->used + len;
+
+    if (reallen < SDS_PREALLOC) {
+        reallen *= 2;
+    } else {
+        reallen +=SDS_PREALLOC;
+    }
+    sh->free = reallen - sh->used;
+    zrealloc(sh, sizeof(*sh) + reallen + 1);
+    return sh->buf;
 }
 sds sdscatlen(const char *c, size_t len) {
     return NULL;
@@ -51,13 +70,112 @@ sds sdscatsds(sds s) {
     return NULL;
 }
 size_t sdslen(sds s) {
-
     sdshdr *sh;
     sh = (sdshdr*)((char*)s - sizeof(sdshdr));
     return sh->used;
 }
+
+void sdsincrlen(sds s, size_t len) {
+    sdshdr *sh;
+    sh = (sdshdr*)((char*)s - sizeof(sdshdr));
+    sh->used+=len;
+}
+
+size_t sdsavail(sds s) {
+    sdshdr *sh;
+    sh = (sdshdr *)((char *)s - sizeof(*sh));
+    return sh->free;
+}
+
 sds sdscatfmt(sds s, const char *fmt, ...) {
-    return NULL;
+
+    const char *f = fmt;
+    size_t initlen = sdslen(s);
+    size_t i = initlen;
+    va_list ap;
+    va_start(ap, fmt);
+
+    while (*f) {
+
+        long long num;
+        unsigned long long unum;
+        char next;
+        char *str;
+        size_t slen;
+        switch (*f) {
+            case '%':
+                next = *(++f);
+                switch (next) {
+                    case 's':
+                    case 'S':
+                        str = va_arg(ap, char*);
+                        slen = strlen(str);
+                        if (sdsavail(s) < slen) {
+                            s = sdsMakeRoomFor(s, slen);
+                        }
+                        memcpy(s+i, str, slen);
+                        sdsincrlen(s, slen);
+                        i+=slen;
+                        break;
+                    case 'i':
+                    case 'I':
+                        if (next == 'i')
+                            num = va_arg(ap, int);
+                        else
+                            num = va_arg(ap, long long);
+
+                        {
+                            char buf[21];
+                            size_t size = ll2string(buf, num);
+                            if (sdsavail(s) < size) {
+                                s = sdsMakeRoomFor(s, size);
+                            }
+                            memcpy(s+i, buf, size);
+                            sdsincrlen(s, size);
+                            i+=size;
+                        }
+                        break;
+                    case 'u':
+                    case 'U':
+                        if (next == 'u')
+                            num = va_arg(ap, unsigned int);
+                        else
+                            num = va_arg(ap, unsigned long long);
+
+                        {
+                            char buf[21];
+                            size_t size = ull2string(buf, num);
+                            if (sdsavail(s) < size) {
+                                s = sdsMakeRoomFor(s, size);
+                            }
+                            memcpy(s+i, buf, size);
+                            sdsincrlen(s, size);
+                            i+=size;
+                        }
+                        break;
+                    default:
+                        if (sdsavail(s) < 1) {
+                            s = sdsMakeRoomFor(s, 1);
+                        }
+                        s[i++] = next;
+                        sdsincrlen(s, 1);
+                        break;
+                }
+
+            default:
+                if (sdsavail(s)==0) {
+                    s = sdsMakeRoomFor(s, 1);
+                }
+                s[i++] = *f;
+
+            f++;
+        }
+
+    }
+
+    va_end(ap);
+    return s;
+
 }
 sds sdscatprintf(sds s, const char *fmt, ...) {
     return NULL;

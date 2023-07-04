@@ -198,45 +198,35 @@ int string2l(const char *s, size_t slen, long *value) {
     return 1;
 }
 
-size_t ll2string(char *s, size_t slen, long long value) {
+size_t ll2string(char *s, long long value) {
 
-    unsigned char negative = value > 0 ? 0 : 1;
+    unsigned char negative = value >= 0 ? 0 : 1;
     unsigned long long v = negative ? -value : value;
-
-    char p[LLMAXSIZE];
+    char *p, *ss;
     size_t vlen = 0;
-
-    char *ss = s;
-
-    while (v > 0) {
-        p[vlen] = '0' + v % 10;
-        v /= 10;
-        vlen++;
-        if (vlen > slen) {
-            return 0;
-        }
-    }
-
+    p = ss = s;
+    char aux;
     if (negative) {
-        p[vlen] = '-';
-        vlen++;
-        if (vlen > slen) {
-            return 0;
-        }
+        *p++ = '-';
     }
 
-    // check if s contains '\0'
-    if (vlen+1 > slen) {
-        return 0;
-    }
+    do {
+        *p++ = '0' + v % 10;
+        v/=10;
+    } while (v > 0);
 
+    vlen = p - s;
+    p--;
     // reverse string
-
-    for (int i=vlen-1; i>=0; i--) {
-        *ss = p[i];
-        ss++;
+    while (p - s > 0) {
+        aux = *p;
+        *p = *s;
+        *s= aux;
+        p--;
+        s++;
     }
-    *ss = '\0';
+
+    ss[vlen] = '\0';
     return vlen;
 }
 
@@ -395,6 +385,31 @@ unsigned long long uu_rev(unsigned long long value) {
     return value;
 }
 
+size_t ull2string(char *s, unsigned long long value) {
+
+    char *p, aux, *ss;
+    ss = p = s;
+    do {
+        *p = '0' + value % 10;
+        value /= 10;
+        p++;
+    } while (value>0);
+
+    size_t i = p-s ;
+    p--;
+    // reverse string
+    while (p-s>0) {
+        aux = *p;
+        *p = *s;
+        *s = aux;
+        p--;
+        aux++;
+    }
+
+    ss[i] = '\0';
+    return i;
+
+}
 
 #ifdef RUN_UT
 int main(int argc, char **argv) {

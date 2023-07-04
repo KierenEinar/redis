@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+#define SDS_PREALLOC (1024 * 1024)
+
 typedef char* sds;
 
 typedef struct sdshdr {
@@ -25,6 +27,18 @@ sds sdsMakeRoomFor(sds s, size_t len);
 sds sdscatlen(const char *c, size_t len);
 sds sdscatsds(sds s);
 size_t sdslen(sds s);
+void sdsincrlen(sds s, size_t len);
+// get the free space of sds.
+size_t sdsavail(sds s);
+
+// sds cat format string
+// this function only handles incompatible subset of printf-alike format specifiers,
+// %s - C string
+// %S - sds string
+// %i - signed int
+// %I - signed int 64bit, like (int64_t, long long)
+// %u - unsigned int
+// %U - unsigned int 64bit, like (unsigned long long, uint64_t)
 sds sdscatfmt(sds s, const char *fmt, ...);
 sds sdscatprintf(sds s, const char *fmt, ...);
 sds sdscatvnprintf(sds s, const char *fmt, va_list list);

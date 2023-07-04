@@ -139,7 +139,7 @@ robj* getDecodedObject(robj *o) {
         return o;
     } else if (o->encoding == REDIS_ENCODING_INT) {
         char buf[32];
-        size_t len = ll2string(buf, sizeof(buf), (long)o->ptr);
+        size_t len = ll2string(buf, (long)o->ptr);
         return createStringObject(buf, len);
     } else {
         // todo server panic

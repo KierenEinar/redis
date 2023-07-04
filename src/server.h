@@ -158,9 +158,10 @@ typedef struct redisServer {
 
 
 #define OBJ_SHARED_INTEGERS 10000
+#define OBJ_BULK_LEN_SIZE 32
 #define OBJ_SHARED_REFCOUNT INT_MAX
 struct redisSharedObject {
-    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr,*integers[OBJ_SHARED_INTEGERS];
+    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr,*integers[OBJ_SHARED_INTEGERS],*bulkhdr[OBJ_BULK_LEN_SIZE];
 };
 
 extern struct redisServer server;
@@ -317,6 +318,12 @@ void handleClientsPendingWrite(void);
 
 //-------------reply--------------------
 void addReply(client *c, robj *r);
+// reply bulk string to client.
+void addReplyBulk(client *c, robj *r);
+// add bulk len to reply prefix
+void addReplyBulkLen(client *c, robj *r);
+// add reply length header.
+void addReplyLongLongPrefix(client *c, long long value, char prefix);
 void addReplyString(client *c, const char *str, size_t len);
 void addReplyError(client *c, const char *str);
 void addReplyErrorLength(client *c, const char *str, size_t len);
