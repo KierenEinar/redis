@@ -169,6 +169,7 @@ sds sdscatfmt(sds s, const char *fmt, ...) {
                     s = sdsMakeRoomFor(s, 1);
                 }
                 s[i++] = *f;
+                sdsincrlen(s, 1);
                 f++;
         }
 

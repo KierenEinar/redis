@@ -3,7 +3,6 @@
 //
 
 #include "dict.h"
-
 // ------------ private function -------------
 
 static int dict_can_resize = 1;
@@ -276,10 +275,8 @@ void dictReplace(dict *d, void *key, void *value) {
         return;
     }
 
-    aux = *existing;
-    _dictSetVal(d, entry, value);
-    _dictFreeVal(d, &aux);
-
+    _dictFreeVal(d, existing);
+    _dictSetVal(d, existing, value);
 }
 
 dictEntry* dictFind(dict *d, const void *key) {

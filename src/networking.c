@@ -194,10 +194,8 @@ void processInputBuffer(client *c) {
            if (processInlineBuffer(c) != RESP_PROCESS_OK) break;
         }
 
-        c->reqtype = 0;
-
         if (c->argc == 0) {
-            // todo reset client and process next command
+            resetClient(c);
         } else {
 
             if (processCommand(c) == C_OK) {
@@ -334,13 +332,10 @@ int processMultiBulkBuffer(client *c){
 
         c->multilen = value;
 
-        if (c->argv) {
-            for (long j =0; j<c->multilen; j++) {
-                decrRefCount(c->argv[j]);
-            }
-            zfree(c->argv);
+        if (c->multilen) {
+            if(c->argv) zfree(c->argv);
+            c->argv = zmalloc(sizeof(robj*) * c->multilen);
         }
-        c->argv = zmalloc(sizeof(robj*) * c->multilen);
     }
 
     while (c->multilen) {
@@ -445,22 +440,14 @@ int processInlineBuffer(client *c) {
         return RESP_PROCESS_ERR;
     }
 
-
-    if (c->argc) {
-        fprintf(stdout, "argc=%d\r\n", c->argc);
-        for (int i=0; i<c->argc; i++) {
-            decrRefCount(c->argv[i]);
-        }
-        zfree(c->argv);
-        c->argc = 0;
-        c->argv = NULL;
+    if (argc) {
+        if (c->argv) zfree(c->argv);
+        c->argc = argc;
+        c->argv = zmalloc(sizeof(robj*) * argc);
     }
 
-    c->argc = argc;
-    c->argv = zmalloc(sizeof(robj *) * argc);
-
     for (int i=0; i<argc; i++) {
-        c->argv[i] = createStringObject(vector[i], strlen(vector[i]));
+        c->argv[i] = createObject(REDIS_OBJECT_STRING, sdsnewlen(vector[i], strlen(vector[i])));
         zfree(vector[i]);
     }
     zfree(vector);
@@ -603,10 +590,14 @@ void resetClient(client *c) {
         for (int j=0; j<c->argc; j++) {
             decrRefCount(c->argv[j]);
         }
-        zfree(c->argv);
         c->argc = 0;
+        zfree(c->argv);
+        c->argv = NULL;
     }
 
+    c->reqtype = 0;
+    c->multilen = 0;
+    c->bulklen = -1;
 }
 
 void freeClient(client *c) {

@@ -7,7 +7,7 @@
 
 // dict key type sds, ignore case-sensitive.
 uint64_t dictSdsCaseHash(void *key) {
-    return crc64_nocase((const unsigned char *)(key), sdslen((char *)(key)));
+    return crc64_nocase((const unsigned char *)(key), sdslen(key));
 }
 
 // dict key type sds, case-sensitive.
@@ -97,7 +97,9 @@ void createSharedObject(void) {
         makeObjectShared(shared.integers[j]);
     }
     for (int j=0; j<OBJ_BULK_LEN_SIZE; j++) {
-        shared.bulkhdr[j] = createObject(REDIS_OBJECT_STRING, sdscatfmt(sdsempty(), "$%i\r\n", j));
+        sds s = sdscatfmt(sdsempty(), "$%i\r\n", j);
+        shared.bulkhdr[j] = createObject(REDIS_OBJECT_STRING, s);
+        shared.bulkhdr[j]->encoding = REDIS_ENCODING_RAW;
         makeObjectShared(shared.bulkhdr[j]);
     }
 

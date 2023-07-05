@@ -14,6 +14,7 @@ robj* createObject(int type, void *ptr) {
     r->refcount = 1;
     r->type = type;
     r->ptr = ptr;
+    r->encoding = REDIS_ENCODING_RAW;
     // todo update lru
     return r;
 }
@@ -90,7 +91,7 @@ void decrRefCount(robj *o) {
 
 void freeStringObject(robj *o) {
     if (o->encoding == REDIS_ENCODING_RAW) {
-        zfree(o->ptr);
+        sdsfree(o->ptr);
     }
 }
 
