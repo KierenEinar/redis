@@ -161,14 +161,15 @@ sds sdscatfmt(sds s, const char *fmt, ...) {
                         sdsincrlen(s, 1);
                         break;
                 }
+                f++;
+                break;
 
             default:
                 if (sdsavail(s)==0) {
                     s = sdsMakeRoomFor(s, 1);
                 }
                 s[i++] = *f;
-
-            f++;
+                f++;
         }
 
     }
