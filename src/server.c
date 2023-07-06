@@ -254,8 +254,6 @@ int processCommand(client *c) {
 
 int main(int argc, char **argv) {
     printf("server start...., pid=%d\r\n", getpid());
-//    printf("crc64 = %llx\r\n", crc64((const unsigned char*)"Hello world", strlen("hello world")));
-//    printf("crc64_nocase = %llx\r\n", crc64_nocase((const unsigned char*)"Hello world", strlen("hello world")));
     initServer();
     elMain(server.el);
     return 0;

@@ -112,13 +112,12 @@ int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expire
     }
 
     setKey(c, key, value);
-    // if (expire) setExpire(c, key, expire);
+    if (expire) setExpire(c, key, expire);
     addReply(c, shared.ok);
     return C_OK;
 }
 
 void setCommand(client *c) {
-
 
     robj *expires = NULL;
     int unit = UNIT_SECONDS;

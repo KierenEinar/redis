@@ -66,7 +66,7 @@
 #define CLIENT_CLOSE_AFTER_REPLY (1 << 2)
 
 // server cron period
-#define SERVER_CRON_PERIOD_MS 100
+#define SERVER_CRON_PERIOD_MS 1
 
 // redis object encoding
 #define REDIS_ENCODING_RAW 1

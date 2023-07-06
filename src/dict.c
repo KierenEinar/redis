@@ -44,7 +44,7 @@ static int _dictExpandIfNeeded(dict *d) {
 
     if (dictIsRehashing(d)) return DICT_OK;
 
-    if (d->ht[0].used == 0) return dictExpand(d, HT_MIN_SIZE);
+    if (d->ht[0].size == 0) return dictExpand(d, HT_MIN_SIZE);
 
     if (d->ht[0].used >= d->ht[0].size &&
         (dict_can_resize || d->ht[0].used / d->ht[0].size > dict_force_resize_ratio)) {
@@ -68,14 +68,14 @@ static long _dictKeyIndex(dict *d, uint64_t keyhash, void *key, dictEntry **exis
     if (existing) *existing = NULL;
 
     for (i=0; i<2; i++) {
-        ht = d->ht[i];
-        idx = keyhash&ht.mask;
-        de = ht.table[idx];
+        idx = keyhash&d->ht[i].mask;
+        de = d->ht[i].table[idx];
         while (de) {
             if (de->key == key || _dictCompareKey(d, de->key, key)) {
                 if (existing) *existing = de;
                 return -1;
             }
+            de = de->next;
         }
 
         if (!dictIsRehashing(d))
@@ -137,7 +137,7 @@ static dictEntry* _dictGenericDelete(dict *d, void *key, int nofree) {
 
         dictEntry *pre = NULL;
         idx = hash & d->ht[table].mask;
-        dictEntry *de = d->ht[table].table[idx];
+        de = d->ht[table].table[idx];
 
         while (de) {
 
@@ -146,15 +146,15 @@ static dictEntry* _dictGenericDelete(dict *d, void *key, int nofree) {
                 if (pre)
                     pre->next = de->next;
                 else
-                    d->ht[table].table[idx]->next = de->next;
+                    d->ht[table].table[idx] = de->next;
+
+                d->ht[table].used--;
 
                 if (!nofree) {
                     _dictFreeKey(d, de);
                     _dictFreeVal(d, de);
                     zfree(de);
                 }
-
-                d->ht[table].used--;
 
                 return de;
             }

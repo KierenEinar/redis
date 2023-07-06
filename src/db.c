@@ -29,6 +29,7 @@ void setKey(client *c, robj *key, robj *value) {
 }
 
 void setExpire(client *c, robj *key, long long expire) {
+    fprintf(stdout, "dict size=%ld\r\n", dictSize(c->db->expires));
     dictEntry *entry = dictAddRow(c->db->expires, key->ptr, NULL);
     mstime_t now = mstime();
     entry->value.s64 = now + expire;
