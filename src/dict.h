@@ -79,6 +79,9 @@ dictEntry* dictAddRow(dict *d, void *key, dictEntry** existing);
 // add entry to the dict, return DICT_OK if success, otherwise DICT_ERR.
 int dictAdd(dict *d, void *key, void *value);
 
+// add or find
+dictEntry *dictAddOrFind(dict *d, void *key);
+
 // replace the entry if key exists.
 void dictReplace(dict *d, void *key, void *value);
 
@@ -100,7 +103,7 @@ void* dictFetchValue(dict *d, const void *key);
 // fetch the value which key exists from the table, return the us persist int the table.
 //uint64_t dictGetUnsignedInteger(dict *d, const void *key);
 // fetch the value which key exists from the table, return 0 if not exists, otherwise return 1, and value will fill if value not null.
-int dictGetSignedInteger(dict *d, const void *key, int64_t *value);
+long long dictGetSignedInteger(dictEntry *de);
 //// fetch the value which key exists from the table, return the double persist int the table.
 //double dictFetchDouble(dict *d, const void *key);
 

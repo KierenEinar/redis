@@ -17,29 +17,28 @@
 
 
 int expireIfNeed(client *c, const robj *key) {
-
+    dictEntry *de;
     int64_t expired;
     if (dictSize(c->db->expires) == 0) return 0;
-    int retval = dictGetSignedInteger(c->db->expires, key->ptr, &expired);
-    if (retval == 0) return 0;
+    de = dictFind(c->db->expires, key->ptr);
+    if (de == NULL) return 0;
+    expired = dictGetSignedInteger(de);
     mstime_t ms = mstime();
     if (expired >= ms) return 0;
     return 1;
 }
 
 robj *lookupKey(client *c, const robj *key) {
-    int64_t expired;
+    long long expired;
     if (dictSize(c->db->dict) == 0) return NULL;
 
     robj *value = dictFetchValue(c->db->dict, key->ptr);
+    expired = getExpire(c->db, (robj*)key);
 
-    if (value && dictSize(c->db->expires) > 0) {
-        int retval = dictGetSignedInteger(c->db->expires, key->ptr, &expired);
-        if (retval > 0) {
-            dictDelete(c->db->expires, key->ptr);
-            dictDelete(c->db->dict, key->ptr);
-            value = NULL;
-        }
+    if (value && expired > 0 && expired < mstime()) {
+        dictDelete(c->db->dict, key->ptr);
+        dictDelete(c->db->expires, key->ptr);
+        value = NULL;
     }
 
     return value;
@@ -100,7 +99,7 @@ int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expire
             return C_ERR;
         }
 
-        if (unit == UNIT_MILLISECONDS) {
+        if (unit == UNIT_SECONDS) {
             expire *= 1000;
         }
     }

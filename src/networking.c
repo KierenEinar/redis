@@ -135,6 +135,17 @@ void addReplyBulkLen(client *c, robj *r) {
 
 }
 
+void addReplyLongLong(client *c, long long value) {
+
+    if (value == 0) {
+        addReply(c, shared.czero);
+    } else if (value == 1) {
+        addReply(c, shared.cone);
+    } else {
+        addReplyLongLongPrefix(c, value, ':');
+    }
+}
+
 void addReplyBulk(client *c, robj *r) {
     addReplyBulkLen(c, r);
     addReply(c, r);

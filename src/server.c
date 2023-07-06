@@ -43,6 +43,8 @@ struct redisSharedObject shared;
 struct redisCommand redisCommandTable[] = {
     {"get", getCommand, 2},
     {"set", setCommand, -3},
+    {"ttl", ttlCommand, 2},
+    {"pttl", pttlCommand, 2},
 };
 
 // dict type for command table
@@ -91,6 +93,9 @@ void createSharedObject(void) {
     shared.syntaxerr = createStringObject("-ERR syntax err\r\n", 17);
     shared.wrongtypeerr = createStringObject("-ERR wrong type against\r\n", 25);
     shared.nullbulk = createStringObject("$-1\r\n", 5);
+    shared.czero = createStringObject(":0\r\n", 4);
+    shared.cone = createStringObject(":1\r\n", 4);
+
     for (long j=0; j<OBJ_SHARED_INTEGERS; j++) {
         shared.integers[j] = createObject(REDIS_OBJECT_STRING, (void*)(j));
         shared.integers[j]->encoding = REDIS_ENCODING_INT;

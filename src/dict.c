@@ -265,6 +265,14 @@ int dictAdd(dict *d, void *key, void *value) {
     return DICT_OK;
 }
 
+dictEntry *dictAddOrFind(dict *d, void *key) {
+
+    dictEntry *existing, *row;
+    row = dictAddRow(d, key, &existing);
+    if (row) return row;
+    return existing;
+}
+
 void dictReplace(dict *d, void *key, void *value) {
 
     dictEntry *existing, *entry, aux;
@@ -314,12 +322,8 @@ void* dictFetchValue(dict *d, const void *key) {
     return de->value.ptr;
 }
 
-int dictGetSignedInteger(dict *d, const void *key, int64_t *value) {
-    dictEntry *de = dictFind(d, key);
-    if (de && value) {
-        *value = de->value.s64;
-    }
-    return de ? DICT_OK :DICT_ERR;
+long long dictGetSignedInteger(dictEntry *de) {
+    return de->value.s64;
 }
 
 dictEntry* dictAddRow(dict *d, void *key, dictEntry** existing) {

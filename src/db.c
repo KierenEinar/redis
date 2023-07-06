@@ -30,7 +30,22 @@ void setKey(client *c, robj *key, robj *value) {
 
 void setExpire(client *c, robj *key, long long expire) {
     fprintf(stdout, "dict size=%ld\r\n", dictSize(c->db->expires));
-    dictEntry *entry = dictAddRow(c->db->expires, key->ptr, NULL);
+    dictEntry *de, *expireRow;
+    de = dictFind(c->db->dict, key->ptr);
+    // todo assert de not null
+    expireRow = dictAddOrFind(c->db->expires, de->key);
     mstime_t now = mstime();
-    entry->value.s64 = now + expire;
+    expireRow->value.s64 = now + expire;
+}
+
+long long getExpire(redisDb *db, robj *key) {
+
+    dictEntry *de;
+
+    if (dictSize(db->expires) == 0 || (de = dictFind(db->expires, key->ptr)) == NULL) {
+        return -1;
+    }
+
+    // todo assert de not null
+    return dictGetSignedInteger(de);
 }

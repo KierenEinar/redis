@@ -217,6 +217,7 @@ size_t ll2string(char *s, long long value) {
 
     vlen = p - s;
     p--;
+    if (negative) s++;
     // reverse string
     while (p - s > 0) {
         aux = *p;

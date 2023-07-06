@@ -161,7 +161,7 @@ typedef struct redisServer {
 #define OBJ_BULK_LEN_SIZE 32
 #define OBJ_SHARED_REFCOUNT INT_MAX
 struct redisSharedObject {
-    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr,*integers[OBJ_SHARED_INTEGERS],*bulkhdr[OBJ_BULK_LEN_SIZE];
+    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr,*integers[OBJ_SHARED_INTEGERS],*bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone;
 };
 
 extern struct redisServer server;
@@ -254,6 +254,12 @@ int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expire
 // client use which db.
 void selectDb(client *c, int id);
 
+// get the key ttl
+void ttlCommand(client *c);
+
+// get the key pttl
+void pttlCommand(client *c);
+
 // execute the command.
 void call(client *c);
 
@@ -302,6 +308,9 @@ void dbReplace(client *c, robj *key, robj *value);
 // remove db expire key
 void removeExpire(client *c, robj *key);
 
+// get the key expire milliseconds
+long long getExpire(redisDb *db, robj *key);
+
 //-------------syncio-------------------
 size_t syncRead(int fd, char *ptr, size_t size, long long timeout);
 
@@ -322,6 +331,8 @@ void addReply(client *c, robj *r);
 void addReplyBulk(client *c, robj *r);
 // add bulk len to reply prefix
 void addReplyBulkLen(client *c, robj *r);
+// reply long long to client
+void addReplyLongLong(client *c, long long value);
 // add reply length header.
 void addReplyLongLongPrefix(client *c, long long value, char prefix);
 void addReplyString(client *c, const char *str, size_t len);
