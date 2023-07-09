@@ -45,6 +45,7 @@ struct redisCommand redisCommandTable[] = {
     {"set", setCommand, -3},
     {"ttl", ttlCommand, 2},
     {"pttl", pttlCommand, 2},
+    {"mset", msetCommand, -3},
 };
 
 // dict type for command table

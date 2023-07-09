@@ -90,7 +90,7 @@ int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expire
     if (expires) {
 
         if (getLongLongFromObjectOrReply(expires, &expire, c, abort_reply) == C_ERR) {
-            if (!abort_reply) addReplyError(c, "integer invalid or out of bounds");
+            addReplyError(c, "integer invalid or out of bounds");
             return C_ERR;
         }
 
@@ -106,13 +106,13 @@ int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expire
 
     if (((flags & SET_OBJECT_NX) && lookupKeyWrite(c, key)) ||
             ((flags & SET_OBJECT_XX) && !lookupKeyWrite(c, key))) {
-        addReply(c, shared.nullbulk);
+        addReply(c, abort_reply ? abort_reply : shared.nullbulk);
         return C_ERR;
     }
 
     setKey(c, key, value);
     if (expire) setExpire(c, key, expire);
-    addReply(c, shared.ok);
+    addReply(c, ok_reply ? ok_reply :shared.ok);
     return C_OK;
 }
 
@@ -153,4 +153,41 @@ void setCommand(client *c) {
 
     setGenericCommand(c, c->argv[1], c->argv[2], flags, expires, unit, NULL, NULL);
 
+}
+
+void msetCommand(client *c) {
+    msetGenericCommand(c, 0);
+}
+
+// nx -> :-1 or :1
+// only set -> +ok, $-1
+int msetGenericCommand(client *c, int nx) {
+
+    int j, busykeys = 0;
+
+    if (c->argc % 2 == 0) {
+        addReply(c, shared.syntaxerr);
+        return C_ERR;
+    }
+
+    if (nx) {
+        for (j=1; j<c->argc; j+=2) {
+            if (lookupKeyWrite(c, c->argv[j])) {
+                busykeys++;
+            }
+        }
+        if (busykeys) {
+            addReply(c, shared.czero);
+            return C_ERR;
+        }
+    }
+
+    for (j=1; j<c->argc; j+=2) {
+        c->argv[j+1] = tryObjectEncoding(c->argv[j+1]);
+        setKey(c, c->argv[j], c->argv[j+1]);
+    }
+
+    addReply(c, nx ? shared.cone : shared.ok);
+
+    return C_OK;
 }

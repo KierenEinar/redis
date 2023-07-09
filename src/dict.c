@@ -131,6 +131,9 @@ static dictEntry* _dictGenericDelete(dict *d, void *key, int nofree) {
 
     dictEntry *de;
     int table;
+
+    if (dictIsRehashing(d)) _dictRehashStep(d);
+
     uint64_t hash = dictKeyHash(d, key);
     unsigned long idx;
     for (table = 0; table <=1; table++) {

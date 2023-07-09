@@ -251,6 +251,12 @@ int getGenericCommand(client *c);
 // generic set command
 int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expires, int unit, robj *ok_reply, robj *abort_reply);
 
+// set multi key value
+void msetCommand(client *c);
+
+// set multi key value generic command
+int msetGenericCommand(client *c, int nx);
+
 // client use which db.
 void selectDb(client *c, int id);
 
