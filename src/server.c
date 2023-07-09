@@ -46,6 +46,7 @@ struct redisCommand redisCommandTable[] = {
     {"ttl", ttlCommand, 2},
     {"pttl", pttlCommand, 2},
     {"mset", msetCommand, -3},
+    {"mget", mgetCommand, -2},
 };
 
 // dict type for command table
@@ -105,8 +106,13 @@ void createSharedObject(void) {
     for (int j=0; j<OBJ_BULK_LEN_SIZE; j++) {
         sds s = sdscatfmt(sdsempty(), "$%i\r\n", j);
         shared.bulkhdr[j] = createObject(REDIS_OBJECT_STRING, s);
-        shared.bulkhdr[j]->encoding = REDIS_ENCODING_RAW;
         makeObjectShared(shared.bulkhdr[j]);
+    }
+
+    for (int j=0; j<OBJ_BULK_LEN_SIZE; j++) {
+        sds s = sdscatfmt(sdsempty(), "*%i\r\n", j);
+        shared.mbulkhdr[j] = createObject(REDIS_OBJECT_STRING, s);
+        makeObjectShared(shared.mbulkhdr[j]);
     }
 
     makeObjectShared(shared.crlf);

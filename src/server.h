@@ -161,7 +161,10 @@ typedef struct redisServer {
 #define OBJ_BULK_LEN_SIZE 32
 #define OBJ_SHARED_REFCOUNT INT_MAX
 struct redisSharedObject {
-    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr,*integers[OBJ_SHARED_INTEGERS],*bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone;
+    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr,
+    *integers[OBJ_SHARED_INTEGERS],
+    *mbulkhdr[OBJ_BULK_LEN_SIZE],
+    *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone;
 };
 
 extern struct redisServer server;
@@ -254,6 +257,9 @@ int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expire
 // set multi key value
 void msetCommand(client *c);
 
+// get multi key value
+void mgetCommand(client *c);
+
 // set multi key value generic command
 int msetGenericCommand(client *c, int nx);
 
@@ -337,6 +343,8 @@ void addReply(client *c, robj *r);
 void addReplyBulk(client *c, robj *r);
 // add bulk len to reply prefix
 void addReplyBulkLen(client *c, robj *r);
+// add multi bulk len header to reply
+void addReplyMultiBulkLen(client *c, long long len);
 // reply long long to client
 void addReplyLongLong(client *c, long long value);
 // add reply length header.

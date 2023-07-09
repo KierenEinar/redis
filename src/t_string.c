@@ -159,6 +159,20 @@ void msetCommand(client *c) {
     msetGenericCommand(c, 0);
 }
 
+void mgetCommand(client *c) {
+
+    int j;
+    addReplyMultiBulkLen(c, c->argc-1);
+    robj *value;
+    for (j=1; j<c->argc; j++) {
+        if ((value = lookupKeyRead(c, c->argv[j])) == NULL) {
+            addReplyBulk(c, shared.nullbulk);
+        } else {
+            addReplyBulk(c, value);
+        }
+    }
+}
+
 // nx -> :-1 or :1
 // only set -> +ok, $-1
 int msetGenericCommand(client *c, int nx) {

@@ -170,6 +170,14 @@ void addReplyErrorLength(client *c, const char *str, size_t len) {
     addReplyString(c, "\r\n", 2);
 }
 
+void addReplyMultiBulkLen(client *c, long long len) {
+    if (len < OBJ_BULK_LEN_SIZE) {
+        addReply(c, shared.mbulkhdr[len]);
+    } else {
+        addReplyLongLongPrefix(c, len, '*');
+    }
+}
+
 void setProtocolError(client *c) {
     c->flag |= CLIENT_CLOSE_AFTER_REPLY;
 }
