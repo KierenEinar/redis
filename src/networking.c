@@ -97,6 +97,9 @@ void addReplyLongLongPrefix(client *c, long long value, char prefix) {
     if (prefix == '$' && value < OBJ_BULK_LEN_SIZE && value >= 0) {
         addReply(c, shared.bulkhdr[value]);
         return;
+    } else if (prefix == '*' && value < OBJ_BULK_LEN_SIZE && value >= 0) {
+        addReply(c, shared.mbulkhdr[value]);
+        return;
     }
 
     char buf[128];

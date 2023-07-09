@@ -90,13 +90,13 @@ mstime_t mstime() {
 
 void createSharedObject(void) {
 
-    shared.crlf = createStringObject("\r\n", 2);
-    shared.ok = createStringObject("+ok\r\n", 5);
-    shared.syntaxerr = createStringObject("-ERR syntax err\r\n", 17);
-    shared.wrongtypeerr = createStringObject("-ERR wrong type against\r\n", 25);
-    shared.nullbulk = createStringObject("$-1\r\n", 5);
-    shared.czero = createStringObject(":0\r\n", 4);
-    shared.cone = createStringObject(":1\r\n", 4);
+    shared.crlf = createObject(REDIS_OBJECT_STRING, sdsnew("\r\n"));
+    shared.ok = createObject(REDIS_OBJECT_STRING, sdsnew("+ok\r\n"));
+    shared.syntaxerr = createObject(REDIS_OBJECT_STRING, sdsnew("-ERR syntax err\r\n"));
+    shared.wrongtypeerr = createObject(REDIS_OBJECT_STRING, sdsnew("-ERR wrong type against\r\n"));
+    shared.nullbulk = createObject(REDIS_OBJECT_STRING, sdsnew("$-1\r\n"));
+    shared.czero = createObject(REDIS_OBJECT_STRING, sdsnew(":0\r\n"));
+    shared.cone = createObject(REDIS_OBJECT_STRING, sdsnew(":1\r\n"));
 
     for (long j=0; j<OBJ_SHARED_INTEGERS; j++) {
         shared.integers[j] = createObject(REDIS_OBJECT_STRING, (void*)(j));
@@ -118,7 +118,10 @@ void createSharedObject(void) {
     makeObjectShared(shared.crlf);
     makeObjectShared(shared.ok);
     makeObjectShared(shared.syntaxerr);
+    makeObjectShared(shared.wrongtypeerr);
     makeObjectShared(shared.nullbulk);
+    makeObjectShared(shared.cone);
+    makeObjectShared(shared.czero);
 }
 
 

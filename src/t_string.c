@@ -166,7 +166,7 @@ void mgetCommand(client *c) {
     robj *value;
     for (j=1; j<c->argc; j++) {
         if ((value = lookupKeyRead(c, c->argv[j])) == NULL) {
-            addReplyBulk(c, shared.nullbulk);
+            addReply(c, shared.nullbulk);
         } else {
             addReplyBulk(c, value);
         }
