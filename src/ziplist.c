@@ -43,12 +43,29 @@ uint32_t int32rev(uint32_t v) {
     return v;
 }
 
-uint32_t byteslen(unsigned char *zl) {
+
+void memrev16(void *p) {
+
+    unsigned char *ptr = p;
+    unsigned char temp = ptr[0];
+
+    ptr[0] = ptr[1];
+    ptr[1] = temp;
+
+}
+
+uint16_t int16rev(uint16_t v) {
+    memrev16(&v);
+    return v;
+}
+
+
+uint32_t ziplistBytesLen(unsigned char *zl) {
     uint32_t *ptr = (uint32_t*)(zl);
     return int32revifbe(*ptr);
 }
 
-uint32_t ziptailoffset(unsigned char *zl) {
+uint32_t ziplistTailOffset(unsigned char *zl) {
     uint32_t offset;
     memcpy(&offset, zl+4, 4);
     return int32revifbe(offset);
@@ -240,12 +257,6 @@ int zipEntryPrevlenBytesDiff(unsigned char *p, unsigned int prevlen) {
     return zipStoreEntryPrevLen(NULL, prevlen) -  prevlensize;
 }
 
-unsigned char *ziplistResize(unsigned char *zl, uint32_t newsize) {
-    zrealloc(zl, newsize+1);
-    zl[newsize] = ZIP_LIST_END;
-    return zl;
-}
-
 void zipStoreTailOffset(unsigned char *zl, uint32_t tail) {
     tail = int32revifbe(tail);
     memcpy(zl, &tail, 4);
@@ -254,6 +265,13 @@ void zipStoreTailOffset(unsigned char *zl, uint32_t tail) {
 void zipStoreByteslen(unsigned char *zl, uint32_t byteslen) {
     byteslen = int32revifbe(byteslen);
     memcpy(zl, &byteslen, 4);
+}
+
+unsigned char *ziplistResize(unsigned char *zl, uint32_t newsize) {
+    zrealloc(zl, newsize);
+    zl[newsize] = ZIP_LIST_END;
+    zipStoreByteslen(zl, newsize);
+    return zl;
 }
 
 void zipSaveInteger(unsigned char *p, unsigned char encoding, long long value) {
@@ -268,15 +286,79 @@ void zipSaveInteger(unsigned char *p, unsigned char encoding, long long value) {
     }
 }
 
+void ziplistIncrLength(unsigned char *zl) {
+
+    uint16_t length;
+    memcpy(&length, zl+8, 2);
+    length = int16rev(length);
+    if (length < 0xffff) {
+        length = int16rev(length+1);
+        memcpy(&length, zl+8, 2);
+    }
+}
+
 
 unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
+
+    uint32_t rawlen, prevlensize, prevlen, rawlensize, curlen, offset;
+
+    int nextDiff;
+
+    curlen = ziplistBytesLen(zl);
+
+    while (p[0] != ZIP_LIST_END) {
+
+        rawlen = zipRawEntryLength(p);
+        if (p[rawlen] == ZIP_LIST_END) {
+            break;
+        }
+
+        prevlen = zipDecodeEntryPrevLen(p+rawlen, &prevlensize);
+        if (prevlen == rawlen) {
+            break;
+        }
+
+        rawlensize = zipStoreEntryPrevLen(NULL, rawlen);
+
+        if (prevlensize < rawlensize) {
+            nextDiff = rawlensize - prevlensize;
+            offset = p - zl;
+            zl = ziplistResize(zl, curlen+nextDiff);
+            p = zl + offset;
+
+            // update tail offset
+            if (zl + ziplistTailOffset(zl) == p+rawlen) {
+
+            } else {
+                zipStoreTailOffset(zl, ziplistTailOffset(zl) + nextDiff);
+            }
+
+            memmove(p+rawlen, p+rawlen-nextDiff, curlen-offset+nextDiff-rawlen-1);
+            zipStoreEntryPrevLen(p+rawlen, rawlen);
+            p = p+rawlen;
+            curlen+=nextDiff;
+
+        } else {
+
+            if (prevlensize > rawlensize) {
+                zipStoreEntryPrevLenLarge(p+rawlen, rawlensize);
+            } else {
+                zipStoreEntryPrevLen(p+rawlen, rawlensize);
+            }
+            break;
+        }
+
+    }
+
+    return zl;
+
 
 }
 
 
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen) {
 
-    uint32_t reqlen, offset, tailoffset, prevlen = 0, curlen = byteslen(zl);
+    uint32_t reqlen, offset, tailoffset, prevlen = 0, curlen = ziplistBytesLen(zl);
     long long value;
     uint8_t encoding = 0;
     int nextdiff, prevlensize, forcelarge = 0;
@@ -313,7 +395,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     zl = ziplistResize(zl, curlen + reqlen + nextdiff);
     p = zl + offset;
 
-    tailoffset = ziptailoffset(zl);
+    tailoffset = ziplistTailOffset(zl);
 
     // memmove [p, end] -> [p+reqlen, end]
     if (p[0] != ZIP_LIST_END) {
@@ -328,10 +410,10 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
         }
 
         // store tail offset
-        zipStoreTailOffset(zl, reqlen + nextdiff);
+        zipStoreTailOffset(zl, tailoffset + reqlen + nextdiff);
 
     } else {
-        zipStoreTailOffset(zl, curlen);
+        zipStoreTailOffset(zl, p-zl);
     }
 
     if (nextdiff != 0) {
@@ -347,8 +429,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
         zipSaveInteger(p+l, encoding, value);
     }
 
-    zipStoreByteslen(zl, curlen + reqlen + nextdiff);
     // incr length
-
+    ziplistIncrLength(zl);
     return zl;
 }

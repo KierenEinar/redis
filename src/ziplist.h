@@ -12,10 +12,14 @@
 void memrev32(void *p);
 uint32_t int32rev(uint32_t v);
 
+void memrev16(void *p);
+uint16_t int16rev(uint16_t v);
 
 #if (BYTE_ORDER == LITTLE_ENDIAN)
+#define int16revifbe(v) (v)
 #define int32revifbe(v) (v)
 #else
+#define int16revifbe(v) int16rev(v)
 #define int32revifbe(v) int32rev(v)
 #endif
 
