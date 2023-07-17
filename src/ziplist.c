@@ -257,20 +257,27 @@ int zipEntryPrevlenBytesDiff(unsigned char *p, unsigned int prevlen) {
     return zipStoreEntryPrevLen(NULL, prevlen) -  prevlensize;
 }
 
-void zipStoreTailOffset(unsigned char *zl, uint32_t tail) {
-    tail = int32revifbe(tail);
-    memcpy(zl, &tail, 4);
-}
-
-void zipStoreByteslen(unsigned char *zl, uint32_t byteslen) {
+void ziplistStoreByteslen(unsigned char *zl, uint32_t byteslen) {
     byteslen = int32revifbe(byteslen);
     memcpy(zl, &byteslen, 4);
+}
+
+
+void ziplistStoreTailOffset(unsigned char *zl, uint32_t tail) {
+    tail = int32revifbe(tail);
+    memcpy(zl+4, &tail, 4);
+}
+
+
+void ziplistStoreLength(unsigned char *zl, uint16_t length) {
+    length = int32revifbe(length);
+    memcpy(zl+8, &length, 2);
 }
 
 unsigned char *ziplistResize(unsigned char *zl, uint32_t newsize) {
     zrealloc(zl, newsize);
     zl[newsize] = ZIP_LIST_END;
-    zipStoreByteslen(zl, newsize);
+    ziplistStoreByteslen(zl, newsize);
     return zl;
 }
 
@@ -300,9 +307,9 @@ void ziplistIncrLength(unsigned char *zl) {
 
 unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
 
-    uint32_t rawlen, prevlensize, prevlen, rawlensize, curlen, offset;
+    uint32_t rawlen, prevlen, rawlensize, curlen, offset;
 
-    int nextDiff;
+    int nextdiff, prevlensize;
 
     curlen = ziplistBytesLen(zl);
 
@@ -321,22 +328,22 @@ unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
         rawlensize = zipStoreEntryPrevLen(NULL, rawlen);
 
         if (prevlensize < rawlensize) {
-            nextDiff = rawlensize - prevlensize;
+            nextdiff = rawlensize - prevlensize;
             offset = p - zl;
-            zl = ziplistResize(zl, curlen+nextDiff);
+            zl = ziplistResize(zl, curlen+nextdiff);
             p = zl + offset;
 
             // update tail offset
             if (zl + ziplistTailOffset(zl) == p+rawlen) {
 
             } else {
-                zipStoreTailOffset(zl, ziplistTailOffset(zl) + nextDiff);
+                ziplistStoreTailOffset(zl, ziplistTailOffset(zl) + nextdiff);
             }
 
-            memmove(p+rawlen, p+rawlen-nextDiff, curlen-offset+nextDiff-rawlen-1);
+            memmove(p+rawlen, p+rawlen-nextdiff, curlen-offset+nextdiff-rawlen-1);
             zipStoreEntryPrevLen(p+rawlen, rawlen);
             p = p+rawlen;
-            curlen+=nextDiff;
+            curlen+=nextdiff;
 
         } else {
 
@@ -410,10 +417,10 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
         }
 
         // store tail offset
-        zipStoreTailOffset(zl, tailoffset + reqlen + nextdiff);
+        ziplistStoreTailOffset(zl, tailoffset + reqlen + nextdiff);
 
     } else {
-        zipStoreTailOffset(zl, p-zl);
+        ziplistStoreTailOffset(zl, p - zl);
     }
 
     if (nextdiff != 0) {
@@ -432,4 +439,44 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     // incr length
     ziplistIncrLength(zl);
     return zl;
+}
+
+unsigned char *ziplistNew() {
+
+    unsigned int size = HDRSIZE + 1;
+    unsigned char* zl = zmalloc(size);
+    ziplistStoreByteslen(zl, size);
+    ziplistStoreTailOffset(zl, HDRSIZE);
+    ziplistStoreLength(zl, 0);
+    zl[size-1] = ZIP_LIST_END;
+    return zl;
+}
+
+unsigned char *ziplistNext(unsigned char *zl, unsigned char *p) {
+
+    if (p[0] == ZIP_LIST_END) return NULL;
+    uint32_t rawlen= zipRawEntryLength(p);
+    p += rawlen;
+    if (p[0] == ZIP_LIST_END) return NULL;
+    return p;
+}
+
+unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
+
+  if (p[0] == ZIP_LIST_END) {
+      p = zl + ziplistTailOffset(zl);
+      return p[0] == ZIP_LIST_END ? NULL : p;
+  } else if (p == zl+HDRSIZE) {
+      return NULL;
+  } else {
+      int prevlensize;
+      zipDecodeEntryPrevLen(zl, &prevlensize);
+      return p - prevlensize;
+  }
+}
+
+unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int where) {
+    unsigned char *p;
+    (where == ZIPLIST_INSERT_HEAD) ? (p = zl + HDRSIZE) : (p = zl + ziplistTailOffset(zl));
+    return __ziplistInsert(zl, p, s, slen);
 }

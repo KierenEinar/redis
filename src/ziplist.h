@@ -8,6 +8,8 @@
 #include <sys/types.h>
 #include <stdint.h>
 
+#define ZIPLIST_INSERT_HEAD 0
+#define ZIPLIST_INSERT_TAIL 1
 
 void memrev32(void *p);
 uint32_t int32rev(uint32_t v);
@@ -15,6 +17,7 @@ uint32_t int32rev(uint32_t v);
 void memrev16(void *p);
 uint16_t int16rev(uint16_t v);
 
+#define HDRSIZE (sizeof(uint32_t)*2+sizeof(uint16_t))
 #if (BYTE_ORDER == LITTLE_ENDIAN)
 #define int16revifbe(v) (v)
 #define int32revifbe(v) (v)
@@ -44,7 +47,15 @@ uint16_t int16rev(uint16_t v);
 
 #define ZIP_PREVLEN_08B 254
 
-// insert s at 'p'
+// create the ziplist.
+unsigned char *ziplistNew(void);
+// return the next entry from p.
+unsigned char *ziplistNext(unsigned char *zl, unsigned char *p);
+// return the prev entry from p.
+unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p);
+// push head or tail to the ziplist.
+unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int where);
+// insert s at 'p'.
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen);
 
 #endif //REDIS_ZIPLIST_H
