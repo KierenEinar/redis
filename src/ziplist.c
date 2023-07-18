@@ -223,16 +223,20 @@ uint32_t zipRawEntryLength(unsigned char *p) {
    unsigned char encoding;
    int prevlensize;
    zipDecodeEntryPrevLen(p, &prevlensize);
-   encoding = zipTryDecodeEncoding(p);
+   encoding = zipTryDecodeEncoding(p+prevlensize);
+
    if (ZIP_IS_STR(encoding)) {
        if (encoding == ZIP_STR_06B) {
            rawlensize = 1;
+           p = p + prevlensize + rawlensize;
            rawlen = ~ZIP_STR_MASK & p[0];
        } else if (encoding == ZIP_STR_14B) {
            rawlensize = 2;
+           p = p + prevlensize + rawlensize;
            rawlen = ~ZIP_STR_MASK & p[0] << 8 | p[1];
        } else {
            rawlensize = 5;
+           p = p + prevlensize + rawlensize;
            rawlen = p[1] << 24 | p[2] << 16 | p[3] << 8 | p[4];
        }
    } else {
@@ -281,16 +285,53 @@ unsigned char *ziplistResize(unsigned char *zl, uint32_t newsize) {
     return zl;
 }
 
-void zipSaveInteger(unsigned char *p, unsigned char encoding, long long value) {
+void ziplistSaveInteger(unsigned char *p, unsigned char encoding, long long value) {
+
+    int8_t  i8;
+    int16_t i16;
+    int32_t i32;
+
     if (encoding == ZIP_INT_08B) {
-        memcpy(p, &value, 1);
+        i8 = (int8_t)value;
+        memcpy(p, &i8, 1);
     } else if (encoding == ZIP_INT_16B) {
-        memcpy(p, &value, 2);
+        i16 = (int16_t)value;
+        memcpy(p, &i16, 2);
     } else if (encoding == ZIP_INT_32B) {
-        memcpy(p, &value, 4);
+        i32 = (int32_t)value;
+        memcpy(p, &i32, 4);
     } else {
         memcpy(p, &value, 8);
     }
+}
+
+void ziplistLoadInteger(unsigned char *p, long long *value) {
+
+    unsigned char encoding;
+    int prevlensize;
+    int8_t *i8;
+    int16_t *i16;
+    int32_t *i32;
+    int64_t *i64;
+
+    prevlensize = zipDecodePrevlensSize(p);
+    p+=prevlensize;
+    encoding = p[0];
+    p+=1;
+    if (encoding == ZIP_INT_08B) {
+        i8 = (int8_t*)p;
+        *value = (long long)(*i8);
+    } else if (encoding == ZIP_INT_16B) {
+        i16 = (int16_t*)p;
+        *value = (long long)(*i16);
+    } else if (encoding == ZIP_INT_32B) {
+        i32 = (int32_t*)p;
+        *value = (long long)(*i32);
+    } else {
+        i64 = (int64_t*)p;
+        *value = (long long)(*i64);
+    }
+
 }
 
 void ziplistIncrLength(unsigned char *zl) {
@@ -437,11 +478,11 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     }
 
     uint32_t l =  zipStoreEntryPrevLen(p, prevlen);
-    l += zipStoreEntryEncoding(p, encoding, slen);
+    l += zipStoreEntryEncoding(p+l, encoding, slen);
     if (ZIP_IS_STR(encoding)) {
         memcpy(p+l, s, slen);
     } else {
-        zipSaveInteger(p+l, encoding, value);
+        ziplistSaveInteger(p + l, encoding, value);
     }
 
     // incr length
@@ -491,7 +532,7 @@ unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int
 
 unsigned char *ziplistIndex(unsigned char *zl, int index) {
 
-    int negative = index >= 0 ? 0 : 1;
+    int negative = (index >= 0) ? 0 : 1;
     uint32_t prevlen, rawlen;
     unsigned char *p = negative ? ziplistTail(zl): ziplistHeader(zl);
 
@@ -515,5 +556,46 @@ unsigned char *ziplistIndex(unsigned char *zl, int index) {
     }
 
     return index > 0 ? NULL : p;
+
+}
+
+unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *slen, long long *value) {
+
+    unsigned char encoding;
+    int prevlensize, rawlensize;
+    if (p == NULL || p[0] == ZIP_LIST_END)
+        return 0;
+
+    if (sstr) *sstr = NULL;
+
+    prevlensize = zipDecodePrevlensSize(p);
+    encoding = zipTryDecodeEncoding(p+prevlensize);
+    p+=prevlensize;
+    if (ZIP_IS_STR(encoding)) {
+
+        if (encoding == ZIP_STR_06B) {
+            *slen = ~ZIP_STR_MASK & p[0];
+            rawlensize = 1;
+        } else if (encoding == ZIP_STR_14B) {
+            *slen  = ~ZIP_STR_MASK & p[0] << 8 |
+                    p[1];
+            rawlensize = 2;
+        } else {
+            *slen  = p[1] << 24 |
+                     p[2] << 16 |
+                     p[3] << 8  |
+                     p[4];
+            rawlensize = 5;
+        }
+
+        *sstr = p+rawlensize;
+
+    } else {
+
+        ziplistLoadInteger(p, value);
+
+    }
+
+    return 1;
 
 }

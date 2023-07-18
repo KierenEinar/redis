@@ -57,7 +57,8 @@ unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p);
 unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int where);
 // get the index of entry ptr.
 unsigned char *ziplistIndex(unsigned char *zl, int index);
-
+// get the entry data. one of sstr
+unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *slen, long long *value);
 // insert s at 'p'.
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen);
 
