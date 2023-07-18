@@ -304,6 +304,14 @@ void ziplistIncrLength(unsigned char *zl) {
     }
 }
 
+unsigned char *ziplistHeader(unsigned char *zl) {
+    return zl + HDRSIZE;
+}
+
+unsigned char *ziplistTail(unsigned char *zl) {
+    return zl + ziplistTailOffset(zl);
+}
+
 
 unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
 
@@ -479,4 +487,33 @@ unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int
     unsigned char *p;
     (where == ZIPLIST_INSERT_HEAD) ? (p = zl + HDRSIZE) : (p = zl + ziplistTailOffset(zl));
     return __ziplistInsert(zl, p, s, slen);
+}
+
+unsigned char *ziplistIndex(unsigned char *zl, int index) {
+
+    int negative = index >= 0 ? 0 : 1;
+    uint32_t prevlen, rawlen;
+    unsigned char *p = negative ? ziplistTail(zl): ziplistHeader(zl);
+
+    if (p[0] == ZIP_LIST_END) {
+        return NULL;
+    }
+
+    if (negative) {
+        index = -index - 1;
+        prevlen = zipDecodeEntryPrevLen(p, NULL);
+        while (prevlen && index--) {
+            p-=prevlen;
+            prevlen = zipDecodeEntryPrevLen(p, NULL);
+        }
+        return index > 0 ? NULL : p;
+    }
+
+    while (p[0] != ZIP_LIST_END && index--) {
+        rawlen = zipRawEntryLength(p);
+        p+=rawlen;
+    }
+
+    return index > 0 ? NULL : p;
+
 }
