@@ -28,30 +28,37 @@
 #include <stdlib.h>
 #include <memory.h>
 
-void memrev32(void *ptr) {
-    unsigned char *x=ptr, t;
-    t = x[4];
-    x[4] = x[0];
-    x[0] = t;
-    t = x[3];
-    x[3] = x[2];
-    x[2] = t;
-}
-
-uint32_t int32rev(uint32_t v) {
-    memrev32(&v);
-    return v;
-}
-
-
 void memrev16(void *p) {
+    unsigned char *x = p, t;
+    t = x[0];
+    x[0] = x[1];
+    x[1] = t;
+}
 
-    unsigned char *ptr = p;
-    unsigned char temp = ptr[0];
+void memrev32(void *p) {
+    unsigned char *x=p, t;
+    t = x[3];
+    x[3] = x[0];
+    x[0] = t;
+    t = x[2];
+    x[2] = x[1];
+    x[1] = t;
+}
 
-    ptr[0] = ptr[1];
-    ptr[1] = temp;
-
+void memrev64(void *p) {
+    unsigned char *x=p, t;
+    t = x[7];
+    x[7] = x[0];
+    x[0] = t;
+    t = x[6];
+    x[6] = x[1];
+    x[1] = t;
+    t = x[5];
+    x[5] = x[2];
+    x[2] = t;
+    t = x[4];
+    x[4] = x[3];
+    x[3] = t;
 }
 
 uint16_t int16rev(uint16_t v) {
@@ -59,6 +66,15 @@ uint16_t int16rev(uint16_t v) {
     return v;
 }
 
+uint32_t int32rev(uint32_t v) {
+    memrev32(&v);
+    return v;
+}
+
+uint64_t int64rev(uint64_t v) {
+    memrev64(&v);
+    return v;
+}
 
 uint32_t ziplistBytesLen(unsigned char *zl) {
     uint32_t *ptr = (uint32_t*)(zl);
@@ -192,7 +208,6 @@ uint32_t zipDecodeEntryPrevLen(unsigned char *p, int *prevlensize) {
         memcpy(&prevlen, p+1, 4);
         prevlen = int32revifbe(prevlen);
     }
-
     if (prevlensize) *prevlensize = _prevlensize;
     return prevlen;
 
@@ -297,11 +312,14 @@ void ziplistSaveInteger(unsigned char *p, unsigned char encoding, long long valu
     } else if (encoding == ZIP_INT_16B) {
         i16 = (int16_t)value;
         memcpy(p, &i16, 2);
+        memrev16ifbe(&i16);
     } else if (encoding == ZIP_INT_32B) {
         i32 = (int32_t)value;
         memcpy(p, &i32, 4);
+        memrev32ifbe(&i32);
     } else {
         memcpy(p, &value, 8);
+        memrev64ifbe(&value);
     }
 }
 
@@ -323,12 +341,15 @@ void ziplistLoadInteger(unsigned char *p, long long *value) {
         *value = (long long)(*i8);
     } else if (encoding == ZIP_INT_16B) {
         i16 = (int16_t*)p;
+        memrev16ifbe(&i16);
         *value = (long long)(*i16);
     } else if (encoding == ZIP_INT_32B) {
         i32 = (int32_t*)p;
+        memrev32ifbe(&i16);
         *value = (long long)(*i32);
     } else {
         i64 = (int64_t*)p;
+        memrev64ifbe(&i64);
         *value = (long long)(*i64);
     }
 
@@ -482,7 +503,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     if (ZIP_IS_STR(encoding)) {
         memcpy(p+l, s, slen);
     } else {
-        ziplistSaveInteger(p + l, encoding, value);
+        ziplistSaveInteger(p+l, encoding, value);
     }
 
     // incr length

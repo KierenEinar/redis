@@ -11,19 +11,30 @@
 #define ZIPLIST_INSERT_HEAD 0
 #define ZIPLIST_INSERT_TAIL 1
 
-void memrev32(void *p);
-uint32_t int32rev(uint32_t v);
-
 void memrev16(void *p);
+void memrev32(void *p);
+void memrev64(void *p);
 uint16_t int16rev(uint16_t v);
+uint32_t int32rev(uint32_t v);
+uint64_t int64rev(uint64_t v);
+
 
 #define HDRSIZE (sizeof(uint32_t)*2+sizeof(uint16_t))
 #if (BYTE_ORDER == LITTLE_ENDIAN)
 #define int16revifbe(v) (v)
 #define int32revifbe(v) (v)
+#define int64revifbe(v) (v)
+#define memrev16ifbe(v)
+#define memrev32ifbe(v)
+#define memrev64ifbe(v)
+
 #else
 #define int16revifbe(v) int16rev(v)
 #define int32revifbe(v) int32rev(v)
+#define int64revifbe(v) int64rev(v)
+#define memrev16ifbe(v) memrev16(v)
+#define memrev32ifbe(v) memrev32(v)
+#define memrev64ifbe(v) memrev64(v)
 #endif
 
 #define ZIP_LIST_ERR 0
@@ -59,6 +70,9 @@ unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int
 unsigned char *ziplistIndex(unsigned char *zl, int index);
 // get the entry data. one of sstr
 unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *slen, long long *value);
+// find the ptr that data eq str.
+unsigned char *ziplistFind(unsigned char *zl, unsigned char *str, unsigned int slen, unsigned int skipcnt);
+
 // insert s at 'p'.
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen);
 
