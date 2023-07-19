@@ -359,13 +359,13 @@ void ziplistLoadInteger(unsigned char *p, long long *value) {
 
 }
 
-void ziplistIncrLength(unsigned char *zl) {
+void ziplistIncrLength(unsigned char *zl, int incrlen) {
 
     uint16_t length;
     memcpy(&length, zl+8, 2);
-    length = int16rev(length);
-    if (length < 0xffff) {
-        length = int16rev(length+1);
+    length = int16revifbe(length);
+    if (length + incrlen < 0xffff) {
+        length = int16revifbe(length+incrlen);
         memcpy(&length, zl+8, 2);
     }
 }
@@ -511,9 +511,61 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     }
 
     // incr length
-    ziplistIncrLength(zl);
+    ziplistIncrLength(zl, 1);
     return zl;
 }
+
+unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int num) {
+    unsigned int j=0;
+    uint32_t rawlen, totlen, nextdff = 0, firstprevlen, curlen, tailoffset, offset;
+    unsigned char *first;
+    int firstprevlensize, deleted=0;
+    first = p;
+    curlen = ziplistBytesLen(zl);
+    for (j=0; p[0]!=ZIP_LIST_END && j<num; j++) {
+        rawlen = zipRawEntryLength(p, NULL, NULL, NULL);
+        p+=rawlen;
+        deleted++;
+    }
+
+    totlen = p - first;
+    if (totlen > 0) {
+
+        if (p[0] != ZIP_LIST_END) {
+
+            firstprevlen = zipDecodeEntryPrevLen(first, &firstprevlensize);
+            nextdff = zipEntryPrevlenBytesDiff(p, firstprevlensize);
+            p-=nextdff;
+            zipStoreEntryPrevLen(p, firstprevlen);
+            memmove(first, p, curlen-(p-zl));
+            tailoffset = ziplistTailOffset(zl);
+            ziplistStoreTailOffset(zl, tailoffset - totlen + nextdff);
+
+            p = first;
+
+        } else {
+            ziplistStoreTailOffset(zl, first - zl);
+        }
+
+        offset = p - zl;
+
+        zl = ziplistResize(zl, curlen - totlen + nextdff);
+
+        p = zl + offset;
+
+        if (nextdff != 0) {
+            zl = __ziplistCascadeUpdate(zl, p);
+            p = zl + offset;
+        }
+
+        ziplistIncrLength(zl, -deleted);
+
+    }
+
+    return zl;
+
+}
+
 
 unsigned char *ziplistNew() {
 

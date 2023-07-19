@@ -76,4 +76,7 @@ unsigned char *ziplistFind(unsigned char *p, unsigned char *str, unsigned int sl
 // insert s at 'p'.
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen);
 
+// delete at p
+unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int num);
+
 #endif //REDIS_ZIPLIST_H
