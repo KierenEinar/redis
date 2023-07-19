@@ -72,6 +72,8 @@ unsigned char *ziplistIndex(unsigned char *zl, int index);
 unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *slen, long long *value);
 // find the ptr that data eq str.
 unsigned char *ziplistFind(unsigned char *p, unsigned char *str, unsigned int slen, unsigned int skipcnt);
+// delete range, start by index
+unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num);
 
 // insert s at 'p'.
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen);
