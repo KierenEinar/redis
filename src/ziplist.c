@@ -228,46 +228,50 @@ unsigned char zipTryDecodeEncoding(unsigned char *p) {
     return p[0];
 }
 
-uint32_t zipRawEntryLength(unsigned char *p) {
+uint32_t zipRawEntryLength(unsigned char *p, int *prevlensize, int *rawlensize, uint32_t *rawlen) {
 
    // encoding str: prevlensize + encoding + rawlensize(exists when rawlen > 63) + rawlen
 
    // encoding int: prevlensize + encoding + intxxbit_byte
 
-   uint32_t rawlensize, rawlen;
+   uint32_t _rawlen;
    unsigned char encoding;
-   int prevlensize;
-   zipDecodeEntryPrevLen(p, &prevlensize);
-   encoding = zipTryDecodeEncoding(p+prevlensize);
+   int _prevlensize, _rawlensize;
+   zipDecodeEntryPrevLen(p, &_prevlensize);
+   encoding = zipTryDecodeEncoding(p+_prevlensize);
 
    if (ZIP_IS_STR(encoding)) {
        if (encoding == ZIP_STR_06B) {
-           rawlensize = 1;
-           p = p + prevlensize + rawlensize;
-           rawlen = ~ZIP_STR_MASK & p[0];
+           _rawlensize = 1;
+           p = p + _prevlensize + _rawlensize;
+           _rawlen = ~ZIP_STR_MASK & p[0];
        } else if (encoding == ZIP_STR_14B) {
-           rawlensize = 2;
-           p = p + prevlensize + rawlensize;
-           rawlen = ~ZIP_STR_MASK & p[0] << 8 | p[1];
+           _rawlensize = 2;
+           p = p + _prevlensize + _rawlensize;
+           _rawlen = ~ZIP_STR_MASK & p[0] << 8 | p[1];
        } else {
-           rawlensize = 5;
-           p = p + prevlensize + rawlensize;
-           rawlen = p[1] << 24 | p[2] << 16 | p[3] << 8 | p[4];
+           _rawlensize = 5;
+           p = p + _prevlensize + _rawlensize;
+           _rawlen = p[1] << 24 | p[2] << 16 | p[3] << 8 | p[4];
        }
    } else {
-       rawlensize = 1;
+       _rawlensize = 1;
        if (encoding == ZIP_INT_08B) {
-           rawlen = 1;
+           _rawlen = 1;
        } else if (encoding == ZIP_INT_16B) {
-           rawlen = 2;
+           _rawlen = 2;
        } else if (encoding == ZIP_INT_32B) {
-           rawlen = 4;
+           _rawlen = 4;
        } else {
-           rawlen = 8;
+           _rawlen = 8;
        }
    }
 
-   return prevlensize + rawlensize + rawlen;
+   if (prevlensize) *prevlensize = _prevlensize;
+   if (rawlensize) *rawlensize = _rawlensize;
+   if (rawlen) *rawlen = _rawlen;
+
+   return _prevlensize + _rawlensize + _rawlen;
 }
 
 int zipEntryPrevlenBytesDiff(unsigned char *p, unsigned int prevlen) {
@@ -385,7 +389,7 @@ unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
 
     while (p[0] != ZIP_LIST_END) {
 
-        rawlen = zipRawEntryLength(p);
+        rawlen = zipRawEntryLength(p, NULL, NULL, NULL);
         if (p[rawlen] == ZIP_LIST_END) {
             break;
         }
@@ -446,7 +450,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     } else {
         unsigned char *ptail = zipEntryTail(zl);
         if (ptail[0] != ZIP_LIST_END) { // check ziplist is empty
-            prevlen = zipRawEntryLength(ptail);
+            prevlen = zipRawEntryLength(ptail, NULL, NULL, NULL);
         }
     }
 
@@ -525,7 +529,7 @@ unsigned char *ziplistNew() {
 unsigned char *ziplistNext(unsigned char *zl, unsigned char *p) {
 
     if (p[0] == ZIP_LIST_END) return NULL;
-    uint32_t rawlen= zipRawEntryLength(p);
+    uint32_t rawlen= zipRawEntryLength(p, NULL, NULL, NULL);
     p += rawlen;
     if (p[0] == ZIP_LIST_END) return NULL;
     return p;
@@ -572,7 +576,7 @@ unsigned char *ziplistIndex(unsigned char *zl, int index) {
     }
 
     while (p[0] != ZIP_LIST_END && index--) {
-        rawlen = zipRawEntryLength(p);
+        rawlen = zipRawEntryLength(p, NULL, NULL, NULL);
         p+=rawlen;
     }
 
@@ -619,4 +623,51 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
 
     return 1;
 
+}
+
+unsigned char *ziplistFind(unsigned char *p, unsigned char *str, unsigned int slen, unsigned int skipcnt) {
+
+    unsigned int skip = 0;
+    unsigned char encoding, vencoding = 0;
+    uint32_t rawlen, entrylen;
+    int prevlensize, rawlensize;
+    long long vv, value;
+    while (p[0] != ZIP_LIST_END) {
+
+        entrylen = zipRawEntryLength(p, &prevlensize, &rawlensize, &rawlen);
+
+        if (skip == 0) {
+
+            encoding = zipTryDecodeEncoding(p+prevlensize);
+            if (ZIP_IS_STR(encoding)) {
+                if (slen == rawlen && memcmp(p+prevlensize+rawlensize, str, rawlen) == 0) {
+                    return p;
+                }
+            } else {
+
+                if (vencoding == 0) {
+                    if (!zipTryEncoding(str, slen, &vencoding, &vv)) {
+                        vencoding = UINT8_MAX;
+                    }
+                }
+
+                // str convert to long long success.
+                if (vencoding != UINT8_MAX) {
+                    ziplistLoadInteger(p, &value);
+                    if (value == vv) {
+                        return p;
+                    }
+                }
+            }
+
+            skip = skipcnt;
+        } else {
+            skip--;
+        }
+
+        p = p+entrylen;
+
+    }
+
+    return NULL;
 }
