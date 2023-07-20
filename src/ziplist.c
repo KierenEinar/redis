@@ -689,8 +689,8 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
 void ziplistRepr(unsigned char *zl) {
 
     unsigned char *p, encoding;
-    int index = 0, hdrlen;
-    uint32_t prevlen, prevlensize, rawlensize, rawlen;
+    int index = 0, hdrlen, prevlensize, rawlensize;
+    uint32_t prevlen, rawlen, entrylen;
     long long value;
     printf(
             "{total bytes: %u}\n"
@@ -705,26 +705,27 @@ void ziplistRepr(unsigned char *zl) {
 
     while (p[0] != ZIP_LIST_END) {
 
-        zipRawEntryLength(p, &prevlensize, &rawlensize, &rawlen, &encoding);
+        entrylen = zipRawEntryLength(p, &prevlensize, &rawlensize, &rawlen, &encoding);
 
         prevlen = zipDecodeEntryPrevLen(p, NULL);
         hdrlen = prevlensize + rawlensize;
 
         printf(
                 "{\n"
-                "\taddr 0x%08lx,\n",
-                "\tindex %05d,\n",
-                "\toffset %u,\n",
-                "\thdrlen %05d,\n", // prevlensize + rawlensize(including encoding)
-                "\tprevlen %05d,\n",  //
-                "\tprevlensize %05d,\n",
-                "\trawlensize %05d,\n",
+                "\taddr 0x%08lx,\n"
+                "\tindex %05d,\n"
+                "\toffset %08ld,\n"
+                "\thdrlen %05d,\n" // prevlensize + rawlensize(including encoding)
+                "\tprevlen %05d,\n"  //
+                "\tprevlensize %05d,\n"
+                "\trawlensize %05d,\n"
                 "\tpayloadlen %u,\n",
-                p,
-                index++,
+                (unsigned long)p,
+                index,
                 p-zl,
                 hdrlen,
                 prevlen,
+                prevlensize,
                 rawlensize,
                 rawlen
                 );
@@ -747,6 +748,9 @@ void ziplistRepr(unsigned char *zl) {
         }
         printf("\n");
         printf("}\n");
+
+        index++;
+        p+=entrylen;
     }
 
 }
