@@ -19,7 +19,7 @@ uint32_t int32rev(uint32_t v);
 uint64_t int64rev(uint64_t v);
 
 
-#define HDRSIZE (sizeof(uint32_t)*2+sizeof(uint16_t))
+#define ZIPLIST_HEADER (sizeof(uint32_t)*2+sizeof(uint16_t))
 #if (BYTE_ORDER == LITTLE_ENDIAN)
 #define int16revifbe(v) (v)
 #define int32revifbe(v) (v)
@@ -74,6 +74,8 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
 unsigned char *ziplistFind(unsigned char *p, unsigned char *str, unsigned int slen, unsigned int skipcnt);
 // delete range, start by index
 unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num);
+// pretty print
+void ziplistRepr(unsigned char *zl);
 
 // insert s at 'p'.
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen);

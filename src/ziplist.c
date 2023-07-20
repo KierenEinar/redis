@@ -27,6 +27,7 @@
 
 #include <stdlib.h>
 #include <memory.h>
+#include <stdio.h>
 
 void memrev16(void *p) {
     unsigned char *x = p, t;
@@ -74,6 +75,13 @@ uint32_t int32rev(uint32_t v) {
 uint64_t int64rev(uint64_t v) {
     memrev64(&v);
     return v;
+}
+
+uint16_t ziplistEntryNums(unsigned char *zl) {
+    uint16_t entries;
+    memcpy(&entries, zl+8, 2);
+    memrev16ifbe(entries);
+    return entries;
 }
 
 uint32_t ziplistBytesLen(unsigned char *zl) {
@@ -228,24 +236,24 @@ unsigned char zipTryDecodeEncoding(unsigned char *p) {
     return p[0];
 }
 
-uint32_t zipRawEntryLength(unsigned char *p, int *prevlensize, int *rawlensize, uint32_t *rawlen) {
+uint32_t zipRawEntryLength(unsigned char *p, int *prevlensize, int *rawlensize, uint32_t *rawlen, unsigned char *encoding) {
 
    // encoding str: prevlensize + encoding + rawlensize(exists when rawlen > 63) + rawlen
 
    // encoding int: prevlensize + encoding + intxxbit_byte
 
    uint32_t _rawlen;
-   unsigned char encoding;
+   unsigned char _encoding;
    int _prevlensize, _rawlensize;
    zipDecodeEntryPrevLen(p, &_prevlensize);
-   encoding = zipTryDecodeEncoding(p+_prevlensize);
+    _encoding = zipTryDecodeEncoding(p+_prevlensize);
 
-   if (ZIP_IS_STR(encoding)) {
+   if (ZIP_IS_STR(_encoding)) {
        if (encoding == ZIP_STR_06B) {
            _rawlensize = 1;
            p = p + _prevlensize + _rawlensize;
            _rawlen = ~ZIP_STR_MASK & p[0];
-       } else if (encoding == ZIP_STR_14B) {
+       } else if (_encoding == ZIP_STR_14B) {
            _rawlensize = 2;
            p = p + _prevlensize + _rawlensize;
            _rawlen = ~ZIP_STR_MASK & p[0] << 8 | p[1];
@@ -256,11 +264,11 @@ uint32_t zipRawEntryLength(unsigned char *p, int *prevlensize, int *rawlensize, 
        }
    } else {
        _rawlensize = 1;
-       if (encoding == ZIP_INT_08B) {
+       if (_encoding == ZIP_INT_08B) {
            _rawlen = 1;
-       } else if (encoding == ZIP_INT_16B) {
+       } else if (_encoding == ZIP_INT_16B) {
            _rawlen = 2;
-       } else if (encoding == ZIP_INT_32B) {
+       } else if (_encoding == ZIP_INT_32B) {
            _rawlen = 4;
        } else {
            _rawlen = 8;
@@ -270,6 +278,7 @@ uint32_t zipRawEntryLength(unsigned char *p, int *prevlensize, int *rawlensize, 
    if (prevlensize) *prevlensize = _prevlensize;
    if (rawlensize) *rawlensize = _rawlensize;
    if (rawlen) *rawlen = _rawlen;
+   if (encoding) *encoding = _encoding;
 
    return _prevlensize + _rawlensize + _rawlen;
 }
@@ -293,7 +302,7 @@ void ziplistStoreTailOffset(unsigned char *zl, uint32_t tail) {
 
 
 void ziplistStoreLength(unsigned char *zl, uint16_t length) {
-    length = int32revifbe(length);
+    length = int16revifbe(length);
     memcpy(zl+8, &length, 2);
 }
 
@@ -371,7 +380,7 @@ void ziplistIncrLength(unsigned char *zl, int incrlen) {
 }
 
 unsigned char *ziplistHeader(unsigned char *zl) {
-    return zl + HDRSIZE;
+    return zl + ZIPLIST_HEADER;
 }
 
 unsigned char *ziplistTail(unsigned char *zl) {
@@ -389,7 +398,7 @@ unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
 
     while (p[0] != ZIP_LIST_END) {
 
-        rawlen = zipRawEntryLength(p, NULL, NULL, NULL);
+        rawlen = zipRawEntryLength(p, NULL, NULL, NULL, NULL);
         if (p[rawlen] == ZIP_LIST_END) {
             break;
         }
@@ -450,7 +459,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     } else {
         unsigned char *ptail = zipEntryTail(zl);
         if (ptail[0] != ZIP_LIST_END) { // check ziplist is empty
-            prevlen = zipRawEntryLength(ptail, NULL, NULL, NULL);
+            prevlen = zipRawEntryLength(ptail, NULL, NULL, NULL, &encoding);
         }
     }
 
@@ -523,7 +532,7 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
     first = p;
     curlen = ziplistBytesLen(zl);
     for (j=0; p[0]!=ZIP_LIST_END && j<num; j++) {
-        rawlen = zipRawEntryLength(p, NULL, NULL, NULL);
+        rawlen = zipRawEntryLength(p, NULL, NULL, NULL, NULL);
         p+=rawlen;
         deleted++;
     }
@@ -569,10 +578,10 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
 
 unsigned char *ziplistNew() {
 
-    unsigned int size = HDRSIZE + 1;
+    unsigned int size = ZIPLIST_HEADER + 1;
     unsigned char* zl = zmalloc(size);
     ziplistStoreByteslen(zl, size);
-    ziplistStoreTailOffset(zl, HDRSIZE);
+    ziplistStoreTailOffset(zl, ZIPLIST_HEADER);
     ziplistStoreLength(zl, 0);
     zl[size-1] = ZIP_LIST_END;
     return zl;
@@ -581,7 +590,7 @@ unsigned char *ziplistNew() {
 unsigned char *ziplistNext(unsigned char *zl, unsigned char *p) {
 
     if (p[0] == ZIP_LIST_END) return NULL;
-    uint32_t rawlen= zipRawEntryLength(p, NULL, NULL, NULL);
+    uint32_t rawlen= zipRawEntryLength(p, NULL, NULL, NULL, NULL);
     p += rawlen;
     if (p[0] == ZIP_LIST_END) return NULL;
     return p;
@@ -592,7 +601,7 @@ unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
   if (p[0] == ZIP_LIST_END) {
       p = zl + ziplistTailOffset(zl);
       return p[0] == ZIP_LIST_END ? NULL : p;
-  } else if (p == zl+HDRSIZE) {
+  } else if (p == zl + ZIPLIST_HEADER) {
       return NULL;
   } else {
       int prevlensize;
@@ -603,7 +612,7 @@ unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
 
 unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int where) {
     unsigned char *p;
-    (where == ZIPLIST_INSERT_HEAD) ? (p = zl + HDRSIZE) : (p = zl + ziplistTailOffset(zl));
+    (where == ZIPLIST_INSERT_HEAD) ? (p = zl + ZIPLIST_HEADER) : (p = zl + ziplistTailOffset(zl));
     return __ziplistInsert(zl, p, s, slen);
 }
 
@@ -628,7 +637,7 @@ unsigned char *ziplistIndex(unsigned char *zl, int index) {
     }
 
     while (p[0] != ZIP_LIST_END && index--) {
-        rawlen = zipRawEntryLength(p, NULL, NULL, NULL);
+        rawlen = zipRawEntryLength(p, NULL, NULL, NULL, NULL);
         p+=rawlen;
     }
 
@@ -677,6 +686,71 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
 
 }
 
+void ziplistRepr(unsigned char *zl) {
+
+    unsigned char *p, encoding;
+    int index = 0, hdrlen;
+    uint32_t prevlen, prevlensize, rawlensize, rawlen;
+    long long value;
+    printf(
+            "{total bytes: %u}\n"
+            "{num entries: %d}\n"
+            "{tails offset: %u}\n",
+            ziplistBytesLen(zl),
+            ziplistEntryNums(zl),
+            ziplistTailOffset(zl)
+            );
+
+    p = ziplistHeader(zl);
+
+    while (p[0] != ZIP_LIST_END) {
+
+        zipRawEntryLength(p, &prevlensize, &rawlensize, &rawlen, &encoding);
+
+        prevlen = zipDecodeEntryPrevLen(p, NULL);
+        hdrlen = prevlensize + rawlensize;
+
+        printf(
+                "{\n"
+                "\taddr 0x%08lx,\n",
+                "\tindex %05d,\n",
+                "\toffset %u,\n",
+                "\thdrlen %05d,\n", // prevlensize + rawlensize(including encoding)
+                "\tprevlen %05d,\n",  //
+                "\tprevlensize %05d,\n",
+                "\trawlensize %05d,\n",
+                "\tpayloadlen %u,\n",
+                p,
+                index++,
+                p-zl,
+                hdrlen,
+                prevlen,
+                rawlensize,
+                rawlen
+                );
+
+        p += hdrlen;
+
+        if (ZIP_IS_STR(encoding)) {
+            printf("\t[str]");
+            if (rawlen > 40) {
+                if (fwrite(p, 40, 1, stdout) == 0) perror("fwrite");
+                printf("...");
+            } else {
+                if (rawlen && fwrite(p, rawlen, 1, stdout) == 0) perror("fwrite");
+            }
+
+        } else {
+            printf("");
+            ziplistLoadInteger(p, &value);
+            printf("\t[int]%lld", value);
+        }
+        printf("\n");
+        printf("}\n");
+    }
+
+}
+
 unsigned char *ziplistFind(unsigned char *p, unsigned char *str, unsigned int slen, unsigned int skipcnt) {
 
     unsigned int skip = 0;
@@ -686,7 +760,7 @@ unsigned char *ziplistFind(unsigned char *p, unsigned char *str, unsigned int sl
     long long vv, value;
     while (p[0] != ZIP_LIST_END) {
 
-        entrylen = zipRawEntryLength(p, &prevlensize, &rawlensize, &rawlen);
+        entrylen = zipRawEntryLength(p, &prevlensize, &rawlensize, &rawlen, &encoding);
 
         if (skip == 0) {
 
@@ -728,5 +802,4 @@ unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num
 
     unsigned  char *p = ziplistIndex(zl, index);
     return p == NULL ? zl : __ziplistDelete(zl, p, num);
-
 }
