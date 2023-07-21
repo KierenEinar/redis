@@ -249,17 +249,17 @@ uint32_t zipRawEntryLength(unsigned char *p, int *prevlensize, int *rawlensize, 
     _encoding = zipTryDecodeEncoding(p+_prevlensize);
 
    if (ZIP_IS_STR(_encoding)) {
-       if (encoding == ZIP_STR_06B) {
+       if (_encoding == ZIP_STR_06B) {
            _rawlensize = 1;
-           p = p + _prevlensize + _rawlensize;
+           p = p + _prevlensize;
            _rawlen = ~ZIP_STR_MASK & p[0];
        } else if (_encoding == ZIP_STR_14B) {
            _rawlensize = 2;
-           p = p + _prevlensize + _rawlensize;
+           p = p + _prevlensize;
            _rawlen = ~ZIP_STR_MASK & p[0] << 8 | p[1];
        } else {
            _rawlensize = 5;
-           p = p + _prevlensize + _rawlensize;
+           p = p + _prevlensize + 1;
            _rawlen = p[1] << 24 | p[2] << 16 | p[3] << 8 | p[4];
        }
    } else {
@@ -308,7 +308,7 @@ void ziplistStoreLength(unsigned char *zl, uint16_t length) {
 
 unsigned char *ziplistResize(unsigned char *zl, uint32_t newsize) {
     zrealloc(zl, newsize);
-    zl[newsize] = ZIP_LIST_END;
+    zl[newsize-1] = ZIP_LIST_END;
     ziplistStoreByteslen(zl, newsize);
     return zl;
 }
@@ -701,7 +701,7 @@ void ziplistRepr(unsigned char *zl) {
             ziplistTailOffset(zl)
             );
 
-    p = ziplistHeader(zl);
+    p = zl + ZIPLIST_HEADER;
 
     while (p[0] != ZIP_LIST_END) {
 
@@ -712,14 +712,14 @@ void ziplistRepr(unsigned char *zl) {
 
         printf(
                 "{\n"
-                "\taddr 0x%08lx,\n"
-                "\tindex %05d,\n"
-                "\toffset %08ld,\n"
-                "\thdrlen %05d,\n" // prevlensize + rawlensize(including encoding)
-                "\tprevlen %05d,\n"  //
-                "\tprevlensize %05d,\n"
-                "\trawlensize %05d,\n"
-                "\tpayloadlen %u,\n",
+                "\taddr: 0x%08lx,\n"
+                "\tindex: %2d,\n"
+                "\toffset: %5ld,\n"
+                "\thdrlen: %2d,\n" // prevlensize + rawlensize(including encoding)
+                "\tprevlen: %5d,\n"  //
+                "\tprevlensize: %2d,\n"
+                "\trawlensize: %2d,\n"
+                "\tpayloadlen: %u,\n",
                 (unsigned long)p,
                 index,
                 p-zl,
@@ -733,7 +733,7 @@ void ziplistRepr(unsigned char *zl) {
         p += hdrlen;
 
         if (ZIP_IS_STR(encoding)) {
-            printf("\t[str]");
+            printf("\t[str]:");
             if (rawlen > 40) {
                 if (fwrite(p, 40, 1, stdout) == 0) perror("fwrite");
                 printf("...");
@@ -744,13 +744,12 @@ void ziplistRepr(unsigned char *zl) {
         } else {
             printf("");
             ziplistLoadInteger(p, &value);
-            printf("\t[int]%lld", value);
+            printf("\t[int]:%lld", value);
         }
-        printf("\n");
-        printf("}\n");
+        printf("\n}\n");
 
         index++;
-        p+=entrylen;
+        p+=rawlen;
     }
 
 }

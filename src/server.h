@@ -35,7 +35,7 @@
 #include "anet.h"
 #include "crc.h"
 #include "dict.h"
-
+#include "ziplist.h"
 #define LRUBITS 24
 
 // define networking

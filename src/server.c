@@ -268,6 +268,11 @@ int processCommand(client *c) {
 
 
 int main(int argc, char **argv) {
+
+//    unsigned char *zl = ziplistNew();
+//    char * s = "hello world";
+//    zl = ziplistPush(zl, (unsigned char*)s, strlen(s), ZIPLIST_INSERT_TAIL);
+//    ziplistRepr(zl);
     printf("server start...., pid=%d\r\n", getpid());
     initServer();
     elMain(server.el);
