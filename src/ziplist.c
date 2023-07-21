@@ -256,7 +256,7 @@ uint32_t zipRawEntryLength(unsigned char *p, int *prevlensize, int *rawlensize, 
        } else if (_encoding == ZIP_STR_14B) {
            _rawlensize = 2;
            p = p + _prevlensize;
-           _rawlen = ~ZIP_STR_MASK & p[0] << 8 | p[1];
+           _rawlen = (((~ZIP_STR_MASK) & p[0]) << 8) | p[1];
        } else {
            _rawlensize = 5;
            p = p + _prevlensize + 1;
@@ -805,4 +805,14 @@ unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num
 
     unsigned  char *p = ziplistIndex(zl, index);
     return p == NULL ? zl : __ziplistDelete(zl, p, num);
+}
+
+
+void testZiplist() {
+    unsigned char *zl = ziplistNew();
+    char s[255];
+    memset(s, 1, sizeof(s)-1);
+    s[254] = '\0';
+    zl = ziplistPush(zl, (unsigned char*)s, strlen(s), ZIPLIST_INSERT_TAIL);
+    ziplistRepr(zl);
 }

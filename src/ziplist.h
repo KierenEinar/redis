@@ -83,4 +83,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
 // delete at p
 unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int num);
 
+// just a test for ziplist core function
+void testZiplist();
+
 #endif //REDIS_ZIPLIST_H
