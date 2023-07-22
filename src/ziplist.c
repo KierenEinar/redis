@@ -221,14 +221,6 @@ uint32_t zipDecodeEntryPrevLen(unsigned char *p, int *prevlensize) {
 
 }
 
-unsigned char *zipEntryTail(unsigned char *zl) {
-
-    uint32_t tailOffset;
-    memcpy(&tailOffset, zl+4, sizeof(uint32_t));
-    tailOffset = int32revifbe(tailOffset);
-    return zl+tailOffset;
-}
-
 unsigned char zipTryDecodeEncoding(unsigned char *p) {
     if ((p[0] & ZIP_STR_MASK) < ZIP_STR_MASK) {
         return p[0] & ZIP_STR_MASK;
@@ -307,7 +299,7 @@ void ziplistStoreLength(unsigned char *zl, uint16_t length) {
 }
 
 unsigned char *ziplistResize(unsigned char *zl, uint32_t newsize) {
-    zrealloc(zl, newsize);
+    zl = zrealloc(zl, newsize);
     zl[newsize-1] = ZIP_LIST_END;
     ziplistStoreByteslen(zl, newsize);
     return zl;
@@ -375,7 +367,7 @@ void ziplistIncrLength(unsigned char *zl, int incrlen) {
     length = int16revifbe(length);
     if (length + incrlen < 0xffff) {
         length = int16revifbe(length+incrlen);
-        memcpy(&length, zl+8, 2);
+        memcpy(zl+8, &length, 2);
     }
 }
 
@@ -457,7 +449,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     if (p[0] != ZIP_LIST_END) {
         prevlen = zipDecodeEntryPrevLen(p, &prevlensize);
     } else {
-        unsigned char *ptail = zipEntryTail(zl);
+        unsigned char *ptail = ziplistTail(zl);
         if (ptail[0] != ZIP_LIST_END) { // check ziplist is empty
             prevlen = zipRawEntryLength(ptail, NULL, NULL, NULL, &encoding);
         }
@@ -612,7 +604,7 @@ unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
 
 unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int where) {
     unsigned char *p;
-    (where == ZIPLIST_INSERT_HEAD) ? (p = zl + ZIPLIST_HEADER) : (p = zl + ziplistTailOffset(zl));
+    (where == ZIPLIST_INSERT_HEAD) ? (p = zl + ZIPLIST_HEADER) : (p = zl + ziplistBytesLen(zl) - 1);
     return __ziplistInsert(zl, p, s, slen);
 }
 
@@ -809,10 +801,16 @@ unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num
 
 
 void testZiplist() {
+
+    int ix = 3;
     unsigned char *zl = ziplistNew();
+    // -------- push elements --------
     char s[255];
     memset(s, 1, sizeof(s)-1);
-    s[254] = '\0';
-    zl = ziplistPush(zl, (unsigned char*)s, strlen(s), ZIPLIST_INSERT_TAIL);
+    s[250] = '\0';
+    while (ix--) {
+        // push strlen 250 bytes, entry raw len will be 253bytes, every entry prevlensize will be 1 byte.
+        zl = ziplistPush(zl, (unsigned char*)s, strlen(s), ZIPLIST_INSERT_TAIL);
+    }
     ziplistRepr(zl);
 }
