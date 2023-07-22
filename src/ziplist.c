@@ -423,9 +423,9 @@ unsigned char *__ziplistCascadeUpdate(unsigned char *zl, unsigned char *p) {
         } else {
 
             if (prevlensize > rawlensize) {
-                zipStoreEntryPrevLenLarge(p+rawlen, rawlensize);
+                zipStoreEntryPrevLenLarge(p+rawlen, rawlen);
             } else {
-                zipStoreEntryPrevLen(p+rawlen, rawlensize);
+                zipStoreEntryPrevLen(p+rawlen, rawlen);
             }
             break;
         }
@@ -482,7 +482,7 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     // memmove [p, end] -> [p+reqlen, end]
     if (p[0] != ZIP_LIST_END) {
 
-        memmove(p-nextdiff, p+reqlen, curlen - offset + nextdiff - 1);
+        memmove(p+reqlen, p-nextdiff, curlen - offset + nextdiff - 1);
 
         if (forcelarge) {
             zipStoreEntryPrevLenLarge(p+reqlen, reqlen);
@@ -810,9 +810,8 @@ void testZiplist() {
     int ix;
     char s[16385];
     unsigned char *zl = ziplistNew();
-
     // push elements with slen lte 63bytes
-    memset(s, 1, 63);
+    memset(s, '1', 63);
     s[63] = '\0';
     ix = 3;
     while (ix--) {
@@ -822,7 +821,7 @@ void testZiplist() {
 
     // -------- push elements with slen gt 63bytes and lte 16383bytes  --------
     ix = 3;
-    memset(s, 1, sizeof(s)-1);
+    memset(s, '1', sizeof(s)-1);
     s[250] = '\0';
     while (ix--) {
         // push strlen 250 bytes, entry raw len will be 253bytes, every entry prevlensize will be 1 byte.
@@ -831,13 +830,12 @@ void testZiplist() {
 
     // -------- push elements with slen gt 16383bytes   --------
     ix = 3;
-    memset(s, 1, sizeof(s)-1);
+    memset(s, '1', sizeof(s)-1);
     s[16384] = '\0';
     while (ix--) {
         // push strlen 250 bytes, entry raw len will be 253bytes, every entry prevlensize will be 1 byte.
         zl = ziplistPush(zl, (unsigned char*)s, strlen(s), ZIPLIST_INSERT_TAIL);
     }
-    ziplistRepr(zl);
 
     // ------- ziplist get by index --------
 
@@ -864,18 +862,22 @@ void testZiplist() {
 
 
     ziplistGet(p, &sstr, &slen, &value);
-    char *data = zmalloc(slen+1);
-    memcpy(data,sstr, slen);
-    data[slen] = '\0';
-    printf("ziplist str get data[%s], len[%u]\n", data, slen);
+
+    memcpy(s, sstr, slen);
+    s[slen] = '\0';
+    printf("ziplist str get data[%s], len[%u]\n", s, slen);
 
 
     // ---------__ziplistInsert -----------
     // test cause cascade update
+    memset(s, '2', 255);
+    s[255] = '\0';
+
+    zl = __ziplistInsert(zl, p, (unsigned char*)s, strlen(s));
 
 
 
 
+    ziplistRepr(zl);
 
-    free(data);
 }

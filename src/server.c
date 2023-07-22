@@ -268,7 +268,7 @@ int processCommand(client *c) {
 
 
 int main(int argc, char **argv) {
-//    testZiplist();
+    //testZiplist();
     printf("server start...., pid=%d\r\n", getpid());
     initServer();
     elMain(server.el);
