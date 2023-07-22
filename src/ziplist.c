@@ -251,7 +251,7 @@ uint32_t zipRawEntryLength(unsigned char *p, int *prevlensize, int *rawlensize, 
            _rawlen = (((~ZIP_STR_MASK) & p[0]) << 8) | p[1];
        } else {
            _rawlensize = 5;
-           p = p + _prevlensize + 1;
+           p = p + _prevlensize;
            _rawlen = p[1] << 24 | p[2] << 16 | p[3] << 8 | p[4];
        }
    } else {
@@ -641,6 +641,8 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
 
     unsigned char encoding;
     int prevlensize, rawlensize;
+    unsigned int _slen;
+    long long _value;
     if (p == NULL || p[0] == ZIP_LIST_END)
         return 0;
 
@@ -652,14 +654,14 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
     if (ZIP_IS_STR(encoding)) {
 
         if (encoding == ZIP_STR_06B) {
-            *slen = ~ZIP_STR_MASK & p[0];
+            _slen = ~ZIP_STR_MASK & p[0];
             rawlensize = 1;
         } else if (encoding == ZIP_STR_14B) {
-            *slen  = ~ZIP_STR_MASK & p[0] << 8 |
+            _slen  = (((~ZIP_STR_MASK) & p[0]) << 8) |
                     p[1];
             rawlensize = 2;
         } else {
-            *slen  = p[1] << 24 |
+            _slen  = p[1] << 24 |
                      p[2] << 16 |
                      p[3] << 8  |
                      p[4];
@@ -668,9 +670,12 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
 
         *sstr = p+rawlensize;
 
+        if (slen) *slen = _slen;
+
     } else {
 
-        ziplistLoadInteger(p, value);
+        ziplistLoadInteger(p, &_value);
+        if (value) *value = _value;
 
     }
 
@@ -802,15 +807,75 @@ unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num
 
 void testZiplist() {
 
-    int ix = 3;
+    int ix;
+    char s[16385];
     unsigned char *zl = ziplistNew();
-    // -------- push elements --------
-    char s[255];
+
+    // push elements with slen lte 63bytes
+    memset(s, 1, 63);
+    s[63] = '\0';
+    ix = 3;
+    while (ix--) {
+        // push strlen 250 bytes, entry raw len will be 253bytes, every entry prevlensize will be 1 byte.
+        zl = ziplistPush(zl, (unsigned char*)s, strlen(s), ZIPLIST_INSERT_TAIL);
+    }
+
+    // -------- push elements with slen gt 63bytes and lte 16383bytes  --------
+    ix = 3;
     memset(s, 1, sizeof(s)-1);
     s[250] = '\0';
     while (ix--) {
         // push strlen 250 bytes, entry raw len will be 253bytes, every entry prevlensize will be 1 byte.
         zl = ziplistPush(zl, (unsigned char*)s, strlen(s), ZIPLIST_INSERT_TAIL);
     }
+
+    // -------- push elements with slen gt 16383bytes   --------
+    ix = 3;
+    memset(s, 1, sizeof(s)-1);
+    s[16384] = '\0';
+    while (ix--) {
+        // push strlen 250 bytes, entry raw len will be 253bytes, every entry prevlensize will be 1 byte.
+        zl = ziplistPush(zl, (unsigned char*)s, strlen(s), ZIPLIST_INSERT_TAIL);
+    }
     ziplistRepr(zl);
+
+    // ------- ziplist get by index --------
+
+//    prevlensize 		rawlensize (encoding | rawlen) 			raw
+//    1		1byte(data:0)		01111111 (1bytes)						63bytes
+//    2		1byte(data:65)		01111111 (1bytes)						63bytes
+//    3		1byte(data:65)		01111111 (1bytes)						63bytes
+//
+//    1		1byte(data:65)		01000000 10010110(2bytes)				250bytes
+//    2		1byte(data:253)	    01000000 10010110(2bytes)		        250bytes
+//    3		1byte(data:253)	    01000000 10010110(2bytes)		        250bytes
+//
+//    1		1byte(data:253)	    01000000 pppppppp(5bytes)		        16384bytes
+//    2	    5byte(data:16390)	01000000 pppppppp(5bytes)		        16384bytes
+//    3		5byte(data:16390)	01000000 pppppppp(5bytes)		        16384bytes
+
+
+    unsigned char * p = ziplistIndex(zl, 4);
+    unsigned char *sstr;
+    unsigned int slen;
+    long long value;
+
+    // ---------- ziplist index ---------------
+
+
+    ziplistGet(p, &sstr, &slen, &value);
+    char *data = zmalloc(slen+1);
+    memcpy(data,sstr, slen);
+    data[slen] = '\0';
+    printf("ziplist str get data[%s], len[%u]\n", data, slen);
+
+
+    // ---------__ziplistInsert -----------
+    // test cause cascade update
+
+
+
+
+
+    free(data);
 }
