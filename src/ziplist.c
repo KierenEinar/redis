@@ -316,46 +316,41 @@ void ziplistSaveInteger(unsigned char *p, unsigned char encoding, long long valu
         memcpy(p, &i8, 1);
     } else if (encoding == ZIP_INT_16B) {
         i16 = (int16_t)value;
-        memcpy(p, &i16, 2);
         memrev16ifbe(&i16);
+        memcpy(p, &i16, 2);
     } else if (encoding == ZIP_INT_32B) {
         i32 = (int32_t)value;
-        memcpy(p, &i32, 4);
         memrev32ifbe(&i32);
+        memcpy(p, &i32, 4);
+
     } else {
-        memcpy(p, &value, 8);
         memrev64ifbe(&value);
+        memcpy(p, &value, 8);
     }
 }
 
-void ziplistLoadInteger(unsigned char *p, long long *value) {
+void ziplistLoadInteger(unsigned char *p, int prevlensize, unsigned char encoding, long long *value) {
 
-    unsigned char encoding;
-    int prevlensize;
-    int8_t *i8;
-    int16_t *i16;
-    int32_t *i32;
-    int64_t *i64;
+    int8_t i8;
+    int16_t i16;
+    int32_t i32;
+    int64_t i64;
 
-    prevlensize = zipDecodePrevlensSize(p);
-    p+=prevlensize;
-    encoding = p[0];
-    p+=1;
     if (encoding == ZIP_INT_08B) {
-        i8 = (int8_t*)p;
-        *value = (long long)(*i8);
+        memcpy(&i8, p, 1);
+        *value = (long long)(i8);
     } else if (encoding == ZIP_INT_16B) {
-        i16 = (int16_t*)p;
+        memcpy(&i16, p, 2);
         memrev16ifbe(&i16);
-        *value = (long long)(*i16);
+        *value = (long long)(i16);
     } else if (encoding == ZIP_INT_32B) {
-        i32 = (int32_t*)p;
-        memrev32ifbe(&i16);
-        *value = (long long)(*i32);
+        memcpy(&i32, p, 4);
+        memrev32ifbe(&i32);
+        *value = (long long)(i32);
     } else {
-        i64 = (int64_t*)p;
+        memcpy(&i64, p, 8);
         memrev64ifbe(&i64);
-        *value = (long long)(*i64);
+        *value = (long long)(i64);
     }
 
 }
@@ -518,9 +513,9 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
 
 unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int num) {
     unsigned int j=0;
-    uint32_t rawlen, totlen, nextdff = 0, firstprevlen, curlen, tailoffset, offset;
+    uint32_t rawlen, totlen, firstprevlen, curlen, tailoffset, offset;
     unsigned char *first;
-    int firstprevlensize, deleted=0;
+    int firstprevlensize, deleted=0, nextdff = 0;
     first = p;
     curlen = ziplistBytesLen(zl);
     for (j=0; p[0]!=ZIP_LIST_END && j<num; j++) {
@@ -535,7 +530,7 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
         if (p[0] != ZIP_LIST_END) {
 
             firstprevlen = zipDecodeEntryPrevLen(first, &firstprevlensize);
-            nextdff = zipEntryPrevlenBytesDiff(p, firstprevlensize);
+            nextdff = zipEntryPrevlenBytesDiff(p, firstprevlen);
             p-=nextdff;
             zipStoreEntryPrevLen(p, firstprevlen);
             memmove(first, p, curlen-(p-zl));
@@ -674,7 +669,7 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
 
     } else {
 
-        ziplistLoadInteger(p, &_value);
+        ziplistLoadInteger(p+1, prevlensize, encoding, &_value);
         if (value) *value = _value;
 
     }
@@ -740,7 +735,7 @@ void ziplistRepr(unsigned char *zl) {
 
         } else {
             printf("");
-            ziplistLoadInteger(p, &value);
+            ziplistLoadInteger(p, prevlensize, encoding, &value);
             printf("\t[int]:%lld", value);
         }
         printf("\n}\n");
@@ -779,7 +774,7 @@ unsigned char *ziplistFind(unsigned char *p, unsigned char *str, unsigned int sl
 
                 // str convert to long long success.
                 if (vencoding != UINT8_MAX) {
-                    ziplistLoadInteger(p, &value);
+                    ziplistLoadInteger(p+prevlensize+rawlensize, prevlensize, encoding, &value);
                     if (value == vv) {
                         return p;
                     }
@@ -840,17 +835,17 @@ void testZiplist() {
     // ------- ziplist get by index --------
 
 //    prevlensize 		rawlensize (encoding | rawlen) 			raw
-//    1		1byte(data:0)		01111111 (1bytes)						63bytes
+//    0		1byte(data:0)		01111111 (1bytes)						63bytes
+//    1		1byte(data:65)		01111111 (1bytes)						63bytes
 //    2		1byte(data:65)		01111111 (1bytes)						63bytes
-//    3		1byte(data:65)		01111111 (1bytes)						63bytes
 //
-//    1		1byte(data:65)		01000000 10010110(2bytes)				250bytes
-//    2		1byte(data:253)	    01000000 10010110(2bytes)		        250bytes
-//    3		1byte(data:253)	    01000000 10010110(2bytes)		        250bytes
+//    3		1byte(data:65)		01000000 10010110(2bytes)				250bytes
+//    4		1byte(data:253)	    01000000 10010110(2bytes)		        250bytes
+//    5		1byte(data:253)	    01000000 10010110(2bytes)		        250bytes
 //
-//    1		1byte(data:253)	    01000000 pppppppp(5bytes)		        16384bytes
-//    2	    5byte(data:16390)	01000000 pppppppp(5bytes)		        16384bytes
-//    3		5byte(data:16390)	01000000 pppppppp(5bytes)		        16384bytes
+//    6		1byte(data:253)	    01000000 pppppppp(5bytes)		        16384bytes
+//    7	    5byte(data:16390)	01000000 pppppppp(5bytes)		        16384bytes
+//    8		5byte(data:16390)	01000000 pppppppp(5bytes)		        16384bytes
 
 
     unsigned char * p = ziplistIndex(zl, 4);
@@ -869,14 +864,67 @@ void testZiplist() {
 
 
     // ---------__ziplistInsert -----------
+
+//    idx   prevlensize 		rawlensize (encoding | rawlen) 			raw             offset
+//    0		1byte(data:0)		01111111 (1bytes)						63bytes         10
+//    1		1byte(data:65)		01111111 (1bytes)						63bytes         75
+//    2		1byte(data:65)		01111111 (1bytes)						63bytes         140
+//
+//    3		1byte(data:65)		01000000 10010110(2bytes)				250bytes        205
+//    4     1byte(data:253)	    01000000 pppppppp(2bytes)               254bytes        458         (inserted)
+//    5		5byte(data:260)	    01000000 10010110(2bytes)		        250bytes        715
+//    6		5byte(data:257)	    01000000 10010110(2bytes)		        250bytes        972
+//
+//    7		5byte(data:257)	    10000000 pppppppp(5bytes)		        16384bytes      1229
+//    8	    5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      17623
+//    9		5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      34017
+
     // test cause cascade update
     memset(s, '2', 255);
-    s[255] = '\0';
+    s[254] = '\0';
 
     zl = __ziplistInsert(zl, p, (unsigned char*)s, strlen(s));
 
+    // test update large prevlen
 
+//    idx   prevlensize 		rawlensize (encoding | rawlen) 			raw             offset
+//    0		1byte(data:0)		01111111 (1bytes)						63bytes         10
+//    1		1byte(data:65)		01111111 (1bytes)						63bytes         75
+//    2		1byte(data:65)		01111111 (1bytes)						63bytes         140
+//
+//    3		1byte(data:65)		01000000 10010110(2bytes)				250bytes        205
+//    4     1byte(data:253)	    01000000 pppppppp(2bytes)               254bytes        458
+//    5     5byte(data:257)	    11000100         (1bytes)               8bytes          472           (inserted)
+//    6		5byte(data:14)	    01000000 10010110(2bytes)		        250bytes        729
+//    7		5byte(data:257)	    01000000 10010110(2bytes)		        250bytes        986
+//
+//    8		5byte(data:257)	    10000000 pppppppp(5bytes)		        16384bytes      1243
+//    9	    5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      17637
+//    10	5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      34031
 
+    memset(s, '3', 10);
+    s[10] = '\0';
+    p = ziplistIndex(zl, 5);
+    zl = __ziplistInsert(zl, p, (unsigned char*)s, strlen(s));
+
+    // test delete last
+
+//    idx   prevlensize 		rawlensize (encoding | rawlen) 			raw             offset
+//    0		1byte(data:0)		01111111 (1bytes)						63bytes         10
+//    1		1byte(data:65)		01111111 (1bytes)						63bytes         75
+//    2		1byte(data:65)		01111111 (1bytes)						63bytes         140
+//
+//    3		1byte(data:65)		01000000 10010110(2bytes)				250bytes        205
+//    4     1byte(data:253)	    01000000 pppppppp(2bytes)               254bytes        458
+//    5     5byte(data:257)	    11000100         (1bytes)               8bytes          472
+//    6		5byte(data:14)	    01000000 10010110(2bytes)		        250bytes        729
+//    7		5byte(data:257)	    01000000 10010110(2bytes)		        250bytes        986
+//
+//    8		5byte(data:257)	    10000000 pppppppp(5bytes)		        16384bytes      1243
+//    9	    5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      17637
+//    10	5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      34031         (deleted)
+
+    zl = ziplistDeleteRange(zl, 9, 1);
 
     ziplistRepr(zl);
 
