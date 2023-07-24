@@ -907,7 +907,7 @@ void testZiplist() {
     p = ziplistIndex(zl, 5);
     zl = __ziplistInsert(zl, p, (unsigned char*)s, strlen(s));
 
-    // test delete last
+    // test delete index
 
 //    idx   prevlensize 		rawlensize (encoding | rawlen) 			raw             offset
 //    0		1byte(data:0)		01111111 (1bytes)						63bytes         10
@@ -921,8 +921,25 @@ void testZiplist() {
 //    7		5byte(data:257)	    01000000 10010110(2bytes)		        250bytes        986
 //
 //    8		5byte(data:257)	    10000000 pppppppp(5bytes)		        16384bytes      1243
-//    9	    5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      17637
-//    10	5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      34031         (deleted)
+//    9	    5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      17637          (deleted)
+//    10	5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      34031
+
+    zl = ziplistDeleteRange(zl, 9, 1);
+
+    // test delete last
+//    idx   prevlensize 		rawlensize (encoding | rawlen) 			raw             offset
+//    0		1byte(data:0)		01111111 (1bytes)						63bytes         10
+//    1		1byte(data:65)		01111111 (1bytes)						63bytes         75
+//    2		1byte(data:65)		01111111 (1bytes)						63bytes         140
+//
+//    3		1byte(data:65)		01000000 10010110(2bytes)				250bytes        205
+//    4     1byte(data:253)	    01000000 pppppppp(2bytes)               254bytes        458
+//    5     5byte(data:257)	    11000100         (1bytes)               8bytes          472
+//    6		5byte(data:14)	    01000000 10010110(2bytes)		        250bytes        729
+//    7		5byte(data:257)	    01000000 10010110(2bytes)		        250bytes        986
+//
+//    8		5byte(data:257)	    10000000 pppppppp(5bytes)		        16384bytes      1243
+//    9	    5byte(data:16394)	10000000 pppppppp(5bytes)		        16384bytes      17637           (deleted)
 
     zl = ziplistDeleteRange(zl, 9, 1);
 
