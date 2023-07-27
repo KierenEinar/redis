@@ -58,12 +58,18 @@ uint64_t int64rev(uint64_t v);
 
 #define ZIP_PREVLEN_08B 254
 
+#define ZIPLIST_END_SIZE 1
+
+#define ZIPLIST_LENGTH_MAX ((1<<16) - 1)
+
 // create the ziplist.
 unsigned char *ziplistNew(void);
 // return the next entry from p.
 unsigned char *ziplistNext(unsigned char *zl, unsigned char *p);
 // return the prev entry from p.
 unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p);
+// merge second into first, after success call, caller should no longer use first or second cause it may be free.
+unsigned char *ziplistMerge(unsigned char **first, unsigned char **second);
 // push head or tail to the ziplist.
 unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int where);
 // get the index of entry ptr.
@@ -74,15 +80,16 @@ unsigned int ziplistGet(unsigned char *p, unsigned char **sstr, unsigned int *sl
 unsigned char *ziplistFind(unsigned char *p, unsigned char *str, unsigned int slen, unsigned int skipcnt);
 // delete range, start by index
 unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num);
+
+// get the ziplist entries len;
+uint32_t ziplistBloblen(unsigned char *zl);
+
 // pretty print
 void ziplistRepr(unsigned char *zl);
-
 // insert s at 'p'.
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen);
-
 // delete at p
 unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int num);
-
 // just a test for ziplist core function
 void testZiplist();
 

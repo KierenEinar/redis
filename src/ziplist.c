@@ -294,6 +294,9 @@ void ziplistStoreTailOffset(unsigned char *zl, uint32_t tail) {
 
 
 void ziplistStoreLength(unsigned char *zl, uint16_t length) {
+    if (length > ZIPLIST_LENGTH_MAX)
+        length = ZIPLIST_LENGTH_MAX;
+
     length = int16revifbe(length);
     memcpy(zl+8, &length, 2);
 }
@@ -597,6 +600,66 @@ unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
   }
 }
 
+unsigned char *ziplistMerge(unsigned char **first, unsigned char **second) {
+
+    if (first == NULL || *first == NULL || second == NULL || *second == NULL) {
+        return NULL;
+    }
+
+    if (*first == *second) {
+        return NULL;
+    }
+
+    unsigned int firstByteslen = ziplistBytesLen(*first);
+    unsigned int secondByteslen = ziplistBytesLen(*second);
+
+    unsigned char *target,*source;
+    unsigned int targetByteslen, sourceByteslen, length, firstOffset;
+    int append;
+
+    if (firstByteslen >= secondByteslen) {
+        target = *first;
+        source = *second;
+        targetByteslen = firstByteslen;
+        sourceByteslen = secondByteslen;
+        append = 1;
+    } else {
+        target = *second;
+        source = *first;
+        targetByteslen = secondByteslen;
+        sourceByteslen = firstByteslen;
+        append = 0;
+    }
+
+    firstOffset = ziplistTailOffset(*first);
+    target = ziplistResize(target, firstByteslen - ZIPLIST_END_SIZE + secondByteslen - ZIPLIST_HEADER);
+    length = ziplistBloblen(*first) + ziplistBloblen(*second);
+    ziplistStoreLength(target, length);
+    ziplistStoreTailOffset(target, firstByteslen - ZIPLIST_END_SIZE + ziplistTailOffset(*second) - ZIPLIST_HEADER);
+
+    if (append) {
+        memcpy(target+firstByteslen-ZIP_LIST_END, source+ZIPLIST_HEADER, secondByteslen - ZIPLIST_HEADER);
+    } else {
+        memmove(target+sourceByteslen-ZIP_LIST_END, target+ZIPLIST_HEADER, targetByteslen - ZIPLIST_HEADER);
+        memcpy(target+ZIPLIST_HEADER, source+ZIPLIST_HEADER, sourceByteslen-ZIPLIST_HEADER-1);
+    }
+
+    target = __ziplistCascadeUpdate(target, target+ firstOffset);
+
+    if (*first == source) {
+        zfree(*first);
+        *first = NULL;
+    }
+
+    if (*second == source) {
+        zfree(*second);
+        *second = NULL;
+    }
+
+    return target;
+
+}
+
 unsigned char *ziplistPush(unsigned char *zl, unsigned char *s, size_t slen, int where) {
     unsigned char *p;
     (where == ZIPLIST_INSERT_HEAD) ? (p = zl + ZIPLIST_HEADER) : (p = zl + ziplistBytesLen(zl) - 1);
@@ -797,6 +860,23 @@ unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num
 
     unsigned  char *p = ziplistIndex(zl, index);
     return p == NULL ? zl : __ziplistDelete(zl, p, num);
+}
+
+uint32_t ziplistBloblen(unsigned char *zl) {
+    uint16_t len;
+    memcpy(&len, zl + 8, 2);
+    memrev16ifbe(&len);
+    if (len < ZIPLIST_LENGTH_MAX)
+        return (uint32_t)len;
+
+    uint32_t idx = 0;
+    zl = zl + ZIPLIST_HEADER;
+    while (zl[0] != ZIP_LIST_END) {
+        zl += zipRawEntryLength(zl, NULL, NULL, NULL, NULL);
+        idx++;
+    }
+    if (idx) idx+=1;
+    return idx;
 }
 
 
