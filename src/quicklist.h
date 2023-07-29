@@ -5,8 +5,19 @@
 #ifndef REDIS_QUICKLIST_H
 #define REDIS_QUICKLIST_H
 
+#include <stdlib.h>
+
+#include "ziplist.h"
+#include "zmalloc.h"
+
 #define QUICK_LIST_HEAD 0
 #define QUICK_LIST_TAIL 1
+
+#define QUICK_LIST_ENCODING_RAW 1
+#define QUCIK_LIST_ENCODING_LZF 2
+
+#define QUICK_LIST_INSERT_BEFORE 0
+#define QUICK_LIST_INSERT_AFTER 1
 
 typedef struct quicklistNode{
     struct quicklistNode *prev;
