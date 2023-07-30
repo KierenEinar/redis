@@ -81,8 +81,14 @@ unsigned char *ziplistFind(unsigned char *p, unsigned char *str, unsigned int sl
 // delete range, start by index
 unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num);
 
-// get the ziplist entries len;
+// get the ziplist total bytes occupy.
 uint32_t ziplistBloblen(unsigned char *zl);
+
+// get the ziplist entries len;
+uint32_t ziplistlen(unsigned char *zl);
+
+// duplicate ziplist
+unsigned char *ziplistdup(unsigned char *zl);
 
 // pretty print
 void ziplistRepr(unsigned char *zl);

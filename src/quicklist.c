@@ -41,8 +41,8 @@ quicklistNode *quicklistNodeCreate() {
     return node;
 }
 
-static void _quicklistUpdateNodeSz(quicklistNode *node, unsigned int size) {
-    node->size+=size;
+static void _quicklistUpdateNodeSz(quicklistNode *node) {
+    node->size = ziplistBloblen(node->zl);
 }
 
 static void quicklistNodeInsert(quicklist *quicklist, quicklistNode *old, quicklistNode *new_node, int after) {
@@ -124,6 +124,48 @@ static int _quicklistAllowInsert(quicklist *quicklist, quicklistNode *node, unsi
 
 }
 
+quicklistNode *quicklistNodeDup(quicklistNode *node) {
+    quicklistNode *newnode = zmalloc(sizeof(*newnode));
+    newnode->prev = node->prev;
+    newnode->next = node->next;
+    newnode->count = node->count;
+    newnode->size = node->size;
+    newnode->encoding = node->encoding;
+    newnode->zl = ziplistdup(node->zl);
+    return newnode;
+}
+
+
+static quicklistNode *_quicklistSplitNode(quicklist *quicklist, quicklistEntry *entry, int after) {
+
+    quicklistNode *newnode = quicklistNodeDup(entry->node);
+
+    int orig_start_truncate, new_start_truncate, orig_extent_truncate, new_extent_truncate;
+
+    orig_start_truncate = after ? (entry->idx + 1) : 0;
+    orig_extent_truncate = after ? -1 : entry->idx + 1;
+
+    new_start_truncate = after ? 0 : entry->idx;
+    new_extent_truncate = after ? (entry->idx + 1): -1;
+
+    entry->node->zl = ziplistDeleteRange(entry->node->zl, orig_start_truncate, orig_extent_truncate);
+    entry->node->count = ziplistlen(entry->node->zl);
+    _quicklistUpdateNodeSz(entry->node);
+
+    newnode->zl = ziplistDeleteRange(newnode->zl, new_start_truncate, new_extent_truncate);
+    newnode->count = ziplistlen(newnode->zl);;
+    _quicklistUpdateNodeSz(newnode);
+    return newnode;
+
+}
+
+static void _quicklistMergeNode(quicklist *quicklist, quicklistNode *center) {
+
+
+
+
+}
+
 static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *value, unsigned int size, int after) {
 
     quicklistNode *prev, *prev_prev, *next, *next_next, *node;
@@ -137,7 +179,7 @@ static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *
         node = quicklistNodeCreate();
         node->count++;
         node->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_TAIL);
-        _quicklistUpdateNodeSz(node, size);
+        _quicklistUpdateNodeSz(node);
         quicklistNodeInsert(quicklist, NULL, node, 1);
         return;
     }
@@ -162,7 +204,6 @@ static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *
         }
     }
 
-
     if (!full && after) {
 
         if (!node->zl) {
@@ -170,15 +211,72 @@ static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *
         } else {
             node->zl = ziplistPush(node->zl, entry->zlentry, size, ZIPLIST_INSERT_TAIL);
         }
-        _quicklistUpdateNodeSz(node, size);
+        _quicklistUpdateNodeSz(node);
         node->count++;
 
     } else if (!full && !after) {
 
+        if (!node->zl) {
+            node->zl = ziplistPush(ziplistNew(), entry->zlentry, size, ZIPLIST_INSERT_HEAD);
+        } else {
+            node->zl = ziplistPush(node->zl, entry->zlentry, size, ZIPLIST_INSERT_TAIL);
+        }
+        _quicklistUpdateNodeSz(node);
+        node->count++;
+    } else if (full && at_tail && !next_full && after) {
+
+        if (!node->next) {
+            quicklistNode *nextnode = quicklistNodeCreate();
+            quicklistNodeInsert(quicklist, node, nextnode, QUICK_LIST_INSERT_AFTER);
+        }
+
+        if (node->next->zl == NULL) {
+            node->next->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_HEAD);
+        } else {
+            node->next->zl = ziplistPush(node->next->zl, value, size, ZIPLIST_INSERT_HEAD);
+        }
+
+        _quicklistUpdateNodeSz(node->next);
+        node->next->count++;
+    } else if (full && at_head && !prev_full && !after) {
+
+        if (!node->prev) {
+            quicklistNode *prevnode = quicklistNodeCreate();
+            quicklistNodeInsert(quicklist, node, prevnode, QUICK_LIST_INSERT_BEFORE);
+        }
+
+        if (node->prev->zl == NULL) {
+            node->prev->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_TAIL);
+        } else {
+            node->prev->zl = ziplistPush(node->prev->zl, value, size, ZIPLIST_INSERT_TAIL);
+        }
+        _quicklistUpdateNodeSz(node->prev);
+        node->prev->count++;
+    } else if (full && at_tail && next_full && after) {
+
+        quicklistNode *nextnode = quicklistNodeCreate();
+        nextnode->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_HEAD);
+        quicklistNodeInsert(quicklist, node, nextnode, QUICK_LIST_INSERT_AFTER);
+        _quicklistUpdateNodeSz(nextnode);
+        nextnode->count++;
+
+    } else if (full && at_head && prev_full && !after) {
+
+        quicklistNode *prevnode = quicklistNodeCreate();
+        prevnode->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_HEAD);
+        quicklistNodeInsert(quicklist, node, prevnode, QUICK_LIST_INSERT_BEFORE);
+        _quicklistUpdateNodeSz(prevnode);
+        prevnode->count++;
+
+    } else if (full) {
+
+        quicklistNode *newnode = _quicklistSplitNode(quicklist, entry, after);
+        ziplistPush(newnode->zl, value, size, after ? ZIPLIST_INSERT_HEAD : ZIPLIST_INSERT_TAIL);
+        quicklistNodeInsert(quicklist, node, newnode, after);
+        _quicklistMergeNode(quicklist, node);
     }
 
-
-    quicklist->len++;
+    quicklist->count++;
 
 
 }

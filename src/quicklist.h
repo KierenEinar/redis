@@ -42,7 +42,7 @@ typedef struct quicklistEntry{
     quicklistNode *node;
     unsigned char *zlentry;
     unsigned char *str;
-    unsigned int idx;
+    int idx;
     unsigned int size;
     long long llvalue;
 }quicklistEntry;

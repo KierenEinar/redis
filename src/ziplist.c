@@ -863,6 +863,10 @@ unsigned char *ziplistDeleteRange(unsigned char *zl, int index, unsigned int num
 }
 
 uint32_t ziplistBloblen(unsigned char *zl) {
+   return ziplistBytesLen(zl);
+}
+
+uint32_t ziplistlen(unsigned char *zl) {
     uint16_t len;
     memcpy(&len, zl + 8, 2);
     memrev16ifbe(&len);
@@ -875,10 +879,16 @@ uint32_t ziplistBloblen(unsigned char *zl) {
         zl += zipRawEntryLength(zl, NULL, NULL, NULL, NULL);
         idx++;
     }
-    if (idx) idx+=1;
     return idx;
 }
 
+unsigned char *ziplistdup(unsigned char *zl) {
+    if (!zl) return NULL;
+    unsigned int byteslen = ziplistBytesLen(zl);
+    unsigned char *nzl = zmalloc(byteslen);
+    memcpy(nzl, zl, byteslen);
+    return nzl;
+}
 
 void testZiplist() {
 
