@@ -83,13 +83,11 @@ static void quicklistNodeInsert(quicklist *quicklist, quicklistNode *old, quickl
     quicklist->len++;
 }
 
-static int _quicklistNodeSizeMeetRequirement(quicklistNode *node, unsigned int size, int fill) {
+static int _quicklistNodeSizeMeetRequirement(unsigned int sz, int fill) {
 
     if (fill > -1) {
         return 0;
     }
-
-    unsigned int sz = node->size + size;
 
     if (-fill-1 < FILL_SIZE_LEN) {
         int offset = fill_size_offset[-fill-1];
@@ -110,11 +108,29 @@ static int _quicklistNodeCountMeetRequirement(quicklistNode *node, int fill) {
 }
 
 
-static int _quicklistAllowInsert(quicklist *quicklist, quicklistNode *node, unsigned int size) {
+static int _quicklistNodeAllowInsert(quicklist *quicklist, quicklistNode *node, unsigned int size) {
 
-    if (_quicklistNodeSizeMeetRequirement(node, size, quicklist->fill)) {
+    int ziplist_overhead = 0;
+
+    if (size < 254) {
+        ziplist_overhead = 1;
+    } else {
+        ziplist_overhead = 5;
+    }
+
+    if (size < 64) {
+        ziplist_overhead += 1;
+    } else if (size <= 16384) {
+        ziplist_overhead += 2;
+    } else {
+        ziplist_overhead += 4;
+    }
+
+    unsigned int new_sz = node->size + size + ziplist_overhead;
+
+    if (_quicklistNodeSizeMeetRequirement(new_sz, quicklist->fill)) {
         return 1;
-    } else if (!_safeSizeLimit(size)) {
+    } else if (!_safeSizeLimit(new_sz)) {
         return 0;
     } else if (_quicklistNodeCountMeetRequirement(node, quicklist->fill)) {
         return 1;
@@ -159,6 +175,12 @@ static quicklistNode *_quicklistSplitNode(quicklist *quicklist, quicklistEntry *
 
 }
 
+
+
+// [prev_prev, prev]
+// [next, next_next]
+// [prev, center]
+// [center, next]
 static void _quicklistMergeNode(quicklist *quicklist, quicklistNode *center) {
 
 
@@ -184,14 +206,14 @@ static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *
         return;
     }
 
-    if (!_quicklistAllowInsert(quicklist, node, size)) {
+    if (!_quicklistNodeAllowInsert(quicklist, node, size)) {
         full = 1;
     }
 
     if (after && entry->idx == node->count) {
         at_tail = 1;
         if (node->next) {
-            if (!_quicklistAllowInsert(quicklist, node->next, size))
+            if (!_quicklistNodeAllowInsert(quicklist, node->next, size))
                 next_full = 1;
         }
     }
@@ -199,7 +221,7 @@ static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *
     if (!after && entry->idx == 0) {
         at_head = 1;
         if (node->prev) {
-            if (!_quicklistAllowInsert(quicklist, node->prev, size))
+            if (!_quicklistNodeAllowInsert(quicklist, node->prev, size))
                 prev_full = 1;
         }
     }
