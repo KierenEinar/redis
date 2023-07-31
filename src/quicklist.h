@@ -72,10 +72,10 @@ int quicklistPush(quicklist *ql, void *data, unsigned int size, int where);
 int quicklistIndex(quicklist *ql, const long long value, quicklistEntry *entry);
 
 // insert after entry.
-int quicklistInsertBefore(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size);
+void quicklistInsertBefore(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size);
 
 // insert before entry.
-int quicklistInsertAfter(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size);
+void quicklistInsertAfter(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size);
 
 // quicklistDeleteNode delete the node from quicklist.
 void quicklistDeleteNode(quicklist *ql, quicklistNode *node);

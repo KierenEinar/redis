@@ -93,7 +93,7 @@ unsigned char *ziplistdup(unsigned char *zl);
 // pretty print
 void ziplistRepr(unsigned char *zl);
 // insert s at 'p'.
-unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen);
+unsigned char *ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen);
 // delete at p
 unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int num);
 // just a test for ziplist core function

@@ -514,6 +514,10 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     return zl;
 }
 
+unsigned char *ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen) {
+    return __ziplistInsert(zl, p, s, slen);
+}
+
 unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int num) {
     unsigned int j=0;
     uint32_t rawlen, totlen, firstprevlen, curlen, tailoffset, offset;

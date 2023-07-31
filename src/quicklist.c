@@ -103,8 +103,8 @@ static int _safeSizeLimit(unsigned int size) {
     return size <= SAFE_MAX_SIZE;
 }
 
-static int _quicklistNodeCountMeetRequirement(quicklistNode *node, int fill) {
-    return node->count < fill;
+static int _quicklistNodeCountMeetRequirement(int count, int fill) {
+    return count < fill;
 }
 
 
@@ -132,7 +132,7 @@ static int _quicklistNodeAllowInsert(quicklist *quicklist, quicklistNode *node, 
         return 1;
     } else if (!_safeSizeLimit(new_sz)) {
         return 0;
-    } else if (_quicklistNodeCountMeetRequirement(node, quicklist->fill)) {
+    } else if (_quicklistNodeCountMeetRequirement(node->count, quicklist->fill)) {
         return 1;
     } else {
         return 0;
@@ -152,7 +152,7 @@ static int _quicklistNodeAllowMerge(quicklist *quicklist, quicklistNode *a, quic
         return 1;
     } else if (!_safeSizeLimit(new_sz)) {
         return 0;
-    } else if (_quicklistNodeCountMeetRequirement(node, quicklist->fill)) {
+    } else if (_quicklistNodeCountMeetRequirement(a->count+b->count, quicklist->fill)) {
         return 1;
     } else {
         return 0;
@@ -174,7 +174,7 @@ quicklistNode *quicklistNodeDup(quicklistNode *node) {
 
 static quicklistNode *_quicklistSplitNode(quicklist *quicklist, quicklistEntry *entry, int after) {
 
-    quicklistNode *newnode = quicklistNodeDup(entry->node);
+    quicklistNode *new_node = quicklistNodeDup(entry->node);
 
     int orig_start_truncate, new_start_truncate, orig_extent_truncate, new_extent_truncate;
 
@@ -188,10 +188,10 @@ static quicklistNode *_quicklistSplitNode(quicklist *quicklist, quicklistEntry *
     entry->node->count = ziplistlen(entry->node->zl);
     _quicklistUpdateNodeSz(entry->node);
 
-    newnode->zl = ziplistDeleteRange(newnode->zl, new_start_truncate, new_extent_truncate);
-    newnode->count = ziplistlen(newnode->zl);;
-    _quicklistUpdateNodeSz(newnode);
-    return newnode;
+    new_node->zl = ziplistDeleteRange(new_node->zl, new_start_truncate, new_extent_truncate);
+    new_node->count = ziplistlen(new_node->zl);;
+    _quicklistUpdateNodeSz(new_node);
+    return new_node;
 
 }
 
@@ -233,8 +233,9 @@ static quicklistNode* _quicklistNodeMergeZiplist(quicklist *quicklist, quicklist
             nokeep = a;
         }
 
-        keep->count+=nokeep->count;
-        keep->size = ziplistBloblen(keep->zl);
+
+        keep->count = ziplistlen(keep->zl);
+        _quicklistUpdateNodeSz(keep);
 
         quicklistDeleteNode(quicklist, nokeep);
 
@@ -254,7 +255,7 @@ static quicklistNode* _quicklistNodeMergeZiplist(quicklist *quicklist, quicklist
 static void _quicklistMergeNode(quicklist *quicklist, quicklistNode *center) {
 
     quicklistNode *prev_prev, *prev, *next, *next_next, *target;
-
+    prev_prev = prev = next = next_next = target = NULL;
     if (center->prev) {
         prev = center->prev;
         if (prev) {
@@ -282,22 +283,21 @@ static void _quicklistMergeNode(quicklist *quicklist, quicklistNode *center) {
 
     if (_quicklistNodeAllowMerge(quicklist, center, center->prev)) {
         target = _quicklistNodeMergeZiplist(quicklist, center, center->prev);
+        center = NULL;
+    } else {
+        target = center;
     }
 
-    if (target && target->next) {
-        if (_quicklistNodeAllowMerge(quicklist, target, target->next)) {
-            _quicklistNodeMergeZiplist(quicklist, target, target->next);
-        }
+    if (_quicklistNodeAllowMerge(quicklist, target, target->next)) {
+        _quicklistNodeMergeZiplist(quicklist, target, target->next);
     }
 
 }
 
-static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *value, unsigned int size, int after) {
+void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *value, unsigned int size, int after) {
 
-    quicklistNode *prev, *prev_prev, *next, *next_next, *node;
     int full, at_tail, at_head, next_full, prev_full;
-
-    prev = prev_prev = next = next_next = NULL;
+    quicklistNode *node;
     full = at_tail = at_head = next_full = prev_full = 0;
     node = entry->node;
 
@@ -307,6 +307,7 @@ static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *
         node->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_TAIL);
         _quicklistUpdateNodeSz(node);
         quicklistNodeInsert(quicklist, NULL, node, 1);
+        quicklist->count++;
         return;
     }
 
@@ -314,7 +315,7 @@ static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *
         full = 1;
     }
 
-    if (after && entry->idx == node->count) {
+    if (after && entry->idx == (node->count - 1)) {
         at_tail = 1;
         if (node->next) {
             if (!_quicklistNodeAllowInsert(quicklist, node->next, size))
@@ -332,77 +333,65 @@ static void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *
 
     if (!full && after) {
 
-        if (!node->zl) {
-            node->zl = ziplistPush(ziplistNew(), entry->zlentry, size, ZIPLIST_INSERT_TAIL);
-        } else {
+        unsigned char *next = ziplistNext(node->zl, entry->zlentry);
+
+        if (!next) {
             node->zl = ziplistPush(node->zl, entry->zlentry, size, ZIPLIST_INSERT_TAIL);
+        } else {
+            node->zl = ziplistInsert(node->zl, entry->zlentry, value, size);
         }
         _quicklistUpdateNodeSz(node);
         node->count++;
 
     } else if (!full && !after) {
 
-        if (!node->zl) {
-            node->zl = ziplistPush(ziplistNew(), entry->zlentry, size, ZIPLIST_INSERT_HEAD);
-        } else {
-            node->zl = ziplistPush(node->zl, entry->zlentry, size, ZIPLIST_INSERT_TAIL);
-        }
+        node->zl = ziplistInsert(node->zl, entry->zlentry, value, size);
         _quicklistUpdateNodeSz(node);
         node->count++;
-    } else if (full && at_tail && !next_full && after) {
+    } else if (full && at_tail && node->next && !next_full && after) {
 
-        if (!node->next) {
-            quicklistNode *nextnode = quicklistNodeCreate();
-            quicklistNodeInsert(quicklist, node, nextnode, QUICK_LIST_INSERT_AFTER);
-        }
-
-        if (node->next->zl == NULL) {
-            node->next->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_HEAD);
-        } else {
-            node->next->zl = ziplistPush(node->next->zl, value, size, ZIPLIST_INSERT_HEAD);
-        }
-
+        node->next->zl = ziplistPush(node->next->zl, value, size, ZIPLIST_INSERT_HEAD);
         _quicklistUpdateNodeSz(node->next);
         node->next->count++;
-    } else if (full && at_head && !prev_full && !after) {
+    } else if (full && at_head && node->prev && !prev_full && !after) {
 
-        if (!node->prev) {
-            quicklistNode *prevnode = quicklistNodeCreate();
-            quicklistNodeInsert(quicklist, node, prevnode, QUICK_LIST_INSERT_BEFORE);
-        }
-
-        if (node->prev->zl == NULL) {
-            node->prev->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_TAIL);
-        } else {
-            node->prev->zl = ziplistPush(node->prev->zl, value, size, ZIPLIST_INSERT_TAIL);
-        }
+        node->prev->zl = ziplistPush(node->prev->zl, value, size, ZIPLIST_INSERT_TAIL);
         _quicklistUpdateNodeSz(node->prev);
         node->prev->count++;
     } else if (full && at_tail && next_full && after) {
 
-        quicklistNode *nextnode = quicklistNodeCreate();
-        nextnode->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_HEAD);
-        quicklistNodeInsert(quicklist, node, nextnode, QUICK_LIST_INSERT_AFTER);
-        _quicklistUpdateNodeSz(nextnode);
-        nextnode->count++;
+        quicklistNode *next = quicklistNodeCreate();
+        next->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_HEAD);
+        quicklistNodeInsert(quicklist, node, next, QUICK_LIST_INSERT_AFTER);
+        _quicklistUpdateNodeSz(next);
+        next->count++;
 
     } else if (full && at_head && prev_full && !after) {
 
-        quicklistNode *prevnode = quicklistNodeCreate();
-        prevnode->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_HEAD);
-        quicklistNodeInsert(quicklist, node, prevnode, QUICK_LIST_INSERT_BEFORE);
-        _quicklistUpdateNodeSz(prevnode);
-        prevnode->count++;
+        quicklistNode *prev = quicklistNodeCreate();
+        prev->zl = ziplistPush(ziplistNew(), value, size, ZIPLIST_INSERT_HEAD);
+        quicklistNodeInsert(quicklist, node, prev, QUICK_LIST_INSERT_BEFORE);
+        _quicklistUpdateNodeSz(prev);
+        prev->count++;
 
     } else if (full) {
 
-        quicklistNode *newnode = _quicklistSplitNode(quicklist, entry, after);
-        ziplistPush(newnode->zl, value, size, after ? ZIPLIST_INSERT_HEAD : ZIPLIST_INSERT_TAIL);
-        quicklistNodeInsert(quicklist, node, newnode, after);
+        quicklistNode *new_node = _quicklistSplitNode(quicklist, entry, after);
+        ziplistPush(new_node->zl, value, size, after ? ZIPLIST_INSERT_HEAD : ZIPLIST_INSERT_TAIL);
+        quicklistNodeInsert(quicklist, node, new_node, after);
         _quicklistMergeNode(quicklist, node);
     }
 
     quicklist->count++;
 
 
+}
+
+
+void quicklistInsertBefore(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size) {
+    _quicklistInsert(ql, entry, data, size, 1);
+}
+
+void quicklistInsertAfter(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size) {
+    _quicklistInsert(ql, entry, data, size, 0);
 }
