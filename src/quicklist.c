@@ -140,6 +140,26 @@ static int _quicklistNodeAllowInsert(quicklist *quicklist, quicklistNode *node, 
 
 }
 
+static int _quicklistNodeAllowMerge(quicklist *quicklist, quicklistNode *a, quicklistNode *b) {
+
+    if (!a || !b) {
+        return 0;
+    }
+
+    unsigned int new_sz = a->size + b->size;
+
+    if (_quicklistNodeSizeMeetRequirement(new_sz, quicklist->fill)) {
+        return 1;
+    } else if (!_safeSizeLimit(new_sz)) {
+        return 0;
+    } else if (_quicklistNodeCountMeetRequirement(node, quicklist->fill)) {
+        return 1;
+    } else {
+        return 0;
+    }
+
+}
+
 quicklistNode *quicklistNodeDup(quicklistNode *node) {
     quicklistNode *newnode = zmalloc(sizeof(*newnode));
     newnode->prev = node->prev;
@@ -175,7 +195,57 @@ static quicklistNode *_quicklistSplitNode(quicklist *quicklist, quicklistEntry *
 
 }
 
+void quicklistDeleteNode(quicklist *ql, quicklistNode *node) {
 
+    if (ql->head == node) {
+        ql->head = node->next;
+    }
+
+    if (ql->tail == node) {
+        ql->tail = node->prev;
+    }
+
+    if (node->prev) {
+        node->prev->next = node->next;
+    }
+
+    if (node->next) {
+        node->next->prev = node->prev;
+    }
+
+    zfree(node->zl);
+    zfree(node);
+    ql->len--;
+}
+
+static quicklistNode* _quicklistNodeMergeZiplist(quicklist *quicklist, quicklistNode *a, quicklistNode *b) {
+
+
+    if (ziplistMerge(&a->zl, &b->zl)) {
+
+        quicklistNode *keep, *nokeep;
+
+        if (a->zl != NULL) {
+            keep = a;
+            nokeep = b;
+        } else {
+            keep = b;
+            nokeep = a;
+        }
+
+        keep->count+=nokeep->count;
+        keep->size = ziplistBloblen(keep->zl);
+
+        quicklistDeleteNode(quicklist, nokeep);
+
+        return keep;
+
+    }
+
+    return NULL;
+
+
+}
 
 // [prev_prev, prev]
 // [next, next_next]
@@ -183,8 +253,42 @@ static quicklistNode *_quicklistSplitNode(quicklist *quicklist, quicklistEntry *
 // [center, next]
 static void _quicklistMergeNode(quicklist *quicklist, quicklistNode *center) {
 
+    quicklistNode *prev_prev, *prev, *next, *next_next, *target;
+
+    if (center->prev) {
+        prev = center->prev;
+        if (prev) {
+            if (prev->prev) prev_prev = prev->prev;
+        }
+    }
+
+    if (center->next) {
+        next = center->next;
+        if (next) {
+            if (next->next) next_next = next->next;
+        }
+    }
 
 
+    if (_quicklistNodeAllowMerge(quicklist, prev, prev_prev)) {
+        _quicklistNodeMergeZiplist(quicklist, prev, prev_prev);
+        prev = prev_prev = NULL;
+    }
+
+    if (_quicklistNodeAllowMerge(quicklist, next, next_next)) {
+        _quicklistNodeMergeZiplist(quicklist, next, next_next);
+        next = next_next = NULL;
+    }
+
+    if (_quicklistNodeAllowMerge(quicklist, center, center->prev)) {
+        target = _quicklistNodeMergeZiplist(quicklist, center, center->prev);
+    }
+
+    if (target && target->next) {
+        if (_quicklistNodeAllowMerge(quicklist, target, target->next)) {
+            _quicklistNodeMergeZiplist(quicklist, target, target->next);
+        }
+    }
 
 }
 

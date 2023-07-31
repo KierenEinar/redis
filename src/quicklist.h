@@ -77,4 +77,7 @@ int quicklistInsertBefore(quicklist *ql, quicklistEntry *entry, void *data, unsi
 // insert before entry.
 int quicklistInsertAfter(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size);
 
+// quicklistDeleteNode delete the node from quicklist.
+void quicklistDeleteNode(quicklist *ql, quicklistNode *node);
+
 #endif //REDIS_QUICKLIST_H
