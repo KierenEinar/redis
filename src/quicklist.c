@@ -387,6 +387,40 @@ void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *value, 
 
 }
 
+int quicklistPushHead(quicklist *ql, void *data, unsigned int size) {
+    return quicklistPush(ql, data, size, QUICK_LIST_INSERT_BEFORE);
+}
+
+int quicklistPushTail(quicklist *ql, void *data, unsigned int size) {
+    return quicklistPush(ql, data, size, QUICK_LIST_INSERT_AFTER);
+}
+
+int quicklistPush(quicklist *ql, void *data, unsigned int size, int where) {
+
+    int full, new_node;
+    quicklistNode *push_at, *push_node;
+
+    push_at = (where == QUICK_LIST_INSERT_AFTER) ? ql->tail : ql->head;
+
+    if (_quicklistNodeAllowInsert(ql, push_at, size)) {
+        push_node = push_at;
+    } else {
+        new_node = 1;
+        push_node = quicklistNodeCreate();
+        quicklistNodeInsert(ql, push_at, push_node, where == QUICK_LIST_INSERT_AFTER ? 1 : 0);
+        push_node->zl = ziplistNew();
+        ql->count++;
+    }
+
+    push_node->zl = ziplistPush(push_node->zl, data, size, where == QUICK_LIST_INSERT_AFTER ? ZIPLIST_INSERT_TAIL : ZIPLIST_INSERT_HEAD);
+    push_node->count++;
+    _quicklistUpdateNodeSz(push_node);
+
+    ql->len++;
+
+    return push_at != push_node;
+
+}
 
 void quicklistInsertBefore(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size) {
     _quicklistInsert(ql, entry, data, size, 1);
@@ -394,4 +428,58 @@ void quicklistInsertBefore(quicklist *ql, quicklistEntry *entry, void *data, uns
 
 void quicklistInsertAfter(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size) {
     _quicklistInsert(ql, entry, data, size, 0);
+}
+
+void initEntry(quicklistEntry *entry) {
+
+    entry->node = NULL;
+    entry->idx = 0;
+    entry->zlentry = NULL;
+    entry->ql = NULL;
+    entry->size = 0;
+    entry->str = NULL;
+    entry->llvalue = -123456789;
+}
+
+int quicklistIndex(quicklist *ql, long long idx, quicklistEntry *entry) {
+
+    int forward = (idx >= 0) ? 1 : 0;
+    if (idx < 0)
+        idx = (-idx) + 1;
+
+    initEntry(entry);
+    quicklistNode *node = forward ? ql->head : ql->tail;
+
+    int offset = 0;
+
+    while (node) {
+
+        if (idx - node->count >= 0) {
+            idx -= node->count;
+            offset+=node->count;
+        } else {
+            break;
+        }
+
+        if (forward) {
+            node = node->next;
+        } else {
+            node = node->prev;
+        }
+    }
+
+    if (!node) return 0;
+
+    int entry_idx = forward ? (int)(idx) : -(int)(idx) - 1;
+
+    unsigned char *p = ziplistIndex(node->zl, entry_idx);
+
+    if (p == NULL)
+        return 0;
+
+    ziplistGet(p, &entry->str, &entry->size, &entry->llvalue);
+
+    entry->idx = forward ? entry_idx : node->count + entry_idx;
+
+    return 1;
 }

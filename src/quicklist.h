@@ -69,7 +69,7 @@ int quicklistPushTail(quicklist *ql, void *data, unsigned int size);
 int quicklistPush(quicklist *ql, void *data, unsigned int size, int where);
 
 // get the entry of quicklist index.
-int quicklistIndex(quicklist *ql, const long long value, quicklistEntry *entry);
+int quicklistIndex(quicklist *ql, long long idx, quicklistEntry *entry);
 
 // insert after entry.
 void quicklistInsertBefore(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size);
