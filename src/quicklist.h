@@ -83,4 +83,9 @@ void quicklistDeleteNode(quicklist *ql, quicklistNode *node);
 // quicklistDelRange delete the range of start, count
 int quicklistDelRange(quicklist *ql, const long start, const long count);
 
+// quicklistPopCustom pop from head or tail.
+// saver enable caller copy the _data into data.
+int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size, long long *value,
+                       void *(*saver)(void *data, unsigned int size));
+
 #endif //REDIS_QUICKLIST_H
