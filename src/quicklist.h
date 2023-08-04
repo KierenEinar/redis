@@ -80,4 +80,7 @@ void quicklistInsertAfter(quicklist *ql, quicklistEntry *entry, void *data, unsi
 // quicklistDeleteNode delete the node from quicklist.
 void quicklistDeleteNode(quicklist *ql, quicklistNode *node);
 
+// quicklistDelRange delete the range of start, count
+int quicklistDelRange(quicklist *ql, const long start, const long count);
+
 #endif //REDIS_QUICKLIST_H

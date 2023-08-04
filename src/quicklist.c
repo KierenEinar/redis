@@ -443,43 +443,102 @@ void initEntry(quicklistEntry *entry) {
 
 int quicklistIndex(quicklist *ql, long long idx, quicklistEntry *entry) {
 
-    int forward = (idx >= 0) ? 1 : 0;
+    int forward;
+    long long entry_idx = 0;
+    long long accum = 0;
+    unsigned char *p;
+
+    forward = idx >= 0 ? 1 : 0;
+
     if (idx < 0)
-        idx = (-idx) + 1;
+        idx = -idx + 1;
 
     initEntry(entry);
-    quicklistNode *node = forward ? ql->head : ql->tail;
 
-    int offset = 0;
+    quicklistNode *node = idx > 0 ? ql->head : ql->tail;
 
     while (node) {
 
-        if (idx - node->count >= 0) {
-            idx -= node->count;
-            offset+=node->count;
-        } else {
+        if (accum + node->count > idx) {
             break;
-        }
-
-        if (forward) {
-            node = node->next;
         } else {
-            node = node->prev;
+            accum += node->count;
         }
+        node = forward ? node->next : node->prev;
     }
 
-    if (!node) return 0;
-
-    int entry_idx = forward ? (int)(idx) : -(int)(idx) - 1;
-
-    unsigned char *p = ziplistIndex(node->zl, entry_idx);
-
-    if (p == NULL)
+    if (!node)
         return 0;
 
-    ziplistGet(p, &entry->str, &entry->size, &entry->llvalue);
+    entry_idx = idx - accum;
 
-    entry->idx = forward ? entry_idx : node->count + entry_idx;
+    if (!forward) entry_idx = -entry_idx - 1;
+
+    p = ziplistIndex(node->zl, (int)(entry_idx));
+
+    if (ziplistGet(p, &entry->str, &entry->size, &entry->llvalue)) {
+        return 1;
+    }
+
+    return 0;
+
+}
+
+int quicklistDelRange(quicklist *ql, const long start, const long count) {
+
+    unsigned long extent = count;
+
+    if (start >= 0 && count > ql->count - start) {
+        extent = ql->count - start;
+    } else if (start < 0 && -start > count) {
+        extent = -start;
+    }
+
+    quicklistEntry entry;
+
+    if (!quicklistIndex(ql, start, &entry)) {
+        return 0;
+    }
+
+    quicklistNode *node = entry.node;
+
+    while (extent) {
+
+        quicklistNode *next = node->next;
+        unsigned long del = 0;
+        int del_entire_node = 0;
+        if (entry.idx == 0 && extent >= node->count) {
+            del = node->count;
+            del_entire_node = 1;
+        } else if (entry.idx > 0 && extent >= node->count) {
+            del = node->count - extent;
+        } else if (entry.idx < 0) {
+            del = -entry.idx;
+            if (del > extent) {
+                del = extent;
+            }
+        } else {
+            del = extent;
+        }
+
+        if (del_entire_node) {
+            quicklistDeleteNode(ql, node);
+        } else {
+
+            node->zl = ziplistDeleteRange(node->zl, entry.idx, del);
+            node->count-=del;
+            if (node->count == 0) {
+                quicklistDeleteNode(ql, node);
+            }
+            ql->count-=del;
+        }
+
+        extent-=del;
+        node = next;
+        entry.idx = 0;
+    }
 
     return 1;
+
+
 }
