@@ -605,6 +605,14 @@ int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size
 
 }
 
+void *quicklistSaver(void *data, unsigned int size) {
+
+    unsigned char *pop_data;
+    pop_data = zmalloc(size);
+    memcpy(pop_data, data, size);
+    return pop_data;
+}
+
 // quicklistCreateIterator create a new iter.
 quicklistIter *quicklistCreateIterator(quicklist *ql, int direction) {
 
@@ -705,3 +713,20 @@ void quicklistReleaseIter(quicklistIter *iter) {
 }
 
 
+void quicklistTest() {
+
+    // test insert
+    quicklist *ql;
+    char *data = "hello world";
+    char *pop_data;
+    unsigned int pop_data_size;
+    long long pop_llvalue;
+    ql = quicklistNew(-2);
+    quicklistPushTail(ql, data, strlen(data));
+
+
+    quicklistPopCustom(ql, QUICK_LIST_HEAD, (void *)&pop_data,
+                       &pop_data_size, &pop_llvalue, &quicklistSaver);
+
+    fprintf(stdout, "pop data = %s", pop_data);
+}

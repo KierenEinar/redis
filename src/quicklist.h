@@ -6,6 +6,8 @@
 #define REDIS_QUICKLIST_H
 
 #include <stdlib.h>
+#include <memory.h>
+#include <stdio.h>
 
 #include "ziplist.h"
 #include "zmalloc.h"
@@ -100,6 +102,8 @@ int quicklistDelRange(quicklist *ql, const long start, const long count);
 // saver enable caller copy the _data into data.
 int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size, long long *value,
                        void *(*saver)(void *data, unsigned int size));
+
+void *quicklistSaver(void *data, unsigned int size);
 
 // quicklistCreateIterator create a new iter.
 quicklistIter *quicklistCreateIterator(quicklist *ql, int direction);
