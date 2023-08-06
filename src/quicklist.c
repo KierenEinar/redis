@@ -110,6 +110,8 @@ static int _quicklistNodeCountMeetRequirement(int count, int fill) {
 
 static int _quicklistNodeAllowInsert(quicklist *quicklist, quicklistNode *node, unsigned int size) {
 
+    if (!node) return 0;
+
     int ziplist_overhead = 0;
 
     if (size < 254) {
@@ -575,10 +577,10 @@ int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size
         *value = -123456789;
     }
 
-    if (where == QUICK_LIST_TAIL && ql->tail) {
+    if (where == QUICK_LIST_HEAD && ql->tail) {
         node = ql->tail;
         idx = 0;
-    } else if (where == QUICK_LIST_HEAD && ql->tail) {
+    } else if (where == QUICK_LIST_TAIL && ql->tail) {
         node = ql->head;
         idx = -1;
     } else {
@@ -728,5 +730,5 @@ void quicklistTest() {
     quicklistPopCustom(ql, QUICK_LIST_HEAD, (void *)&pop_data,
                        &pop_data_size, &pop_llvalue, &quicklistSaver);
 
-    fprintf(stdout, "pop data = %s", pop_data);
+    fprintf(stdout, "pop data = %s\n", pop_data);
 }
