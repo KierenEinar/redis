@@ -567,6 +567,12 @@ int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size
     if (data) {
         *data = NULL;
     }
+    if (size) {
+        *size = 0;
+    }
+    if (value) {
+        *value = -123456789;
+    }
 
     if (where == QUICK_LIST_TAIL && ql->tail) {
         node = ql->tail;
@@ -584,6 +590,7 @@ int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size
 
         if (sstr) {
             *data = saver((void *)sstr, ssize);
+            *size = ssize;
         } else {
             *value = svalue;
         }
