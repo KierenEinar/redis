@@ -171,18 +171,19 @@ quicklistNode *quicklistNodeDup(quicklistNode *node) {
     return newnode;
 }
 
-static void _quicklistDelZlEntry(quicklist *ql, quicklistNode *node, unsigned char *p) {
+static int _quicklistDelZlEntry(quicklist *ql, quicklistNode *node, unsigned char *p) {
 
     node->zl = __ziplistDelete(node->zl, p, 1);
 
     if (ziplistlen(node->zl) == 0) {
         quicklistDeleteNode(ql, node);
-        return;
+        return 1;
     }
 
     node->count--;
     _quicklistUpdateNodeSz(node);
     ql->len--;
+    return 0;
 }
 
 static quicklistNode *_quicklistSplitNode(quicklist *quicklist, quicklistEntry *entry, int after) {
@@ -602,6 +603,95 @@ int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size
 
     return 0;
 
+}
 
+// quicklistCreateIterator create a new iter.
+quicklistIter *quicklistCreateIterator(quicklist *ql, int direction) {
 
+    quicklistIter *iter;
+    iter = zmalloc(sizeof(*iter));
+
+    iter->ql = ql;
+    if (direction == AL_LIST_FORWARD) {
+        iter->current = ql->head;
+        iter->offset = 0;
+    } else {
+        iter->current = ql->tail;
+        iter->offset = -1;
+    }
+    iter->direction = direction;
+    iter->zi = NULL;
+    return iter;
+}
+
+// iter the next entry.
+int quicklistNext(quicklistIter *iter, quicklistEntry *entry) {
+
+    initEntry(entry);
+
+    if (entry->ql == NULL) {
+        return 0;
+    }
+
+    if (iter->current == NULL) {
+        return 0;
+    }
+
+    int update_offset = 0;
+
+    if (!iter->zi) {
+        iter->zi = ziplistIndex(iter->current->zl, iter->offset);
+
+    } else {
+        if (iter->direction == AL_LIST_FORWARD) {
+            iter->zi = ziplistNext(iter->current->zl, iter->zi);
+        } else {
+            iter->zi = ziplistPrev(iter->current->zl, iter->zi);
+        }
+        ziplistGet(iter->zi, &entry->str, &entry->size, &entry->llvalue);
+    }
+
+    if (iter->zi) update_offset = 1;
+    iter->offset += update_offset;
+
+    entry->idx = iter->offset;
+    entry->node = iter->current;
+    entry->zlentry = iter->zi;
+
+    if (iter->zi) {
+        return 1;
+    }
+
+    if (iter->direction == AL_LIST_FORWARD) {
+        iter->current = iter->current->next;
+        iter->offset = 0;
+    } else {
+        iter->current = iter->current->prev;
+        iter->offset = -1;
+    }
+
+    return quicklistNext(iter, entry);
+
+}
+
+// delete the entry while iterating.
+void quicklistDelEntry(quicklistIter *iter, quicklistEntry *entry) {
+
+    int deleted_node = _quicklistDelZlEntry(entry->ql, entry->node, entry->zlentry);
+
+    if (deleted_node) {
+        if (iter->direction == AL_LIST_FORWARD) {
+            iter->current = iter->current->next;
+            iter->offset = 0;
+        } else {
+            iter->current = iter->current->prev;
+            iter->offset = -1;
+        }
+    }
+    iter->zi = NULL;
+}
+
+// release the iter.
+void quicklistReleaseIter(quicklistIter *iter) {
+    zfree(iter);
 }

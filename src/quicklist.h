@@ -19,6 +19,9 @@
 #define QUICK_LIST_INSERT_BEFORE 0
 #define QUICK_LIST_INSERT_AFTER 1
 
+#define AL_LIST_FORWARD 0
+#define AL_LIST_BACKWARD 1
+
 typedef struct quicklistNode{
     struct quicklistNode *prev;
     struct quicklistNode *next;
@@ -46,6 +49,14 @@ typedef struct quicklistEntry{
     unsigned int size;
     long long llvalue;
 }quicklistEntry;
+
+typedef struct quicklistIter{
+    quicklist *ql;
+    quicklistNode *current;
+    unsigned char *zi;
+    int offset;
+    int direction;
+}quicklistIter;
 
 // create a new quicklist .
 quicklist *quicklistCreate(void);
@@ -87,5 +98,17 @@ int quicklistDelRange(quicklist *ql, const long start, const long count);
 // saver enable caller copy the _data into data.
 int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size, long long *value,
                        void *(*saver)(void *data, unsigned int size));
+
+// quicklistCreateIterator create a new iter.
+quicklistIter *quicklistCreateIterator(quicklist *ql, int direction);
+
+// iter the next entry.
+int quicklistNext(quicklistIter *iter, quicklistEntry *entry);
+
+// delete the entry while iterating.
+void quicklistDelEntry(quicklistIter *iter, quicklistEntry *entry);
+
+// release the iter.
+void quicklistReleaseIter(quicklistIter *iter);
 
 #endif //REDIS_QUICKLIST_H
