@@ -79,6 +79,8 @@ int quicklistPushTail(quicklist *ql, void *data, unsigned int size);
 // a wraaper to push header or tail.
 int quicklistPush(quicklist *ql, void *data, unsigned int size, int where);
 
+void quicklistRelease(quicklist *ql);
+
 // get the entry of quicklist index.
 int quicklistIndex(quicklist *ql, long long idx, quicklistEntry *entry);
 
@@ -110,5 +112,7 @@ void quicklistDelEntry(quicklistIter *iter, quicklistEntry *entry);
 
 // release the iter.
 void quicklistReleaseIter(quicklistIter *iter);
+
+void quicklistTest();
 
 #endif //REDIS_QUICKLIST_H

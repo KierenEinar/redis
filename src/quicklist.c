@@ -691,7 +691,17 @@ void quicklistDelEntry(quicklistIter *iter, quicklistEntry *entry) {
     iter->zi = NULL;
 }
 
+void quicklistRelease(quicklist *ql) {
+    unsigned int len;
+    len = ql->len;
+    quicklistDelRange(ql, 0, len);
+    zfree(ql);
+}
+
+
 // release the iter.
 void quicklistReleaseIter(quicklistIter *iter) {
     zfree(iter);
 }
+
+
