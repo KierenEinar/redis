@@ -176,6 +176,7 @@ quicklistNode *quicklistNodeDup(quicklistNode *node) {
 static int _quicklistDelZlEntry(quicklist *ql, quicklistNode *node, unsigned char *p) {
 
     node->zl = __ziplistDelete(node->zl, p, 1);
+    ql->count--;
 
     if (ziplistlen(node->zl) == 0) {
         quicklistDeleteNode(ql, node);
@@ -425,14 +426,13 @@ int quicklistPush(quicklist *ql, void *data, unsigned int size, int where) {
         push_node = quicklistNodeCreate();
         quicklistNodeInsert(ql, push_at, push_node, where == QUICK_LIST_INSERT_AFTER ? 1 : 0);
         push_node->zl = ziplistNew();
-        ql->count++;
     }
 
     push_node->zl = ziplistPush(push_node->zl, (unsigned char*)data, size, where == QUICK_LIST_INSERT_AFTER ? ZIPLIST_INSERT_TAIL : ZIPLIST_INSERT_HEAD);
     push_node->count++;
     _quicklistUpdateNodeSz(push_node);
 
-    ql->len++;
+    ql->count++;
 
     return push_at != push_node;
 
@@ -702,12 +702,15 @@ void quicklistDelEntry(quicklistIter *iter, quicklistEntry *entry) {
 }
 
 void quicklistRelease(quicklist *ql) {
-    unsigned int len;
-    len = ql->len;
-    quicklistDelRange(ql, 0, len);
+    unsigned int count;
+    count = ql->count;
+    quicklistDelRange(ql, 0, count);
     zfree(ql);
 }
 
+int quicklistEmpty(quicklist *ql) {
+    return ql->count == 0;
+}
 
 // release the iter.
 void quicklistReleaseIter(quicklistIter *iter) {
@@ -717,7 +720,7 @@ void quicklistReleaseIter(quicklistIter *iter) {
 
 void quicklistTest() {
 
-    // test insert
+    // test push tail
     quicklist *ql;
     char *data = "hello world";
     char *pop_data;
@@ -730,5 +733,38 @@ void quicklistTest() {
     quicklistPopCustom(ql, QUICK_LIST_HEAD, (void *)&pop_data,
                        &pop_data_size, &pop_llvalue, &quicklistSaver);
 
-    fprintf(stdout, "pop data = %s\n", pop_data);
+    fprintf(stdout, "quicklistPushTail pop data = %s\n", pop_data);
+
+    zfree(pop_data);
+
+    // test push head
+    quicklistPushHead(ql, data, strlen(data));
+
+    quicklistPopCustom(ql, QUICK_LIST_HEAD, (void *)&pop_data,
+                       &pop_data_size, &pop_llvalue, &quicklistSaver);
+
+    fprintf(stdout, "quicklistPushHead pop data = %s\n", pop_data);
+
+    zfree(pop_data);
+
+
+    // test multi push
+    int step = 5;
+    char *m_data = "multi hello world";
+    char *m_pop_data;
+    while (step) {
+        quicklistPushTail(ql, m_data, strlen(m_data));
+        step--;
+    }
+
+    while (!quicklistEmpty(ql)) {
+        quicklistPopCustom(ql, QUICK_LIST_HEAD, (void *)&m_pop_data,
+                           &pop_data_size, &pop_llvalue, &quicklistSaver);
+
+        fprintf(stdout, "multi quicklistPushHead pop data = %s\n", m_pop_data);
+    }
+
+
+
+
 }

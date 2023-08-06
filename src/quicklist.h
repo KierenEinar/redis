@@ -83,6 +83,9 @@ int quicklistPush(quicklist *ql, void *data, unsigned int size, int where);
 
 void quicklistRelease(quicklist *ql);
 
+// check quicklist is empty.
+int quicklistEmpty(quicklist *ql);
+
 // get the entry of quicklist index.
 int quicklistIndex(quicklist *ql, long long idx, quicklistEntry *entry);
 
