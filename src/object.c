@@ -185,3 +185,17 @@ int getLongLongFromObject(robj *obj, long long *target) {
 
 }
 
+robj *createListTypeObject() {
+    quicklist *ql = quicklistNew(server.list_fill_factor);
+    robj *obj = createObject(REDIS_OBJECT_LIST, ql);
+    obj->encoding = REDIS_ENCODING_LIST;
+    return obj;
+}
+
+
+int checkType(robj *key, int type) {
+    if (key->type == type) {
+        return 1;
+    }
+    return 0;
+}

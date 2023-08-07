@@ -47,6 +47,10 @@ struct redisCommand redisCommandTable[] = {
     {"pttl", pttlCommand, 2},
     {"mset", msetCommand, -3},
     {"mget", mgetCommand, -2},
+    {"lpush", lpushCommand, -3},
+    {"rpush", rpushCommand, -3},
+    {"lpop", lpopCommand, 2},
+    {"rpop", rpopCommand, 2},
 };
 
 // dict type for command table
@@ -199,7 +203,7 @@ void initServer(void) {
         server.dbs[j].expires = dictCreate(&keyptrDictType);
     }
 
-
+    server.list_fill_factor = DEFAULT_LIST_FILL_FACTOR;
     server.backlog = DEFAULT_BACKLOG;
     server.port = DEFAULT_BIND_PORT;
     server.unix_time = time(NULL);

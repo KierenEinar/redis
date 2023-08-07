@@ -120,6 +120,9 @@ void quicklistDelEntry(quicklistIter *iter, quicklistEntry *entry);
 // release the iter.
 void quicklistReleaseIter(quicklistIter *iter);
 
+// get the quick list entries count.
+unsigned int quicklistCount(quicklist *ql);
+
 void quicklistTest();
 
 #endif //REDIS_QUICKLIST_H

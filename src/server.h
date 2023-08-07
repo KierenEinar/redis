@@ -43,6 +43,7 @@
 #define SERVER_NETWORK_ERR_LEN 255
 #define DEFAULT_BACKLOG 511
 #define DEFAULT_BIND_PORT 6379
+#define DEFAULT_LIST_FILL_FACTOR -2
 #define SERVER_NETWORK_IP_FD_LEN 16
 
 // define result
@@ -73,9 +74,14 @@
 #define REDIS_ENCODING_RAW 1
 #define REDIS_ENCODING_EMBED 2
 #define REDIS_ENCODING_INT 3
+#define REDIS_ENCODING_LIST 4
 
 // redis object type
 #define REDIS_OBJECT_STRING 1
+#define REDIS_OBJECT_LIST   2
+
+#define LIST_HEAD 0
+#define LIST_TAIL 1
 
 // redis share object ref_count
 #define REDIS_SHARED_OBJECT_REF INT_MAX
@@ -154,6 +160,7 @@ typedef struct redisServer {
     int dbnum;
 
     dict *commands;
+    int list_fill_factor;
 
 }redisServer;
 
@@ -203,6 +210,9 @@ robj* createStringObject(const char *s, size_t len);
 // create a string type object, the encoding is INT, robj ptr is the value.
 robj* createStringObjectFromLongLong(long long value);
 
+// create a list type object
+robj* createListTypeObject();
+
 // incr the refcount, will do nothing when o is a shared object.
 void incrRefCount(robj *o);
 
@@ -233,6 +243,9 @@ int getLongLongFromObjectOrReply(robj *obj, long long *target, client *c, robj *
 
 // create the golbal shared object
 void createSharedObject(void);
+
+// check key type matchs the giving param type, return 1 match, otherwise 0 return.
+int checkType(robj *key, int type);
 
 //-------------- redis command process prototype -----------
 void populateCommandTable(void);
@@ -272,6 +285,18 @@ void ttlCommand(client *c);
 
 // get the key pttl
 void pttlCommand(client *c);
+
+// push an element into head.
+void lpushCommand(client *c);
+
+// push an element into head.
+void rpushCommand(client *c);
+
+// pop an element from head.
+void lpopCommand(client *c);
+
+// pop an element from tail.
+void rpopCommand(client *c);
 
 // execute the command.
 void call(client *c);
@@ -323,6 +348,26 @@ void removeExpire(client *c, robj *key);
 
 // get the key expire milliseconds
 long long getExpire(redisDb *db, robj *key);
+
+// list prototype
+
+// push command, lpush or rpush, where -> LIST_HEAD or LIST_TAIL.
+void pushGenericCommand(client *c, int where);
+
+// pop command, lpop or rpop, where -> LIST_HEAD or LIST_TAIL
+void popGenericCommand(client *c, int where);
+
+// push.
+void listTypePush(robj *subject, robj *value, int where);
+
+// pop.
+robj* listTypePop(robj *subject, int where);
+
+// pop saver.
+void* listPopSaver(void *data, unsigned int size);
+
+// list len.
+unsigned int listTypeLen(robj *lobj);
 
 //-------------syncio-------------------
 size_t syncRead(int fd, char *ptr, size_t size, long long timeout);

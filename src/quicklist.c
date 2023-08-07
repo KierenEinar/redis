@@ -593,7 +593,7 @@ int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size
 
         if (sstr) {
             *data = saver((void *)sstr, ssize);
-            *size = ssize;
+            if (size) *size = ssize;
         } else {
             *value = svalue;
         }
@@ -717,6 +717,9 @@ void quicklistReleaseIter(quicklistIter *iter) {
     zfree(iter);
 }
 
+unsigned int quicklistCount(quicklist *ql) {
+    return ql->count;
+}
 
 void quicklistTest() {
 
@@ -763,6 +766,9 @@ void quicklistTest() {
 
         fprintf(stdout, "multi quicklistPushHead pop data = %s\n", m_pop_data);
     }
+
+
+    // test quicklist insert at index
 
 
 
