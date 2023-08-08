@@ -43,7 +43,7 @@ void popGenericCommand(client *c, int where) {
 
     robj *lobj = lookupKeyWrite(c, c->argv[1]);
     if (!lobj) {
-        addReplyBulk(c, shared.nullbulk);
+        addReply(c, shared.nullbulk);
         return;
     }
 
