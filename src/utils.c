@@ -412,6 +412,25 @@ size_t ull2string(char *s, unsigned long long value) {
 
 }
 
+void fprettystr(char *s, FILE *f, unsigned int maxlen) {
+    size_t slen = strlen(s);
+    if (slen <= maxlen) {
+        fprintf(f, "data=%s\n", s);
+        fprintf(f, "len=%zu\n", slen);
+        return;
+    }
+
+    fprintf(f, "data=");
+
+    for (int i=0; i<maxlen; i++) {
+        fprintf(f, "%c", s[i]);
+    }
+    fprintf(f,"...");
+    fprintf(f, "\n");
+    fprintf(f, "len=%zu\n", slen);
+
+}
+
 #ifdef RUN_UT
 int main(int argc, char **argv) {
 

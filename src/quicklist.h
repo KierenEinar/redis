@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 #include "ziplist.h"
+#include "utils.h"
 #include "zmalloc.h"
 
 #define QUICK_LIST_HEAD 0

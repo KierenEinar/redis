@@ -353,7 +353,7 @@ void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *value, 
         unsigned char *next = ziplistNext(node->zl, entry->zlentry);
 
         if (!next) {
-            node->zl = ziplistPush(node->zl, entry->zlentry, size, ZIPLIST_INSERT_TAIL);
+            node->zl = ziplistPush(node->zl, (unsigned char*)value, size, ZIPLIST_INSERT_TAIL);
         } else {
             node->zl = ziplistInsert(node->zl, entry->zlentry, (unsigned char*)value, size);
         }
@@ -439,11 +439,11 @@ int quicklistPush(quicklist *ql, void *data, unsigned int size, int where) {
 }
 
 void quicklistInsertBefore(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size) {
-    _quicklistInsert(ql, entry, data, size, 1);
+    _quicklistInsert(ql, entry, data, size, 0);
 }
 
 void quicklistInsertAfter(quicklist *ql, quicklistEntry *entry, void *data, unsigned int size) {
-    _quicklistInsert(ql, entry, data, size, 0);
+    _quicklistInsert(ql, entry, data, size, 1);
 }
 
 void initEntry(quicklistEntry *entry) {
@@ -493,6 +493,10 @@ int quicklistIndex(quicklist *ql, long long idx, quicklistEntry *entry) {
     p = ziplistIndex(node->zl, (int)(entry_idx));
 
     if (ziplistGet(p, &entry->str, &entry->size, &entry->llvalue)) {
+        entry->node = node;
+        entry->idx = (int)(entry_idx);
+        entry->ql = ql;
+        entry->zlentry = p;
         return 1;
     }
 
@@ -639,7 +643,7 @@ int quicklistNext(quicklistIter *iter, quicklistEntry *entry) {
 
     initEntry(entry);
 
-    if (entry->ql == NULL) {
+    if (iter->ql == NULL) {
         return 0;
     }
 
@@ -658,8 +662,9 @@ int quicklistNext(quicklistIter *iter, quicklistEntry *entry) {
         } else {
             iter->zi = ziplistPrev(iter->current->zl, iter->zi);
         }
-        ziplistGet(iter->zi, &entry->str, &entry->size, &entry->llvalue);
     }
+
+    ziplistGet(iter->zi, &entry->str, &entry->size, &entry->llvalue);
 
     if (iter->zi) update_offset = 1;
     iter->offset += update_offset;
@@ -725,6 +730,8 @@ void quicklistTest() {
 
     // test push tail
     quicklist *ql;
+    quicklistIter *iter;
+    quicklistEntry entry;
     char *data = "hello world";
     char *pop_data;
     unsigned int pop_data_size;
@@ -750,7 +757,6 @@ void quicklistTest() {
 
     zfree(pop_data);
 
-
     // test multi push
     int step = 5;
     char *m_data = "multi hello world";
@@ -765,12 +771,44 @@ void quicklistTest() {
                            &pop_data_size, &pop_llvalue, &quicklistSaver);
 
         fprintf(stdout, "multi quicklistPushHead pop data = %s\n", m_pop_data);
+
+        zfree(m_pop_data);
     }
 
+    quicklistRelease(ql);
 
     // test quicklist insert at index
 
+    ql = quicklistNew(-1);
+    unsigned int size = 1024;
+    char *new_data = zmalloc(sizeof(char)*size);
+    step = 10;
+    for (int j=0; j<=step; j++) {
+        new_data = memset(new_data, 'a'+j, size-1);
+        new_data[size-1] = '\0';
+        quicklistPushTail(ql, new_data, size);
+    }
 
+    // iterate it
+    iter = quicklistCreateIterator(ql, AL_LIST_FORWARD);
+    while (quicklistNext(iter, &entry)) {
+        fprettystr((char *)entry.str, stdout, 40);
+    }
+    quicklistReleaseIter(iter);
 
+    // test insert node tail, and node not full
+
+    fprintf(stdout, "test insert node tail, and node not full .... \n");
+    memset(new_data, 'l', 100);
+    new_data[100] = '\0';
+    quicklistIndex(ql, 5, &entry);
+    quicklistInsertAfter(ql, &entry, new_data, strlen(new_data));
+    iter = quicklistCreateIterator(ql, AL_LIST_FORWARD);
+    while (quicklistNext(iter, &entry)) {
+        fprettystr((char *)entry.str, stdout, 40);
+    }
+    quicklistReleaseIter(iter);
+
+    // test insert node head
 
 }

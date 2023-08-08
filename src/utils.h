@@ -7,7 +7,9 @@
 
 #define LLMAXSIZE 21
 #include <sys/types.h>
+#include <stdio.h>
 #include "zmalloc.h"
+
 #define RESP_PROTO_MAX_INLINE_SEG (1024 * 64)
 #define RESP_PROTO_MAX_BULK_SEG (512 * 1024 * 1024)
 #define RESP_PROCESS_ERR (-1)
@@ -26,5 +28,7 @@ char** stringsplitargs(const char *line, int *argc);
 unsigned long u_rev(unsigned long value);
 
 unsigned long long uu_rev(unsigned long long value);
+
+void fprettystr(char *s, FILE *f, unsigned int maxlen);
 
 #endif //REDIS_UTILS_H
