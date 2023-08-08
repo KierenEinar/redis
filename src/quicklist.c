@@ -471,7 +471,7 @@ int quicklistIndex(quicklist *ql, long long idx, quicklistEntry *entry) {
 
     initEntry(entry);
 
-    quicklistNode *node = idx > 0 ? ql->head : ql->tail;
+    quicklistNode *node = idx >= 0 ? ql->head : ql->tail;
 
     while (node) {
 
@@ -809,6 +809,18 @@ void quicklistTest() {
     }
     quicklistReleaseIter(iter);
 
-    // test insert node head
+    // test insert node head, and node not full
+
+    fprintf(stdout, "test insert node head, and node not full .... \n");
+    memset(new_data, 'm', 100);
+    new_data[100] = '\0';
+    quicklistIndex(ql, 0, &entry);
+    quicklistInsertBefore(ql, &entry, new_data, strlen(new_data));
+    iter = quicklistCreateIterator(ql, AL_LIST_FORWARD);
+    while (quicklistNext(iter, &entry)) {
+        fprettystr((char *)entry.str, stdout, 40);
+    }
+    quicklistReleaseIter(iter);
+
 
 }
