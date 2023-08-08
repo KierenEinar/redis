@@ -405,11 +405,11 @@ void _quicklistInsert(quicklist *quicklist, quicklistEntry *entry, void *value, 
 }
 
 int quicklistPushHead(quicklist *ql, void *data, unsigned int size) {
-    return quicklistPush(ql, data, size, QUICK_LIST_INSERT_BEFORE);
+    return quicklistPush(ql, data, size, QUICK_LIST_HEAD);
 }
 
 int quicklistPushTail(quicklist *ql, void *data, unsigned int size) {
-    return quicklistPush(ql, data, size, QUICK_LIST_INSERT_AFTER);
+    return quicklistPush(ql, data, size, QUICK_LIST_TAIL);
 }
 
 int quicklistPush(quicklist *ql, void *data, unsigned int size, int where) {
@@ -417,18 +417,18 @@ int quicklistPush(quicklist *ql, void *data, unsigned int size, int where) {
     int full, new_node;
     quicklistNode *push_at, *push_node;
 
-    push_at = (where == QUICK_LIST_INSERT_AFTER) ? ql->tail : ql->head;
+    push_at = (where == QUICK_LIST_HEAD) ? ql->head : ql->tail;
 
     if (_quicklistNodeAllowInsert(ql, push_at, size)) {
         push_node = push_at;
     } else {
         new_node = 1;
         push_node = quicklistNodeCreate();
-        quicklistNodeInsert(ql, push_at, push_node, where == QUICK_LIST_INSERT_AFTER ? 1 : 0);
+        quicklistNodeInsert(ql, push_at, push_node, where == QUICK_LIST_TAIL ? 1 : 0);
         push_node->zl = ziplistNew();
     }
 
-    push_node->zl = ziplistPush(push_node->zl, (unsigned char*)data, size, where == QUICK_LIST_INSERT_AFTER ? ZIPLIST_INSERT_TAIL : ZIPLIST_INSERT_HEAD);
+    push_node->zl = ziplistPush(push_node->zl, (unsigned char*)data, size, where == QUICK_LIST_TAIL ? ZIPLIST_INSERT_TAIL : ZIPLIST_INSERT_HEAD);
     push_node->count++;
     _quicklistUpdateNodeSz(push_node);
 
