@@ -123,7 +123,7 @@ void addReplyBulkLen(client *c, robj *r) {
             len++;
             value = -value;
         }
-        while (value/=10 > 0) {
+        while ((value = value / 10) > 0) {
             len++;
         }
     } else {
