@@ -547,7 +547,13 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
             p = first;
 
         } else {
-            ziplistStoreTailOffset(zl, first - zl);
+
+            unsigned char *prev = ziplistPrev(zl, first);
+            if (prev) {
+                ziplistStoreTailOffset(zl, prev-zl);
+            } else {
+                ziplistStoreTailOffset(zl, ZIPLIST_HEADER);
+            }
         }
 
         offset = p - zl;
@@ -598,9 +604,9 @@ unsigned char *ziplistPrev(unsigned char *zl, unsigned char *p) {
   } else if (p == zl + ZIPLIST_HEADER) {
       return NULL;
   } else {
-      int prevlensize;
-      zipDecodeEntryPrevLen(zl, &prevlensize);
-      return p - prevlensize;
+      uint32_t prevlen;
+      prevlen = zipDecodeEntryPrevLen(p, NULL);
+      return p - prevlen;
   }
 }
 
@@ -685,7 +691,6 @@ unsigned char *ziplistIndex(unsigned char *zl, int index) {
         prevlen = zipDecodeEntryPrevLen(p, NULL);
         while (prevlen && index--) {
             p-=prevlen;
-            prevlen = zipDecodeEntryPrevLen(p, NULL);
         }
         return index > 0 ? NULL : p;
     }

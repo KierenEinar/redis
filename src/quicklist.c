@@ -581,11 +581,11 @@ int quicklistPopCustom(quicklist *ql, int where, void **data, unsigned int *size
         *value = -123456789;
     }
 
-    if (where == QUICK_LIST_HEAD && ql->tail) {
-        node = ql->tail;
+    if (where == QUICK_LIST_HEAD && ql->head) {
+        node = ql->head;
         idx = 0;
     } else if (where == QUICK_LIST_TAIL && ql->tail) {
-        node = ql->head;
+        node = ql->tail;
         idx = -1;
     } else {
         return 0;
