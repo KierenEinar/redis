@@ -322,6 +322,7 @@ void rpopCommand(client *c);
 // for blpop, brpop
 void blockingGenericCommand(client *c, int where);
 
+// block client for multi input keys.
 void blockForKeys(client *c, robj **argv, int argc, long long timeout);
 
 // execute the command.

@@ -18,6 +18,8 @@ void blockForKeys(client *c, robj **argv, int argc, long long timeout) {
 
         incrRefCount(key);
 
+        dictAdd(c->bpop.blocking_keys, key, NULL);
+
         if (dictFind(c->db->blocking_keys, key) == NULL) {
             incrRefCount(key);
             l = listCreate();
