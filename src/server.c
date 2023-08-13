@@ -324,6 +324,9 @@ int processCommand(client *c) {
 
     call(c);
 
+    if (listLength(server.ready_keys))
+        handleClientsOnBlockedList();
+
     return C_OK;
 }
 

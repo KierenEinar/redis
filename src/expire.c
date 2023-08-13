@@ -8,7 +8,7 @@ void ttlGenericCommand(client *c, int output_ms) {
     long long expire, ttl = -1;
 
     // key not exists, just return -2
-    if (lookupKeyRead(c, c->argv[1])==NULL) {
+    if (lookupKeyRead(c->db, c->argv[1])==NULL) {
         addReplyLongLong(c, -2);
         return;
     }

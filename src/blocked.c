@@ -37,3 +37,97 @@ void blockForKeys(client *c, robj **argv, int argc, long long timeout) {
     c->bpop.timeout = timeout;
     c->flag &= CLIENT_BLOCKED;
 }
+
+void unblockClient(client *c) {
+
+    dictIter di;
+    dictEntry *de;
+    dictGetIterator(c->bpop.blocking_keys, &di);
+    c->flag |= ~CLIENT_BLOCKED;
+    while ((de = dictNext(&di)) != NULL) {
+
+        robj *key = de->key;
+        list *l = dictFetchValue(c->db->blocking_keys, key);
+        if (l) {
+            listNode *node = listSearchKey(l, c);
+            if (node) {
+                listDelNode(l, node);
+            }
+            if (listLength(l)) {
+                dictDelete(c->db->blocking_keys, key);
+            }
+        }
+
+        dictDelete(c->bpop.blocking_keys, key);
+
+    }
+}
+
+int serveClientOnBlockedList(client *c, robj *key, robj *value) {
+
+    addReplyMultiBulkLen(c, 2);
+    addReplyBulk(c, key);
+    addReplyBulk(c, value);
+
+    return C_OK;
+}
+
+void handleClientsOnBlockedList(void) {
+
+    list *l;
+    listIter iter;
+    readyList *rl;
+    listNode *node;
+
+    while (listLength(server.ready_keys)!= 0) {
+
+        l = server.ready_keys;
+        server.ready_keys = listCreate();
+        listRewind(l, &iter);
+
+        while ((node=listNext(&iter)) != NULL) {
+
+            rl = node->value;
+            dictDelete(rl->db->ready_keys, rl->key);
+
+            robj *obj = lookupKeyWrite(rl->db, rl->key);
+            if (obj != NULL && obj->type == REDIS_OBJECT_LIST) {
+
+                list *clients = dictFetchValue(rl->db->blocking_keys, rl->key);
+
+                while (listLength(clients) > 0) {
+
+                    listNode *ln = listFirst(clients);
+                    client *c = listNodeValue(ln);
+
+                    int where = c->cmd->proc == blpopCommand ?
+                            QUICK_LIST_HEAD : QUICK_LIST_TAIL;
+
+                    robj *value = listTypePop(obj, where);
+                    if (value) {
+                        unblockClient(c);
+                        if (serveClientOnBlockedList(c, rl->key, value) != C_OK) {
+                            listTypePush(obj, value, where);
+                        }
+                        decrRefCount(value);
+                    } else {
+                        break;
+                    }
+
+                    listDelNode(clients, ln);
+                }
+
+                if (!listLength(clients))
+                    listRelease(clients);
+
+            }
+
+            decrRefCount(rl->key);
+            zfree(rl);
+            listDelNode(l, node);
+        }
+
+    }
+
+
+}

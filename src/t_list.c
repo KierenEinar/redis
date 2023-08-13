@@ -22,7 +22,7 @@ void rpopCommand(client *c) {
 
 void pushGenericCommand(client *c, int where) {
 
-    robj *lobj = lookupKeyWrite(c, c->argv[1]);
+    robj *lobj = lookupKeyWrite(c->db, c->argv[1]);
     if (lobj && !checkType(lobj, REDIS_OBJECT_LIST)) {
         addReply(c, shared.wrongtypeerr);
         return;
@@ -41,7 +41,7 @@ void pushGenericCommand(client *c, int where) {
 
 void popGenericCommand(client *c, int where) {
 
-    robj *lobj = lookupKeyWrite(c, c->argv[1]);
+    robj *lobj = lookupKeyWrite(c->db, c->argv[1]);
     if (!lobj) {
         addReply(c, shared.nullbulk);
         return;
@@ -111,6 +111,15 @@ unsigned int listTypeLen(robj *lobj) {
     }
 }
 
+// pop an element from head, when not exists, block the client with options.
+void blpopCommand(client *c) {
+    blockingGenericCommand(c, QUICK_LIST_TAIL);
+}
+
+// pop and element from tail, when not exists, block the client with options.
+void brpopCommand(client *c) {
+    blockingGenericCommand(c, QUICK_LIST_HEAD);
+}
 
 void blockingGenericCommand(client *c, int where) {
 
@@ -122,7 +131,7 @@ void blockingGenericCommand(client *c, int where) {
     }
 
     for (j=1; j<c->argc-1; j++) {
-        robj *o = lookupKeyWrite(c, c->argv[j]);
+        robj *o = lookupKeyWrite(c->db, c->argv[j]);
         if (o != NULL) {
             if (o->type != REDIS_OBJECT_LIST) {
                 addReply(c, shared.wrongtypeerr);

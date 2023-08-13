@@ -323,6 +323,12 @@ void lpopCommand(client *c);
 // pop an element from tail.
 void rpopCommand(client *c);
 
+// pop an element from head, when not exists, block the client with options.
+void blpopCommand(client *c);
+
+// pop and element from tail, when not exists, block the client with options.
+void brpopCommand(client *c);
+
 // for blpop, brpop
 void blockingGenericCommand(client *c, int where);
 
@@ -332,6 +338,15 @@ void blockForKeys(client *c, robj **argv, int argc, long long timeout);
 // signal list if there is blocking client waiting for data.
 void signalListAsReady(redisDb *db, robj *key);
 
+// handle blocked clients at least one key is ready.
+void handleClientsOnBlockedList(void);
+
+// unblock client on blocking set
+void unblockClient(client *c);
+
+// serve client on blocked list.
+int serveClientOnBlockedList(client *c, robj *key, robj *value);
+
 // execute the command.
 void call(client *c);
 
@@ -339,15 +354,15 @@ void call(client *c);
 
 // delete the key from expires set if exists, but logically has been expired.
 // return 1 if key remove from expires, 0 key not exists.
-int expireIfNeed(client *c, const robj *key);
+int expireIfNeed(redisDb *db, const robj *key);
 
 // lookup a key from select db, null received when key not exists or has been expired.
 // as a side effect, if key exists but logical expired, will delete by using dbSyncDelete or dbAsyncDelete.
-robj *lookupKeyRead(client *c, const robj *key);
+robj *lookupKeyRead(redisDb *db, const robj *key);
 
 // lookup a key from select db, null received when key not exists or has been expired.
 // as a side effect, if key exists but logical expired, will delete by using dbSyncDelete or dbAsyncDelete.
-robj *lookupKeyWrite(client *c, const robj *key);
+robj *lookupKeyWrite(redisDb *db, const robj *key);
 
 // lookup a key from select db, null received when key not exists or has been expired.
 // as a side effect, if key exists but logical expired, will delete by using dbSyncDelete or dbAsyncDelete.

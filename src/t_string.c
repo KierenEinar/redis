@@ -12,11 +12,11 @@
 #define SET_OBJECT_PX 1 << 3
 
 
-int expireIfNeed(client *c, const robj *key) {
+int expireIfNeed(redisDb *db, const robj *key) {
     dictEntry *de;
     int64_t expired;
-    if (dictSize(c->db->expires) == 0) return 0;
-    de = dictFind(c->db->expires, key->ptr);
+    if (dictSize(db->expires) == 0) return 0;
+    de = dictFind(db->expires, key->ptr);
     if (de == NULL) return 0;
     expired = dictGetSignedInteger(de);
     mstime_t ms = mstime();
@@ -24,35 +24,35 @@ int expireIfNeed(client *c, const robj *key) {
     return 1;
 }
 
-robj *lookupKey(client *c, const robj *key) {
+robj *lookupKey(redisDb *db, const robj *key) {
     long long expired;
-    if (dictSize(c->db->dict) == 0) return NULL;
+    if (dictSize(db->dict) == 0) return NULL;
 
-    robj *value = dictFetchValue(c->db->dict, key->ptr);
-    expired = getExpire(c->db, (robj*)key);
+    robj *value = dictFetchValue(db->dict, key->ptr);
+    expired = getExpire(db, (robj*)key);
 
     if (value && expired > 0 && expired < mstime()) {
-        dictDelete(c->db->dict, key->ptr);
-        dictDelete(c->db->expires, key->ptr);
+        dictDelete(db->dict, key->ptr);
+        dictDelete(db->expires, key->ptr);
         value = NULL;
     }
 
     return value;
 }
 
-robj *lookupKeyRead(client *c, const robj *key) {
-    expireIfNeed(c, key);
-    return lookupKey(c, key);
+robj *lookupKeyRead(redisDb *db, const robj *key) {
+    expireIfNeed(db, key);
+    return lookupKey(db, key);
 }
 
-robj *lookupKeyWrite(client *c, const robj *key) {
-    expireIfNeed(c, key);
-    return lookupKey(c, key);
+robj *lookupKeyWrite(redisDb *db, const robj *key) {
+    expireIfNeed(db, key);
+    return lookupKey(db, key);
 }
 
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply) {
-    expireIfNeed(c, key);
-    robj *val = lookupKey(c, key);
+    expireIfNeed(c->db, key);
+    robj *val = lookupKey(c->db, key);
     if (!val) {
         if (reply) {
             // todo send reply to client
@@ -100,8 +100,8 @@ int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expire
         }
     }
 
-    if (((flags & SET_OBJECT_NX) && lookupKeyWrite(c, key)) ||
-            ((flags & SET_OBJECT_XX) && !lookupKeyWrite(c, key))) {
+    if (((flags & SET_OBJECT_NX) && lookupKeyWrite(c->db, key)) ||
+            ((flags & SET_OBJECT_XX) && !lookupKeyWrite(c->db, key))) {
         addReply(c, abort_reply ? abort_reply : shared.nullbulk);
         return C_ERR;
     }
@@ -161,7 +161,7 @@ void mgetCommand(client *c) {
     addReplyMultiBulkLen(c, c->argc-1);
     robj *value;
     for (j=1; j<c->argc; j++) {
-        if ((value = lookupKeyRead(c, c->argv[j])) == NULL) {
+        if ((value = lookupKeyRead(c->db, c->argv[j])) == NULL) {
             addReply(c, shared.nullbulk);
         } else {
             addReplyBulk(c, value);
@@ -182,7 +182,7 @@ int msetGenericCommand(client *c, int nx) {
 
     if (nx) {
         for (j=1; j<c->argc; j+=2) {
-            if (lookupKeyWrite(c, c->argv[j])) {
+            if (lookupKeyWrite(c->db, c->argv[j])) {
                 busykeys++;
             }
         }

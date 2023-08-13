@@ -20,7 +20,7 @@ void removeExpire(client *c, robj *key) {
 
 void setKey(client *c, robj *key, robj *value) {
 
-    if (!lookupKeyWrite(c, key)) {
+    if (!lookupKeyWrite(c->db, key)) {
         dbAdd(c, key, value);
     } else {
         dbReplace(c, key, value);
