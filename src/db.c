@@ -6,6 +6,7 @@
 
 void dbAdd(client *c, robj *key, robj *value) {
     dictAdd(c->db->dict, sdsdup(key->ptr), value);
+    if (key->type == REDIS_OBJECT_LIST) signalListAsReady(c->db, key);
 }
 
 void dbReplace(client *c, robj *key, robj *value) {

@@ -150,6 +150,10 @@ typedef struct client {
 
 } client;
 
+typedef struct readyList {
+    redisDb *db;
+    robj *key;
+}readyList;
 
 typedef struct redisServer {
 
@@ -324,6 +328,9 @@ void blockingGenericCommand(client *c, int where);
 
 // block client for multi input keys.
 void blockForKeys(client *c, robj **argv, int argc, long long timeout);
+
+// signal list if there is blocking client waiting for data.
+void signalListAsReady(redisDb *db, robj *key);
 
 // execute the command.
 void call(client *c);

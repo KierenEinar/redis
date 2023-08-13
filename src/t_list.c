@@ -150,3 +150,21 @@ void blockingGenericCommand(client *c, int where) {
     blockForKeys(c, &c->argv[1], c->argc - 2, timeout);
 
 }
+
+void signalListAsReady(redisDb *db, robj *key) {
+
+    readyList *rl;
+
+    if (dictFind(db->blocking_keys, key) == NULL) return;
+    if (dictFind(db->ready_keys, key) == NULL) return;
+
+
+    rl = zmalloc(sizeof(*rl));
+    rl->key = key;
+    rl->db = db;
+    listAddNodeTail(server.ready_keys, rl);
+
+    incrRefCount(key);
+    dictAdd(db->ready_keys, key, NULL);
+
+}
