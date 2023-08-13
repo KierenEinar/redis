@@ -199,3 +199,22 @@ int checkType(robj *key, int type) {
     }
     return 0;
 }
+
+int getTimeoutFromObjectOrReply(client *c, robj *argv, int unit, long long *timeout, robj *reply) {
+
+    long long _timeout;
+
+    if (getLongLongFromObject(argv, &_timeout) != C_OK || _timeout < 0) {
+        if (!reply) addReply(c, shared.syntaxerr);
+        else addReply(c, reply);
+        return C_ERR;
+    }
+
+    mstime_t now = mstime();
+    if (unit == UNIT_SECONDS) {
+        unit *= 1000l;
+    }
+
+    if (timeout) *timeout = now + unit;
+    return C_OK;
+}

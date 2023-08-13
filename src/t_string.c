@@ -11,10 +11,6 @@
 #define SET_OBJECT_EX 1 << 2
 #define SET_OBJECT_PX 1 << 3
 
-// -------- define expire unit ---------
-#define UNIT_SECONDS 1
-#define UNIT_MILLISECONDS 2
-
 
 int expireIfNeed(client *c, const robj *key) {
     dictEntry *de;

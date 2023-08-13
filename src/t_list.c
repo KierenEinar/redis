@@ -57,8 +57,9 @@ void popGenericCommand(client *c, int where) {
     decrRefCount(value);
 
     if (!listTypeLen(lobj)) {
-        dictDelete(c->db->dict, c->argv[1]->ptr);
+        quicklistRelease(lobj->ptr);
         removeExpire(c, c->argv[1]);
+        dictDelete(c->db->dict, c->argv[1]->ptr);
     }
 
 
@@ -108,4 +109,44 @@ unsigned int listTypeLen(robj *lobj) {
         // server panic
         return 0;
     }
+}
+
+
+void blockingGenericCommand(client *c, int where) {
+
+    long long timeout;
+    int j;
+
+    if (getTimeoutFromObjectOrReply(c, c->argv[c->argc-1], UNIT_SECONDS, &timeout, NULL) != C_OK) {
+        return;
+    }
+
+    for (j=1; j<c->argc-1; j++) {
+        robj *o = lookupKeyWrite(c, c->argv[j]);
+        if (o != NULL) {
+            if (o->type != REDIS_OBJECT_LIST) {
+                addReply(c, shared.wrongtypeerr);
+                return;
+            }
+
+            robj *val = listTypePop(o, where);
+
+            if (!listTypeLen(o)) {
+                quicklistRelease(o->ptr);
+                removeExpire(c, c->argv[1]);
+                dictDelete(c->db->dict, c->argv[1]->ptr);
+            }
+
+            if (val != NULL) {
+                addReplyMultiBulkLen(c, 2);
+                addReplyBulk(c, c->argv[j]);
+                addReplyBulk(c, val);
+                return;
+            }
+
+        }
+    }
+
+    blockForKeys(c, &c->argv[1], c->argc - 2, timeout);
+
 }

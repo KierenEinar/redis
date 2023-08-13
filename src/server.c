@@ -3,7 +3,6 @@
 //
 
 #include "server.h"
-#include "varint.h"
 
 // dict key type sds, ignore case-sensitive.
 uint64_t dictSdsCaseHash(void *key) {
@@ -34,6 +33,43 @@ void dictSdsDestructor(void *ptr) {
 
 void dictObjDestructor(void *ptr) {
     decrRefCount(ptr);
+}
+
+uint64_t dictEncObjectHash(void *ptr) {
+    if (sdsEncodedObject(ptr)) {
+        return dictSdsHash(ptr);
+    } else {
+        robj *o = ptr;
+        o = getDecodedObject(o);
+        uint64_t h = dictSdsHash(o->ptr);
+        decrRefCount(o);
+        return h;
+    }
+}
+
+int dictEncObjectCompare(const void *key1, const void *key2) {
+
+    robj *obj1, *obj2;
+    obj1 = (robj*)key1;
+    obj2 = (robj*)key2;
+
+    if (obj1->encoding == REDIS_ENCODING_INT && obj2->encoding == REDIS_ENCODING_INT) {
+        long val1, val2;
+        val1 = (long)obj1->ptr;
+        val2 = (long)obj2->ptr;
+        return val1 == val2;
+    }
+
+    obj1 = getDecodedObject(obj1);
+    obj2 = getDecodedObject(obj2);
+    int cmp = dictSdsCompare(obj1->ptr, obj2->ptr);
+    decrRefCount(obj1);
+    decrRefCount(obj2);
+    return cmp;
+}
+
+void dictListDestructor(void *ptr) {
+    listRelease(ptr);
 }
 
 // global vars
@@ -82,6 +118,23 @@ dictType keyptrDictType = {
         NULL,
 };
 
+dictType objectKeyValueListDictType = {
+        dictEncObjectHash,
+        dictEncObjectCompare,
+        NULL,
+        NULL,
+        dictObjDestructor,
+        dictListDestructor,
+};
+
+dictType objectKeyValuePtrDictType = {
+        dictEncObjectHash,
+        dictEncObjectCompare,
+        NULL,
+        NULL,
+        dictObjDestructor,
+        NULL,
+};
 
 mstime_t mstime() {
     struct timeval t;
@@ -201,6 +254,8 @@ void initServer(void) {
     for (int j=0; j<server.dbnum; j++) {
         server.dbs[j].dict = dictCreate(&dbDictType);
         server.dbs[j].expires = dictCreate(&keyptrDictType);
+        server.dbs[j].blocking_keys = dictCreate(&objectKeyValueListDictType);
+        server.dbs[j].ready_keys = dictCreate(&objectKeyValuePtrDictType);
     }
 
     server.list_fill_factor = DEFAULT_LIST_FILL_FACTOR;
@@ -211,6 +266,8 @@ void initServer(void) {
     server.client_pending_writes = listCreate();
     server.client_list = listCreate();
     server.client_close_list = listCreate();
+    server.ready_keys = listCreate();
+
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
 
     if (listenPort(server.backlog) == C_ERR) {

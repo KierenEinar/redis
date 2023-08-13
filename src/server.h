@@ -66,7 +66,7 @@
 #define CLIENT_PENDING_WRITE (1 << 0)
 #define CLIENT_CLOSE_ASAP (1 << 1)
 #define CLIENT_CLOSE_AFTER_REPLY (1 << 2)
-
+#define CLIENT_BLOCKED (1 << 3)
 // server cron period
 #define SERVER_CRON_PERIOD_MS 1
 
@@ -88,6 +88,10 @@
 
 #define REDIS_DEFAULT_DB_NUM 16
 
+// -------- define expire unit ---------
+#define UNIT_SECONDS 1
+#define UNIT_MILLISECONDS 2
+
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -99,7 +103,15 @@ typedef struct redisObject {
 typedef struct redisDb {
     dict* dict;
     dict* expires;
+    dict *blocking_keys;
+    dict *ready_keys;
 }redisDb;
+
+typedef struct blockingStates {
+    long long timeout;
+    dict* blocking_keys;
+
+}blockingStates;
 
 typedef struct client {
     char err[255];
@@ -134,6 +146,8 @@ typedef struct client {
 
     struct redisCommand *cmd;
 
+    blockingStates bpop;
+
 } client;
 
 
@@ -159,6 +173,8 @@ typedef struct redisServer {
     redisDb *dbs;
     int dbnum;
 
+    list *ready_keys;
+
     dict *commands;
     int list_fill_factor;
 
@@ -179,6 +195,8 @@ extern struct redisServer server;
 extern struct redisSharedObject shared;
 extern struct dictType dbDictType;
 extern struct dictType keyptrDictType;
+extern struct dictType objectKeyValueListDictType;
+extern struct dictType objectKeyValuePtrDictType;
 // --------------mstime---------------
 typedef int64_t mstime_t;
 mstime_t mstime();
@@ -247,6 +265,9 @@ void createSharedObject(void);
 // check key type matchs the giving param type, return 1 match, otherwise 0 return.
 int checkType(robj *key, int type);
 
+// get timeout
+int getTimeoutFromObjectOrReply(client *c, robj* argv, int unit, long long *timeout, robj *reply);
+
 //-------------- redis command process prototype -----------
 void populateCommandTable(void);
 
@@ -297,6 +318,11 @@ void lpopCommand(client *c);
 
 // pop an element from tail.
 void rpopCommand(client *c);
+
+// for blpop, brpop
+void blockingGenericCommand(client *c, int where);
+
+void blockForKeys(client *c, robj **argv, int argc, long long timeout);
 
 // execute the command.
 void call(client *c);

@@ -303,7 +303,7 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
     c->reply = listCreate();
     listSetFreeMethod(c->reply, zfree);
     c->reply_bytes = 0ll;
-
+    c->bpop.blocking_keys = dictCreate(&objectKeyValuePtrDictType);
     listAddNodeTail(server.client_list, c);
     c->client_list_node = listLast(server.client_list);
 
