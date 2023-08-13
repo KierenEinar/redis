@@ -87,6 +87,8 @@ struct redisCommand redisCommandTable[] = {
     {"rpush", rpushCommand, -3},
     {"lpop", lpopCommand, 2},
     {"rpop", rpopCommand, 2},
+    {"blpop", blpopCommand, -3},
+    {"brpop", brpopCommand, -3},
 };
 
 // dict type for command table
