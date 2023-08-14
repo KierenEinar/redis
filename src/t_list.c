@@ -165,7 +165,7 @@ void signalListAsReady(redisDb *db, robj *key) {
     readyList *rl;
 
     if (dictFind(db->blocking_keys, key) == NULL) return;
-    if (dictFind(db->ready_keys, key) == NULL) return;
+    if (dictFind(db->ready_keys, key) != NULL) return;
 
 
     rl = zmalloc(sizeof(*rl));

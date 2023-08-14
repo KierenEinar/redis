@@ -298,6 +298,8 @@ dictEntry* dictFind(dict *d, const void *key) {
     unsigned long bucket;
     dictEntry *de;
 
+    if (dictSize(d) == 0) return NULL;
+
     if (dictIsRehashing(d)) _dictRehashStep(d);
 
     hash = dictKeyHash(d, (void *)key);

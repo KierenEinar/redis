@@ -36,13 +36,15 @@ void dictObjDestructor(void *ptr) {
 }
 
 uint64_t dictEncObjectHash(void *ptr) {
-    if (sdsEncodedObject(ptr)) {
-        return dictSdsHash(ptr);
+
+    robj *obj = ptr;
+
+    if (sdsEncodedObject(obj)) {
+        return dictSdsHash(obj->ptr);
     } else {
-        robj *o = ptr;
-        o = getDecodedObject(o);
-        uint64_t h = dictSdsHash(o->ptr);
-        decrRefCount(o);
+        obj = getDecodedObject(obj);
+        uint64_t h = dictSdsHash(obj->ptr);
+        decrRefCount(obj);
         return h;
     }
 }

@@ -215,6 +215,6 @@ int getTimeoutFromObjectOrReply(client *c, robj *argv, int unit, long long *time
         unit *= 1000l;
     }
 
-    if (timeout) *timeout = now + unit;
+    if (timeout) *timeout = now + unit + _timeout;
     return C_OK;
 }
