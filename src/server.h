@@ -189,7 +189,7 @@ typedef struct redisServer {
 #define OBJ_BULK_LEN_SIZE 32
 #define OBJ_SHARED_REFCOUNT INT_MAX
 struct redisSharedObject {
-    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr,
+    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk,
     *integers[OBJ_SHARED_INTEGERS],
     *mbulkhdr[OBJ_BULK_LEN_SIZE],
     *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone;
@@ -448,7 +448,7 @@ void addReplyString(client *c, const char *str, size_t len);
 void addReplyError(client *c, const char *str);
 void addReplyErrorLength(client *c, const char *str, size_t len);
 void setProtocolError(client *c);
-
+void replyUnBlockClientTimeout(client *c);
 // ------------redis client--------------
 
 // reset the client so it can process command again.
@@ -459,6 +459,9 @@ void freeClientAsync(client *c);
 void freeClientInFreeQueueAsync(void);
 
 //-------------cron job-----------------
+
+void clientCron(void);
+void clientHandleCronTimeout(client *c, mstime_t nowms);
 long long serverCron(struct eventLoop *el, int id, void *clientData);
 
 // ------------process command -------------

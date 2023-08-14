@@ -53,9 +53,6 @@ void unblockClient(client *c) {
             if (node) {
                 listDelNode(l, node);
             }
-            if (listLength(l)) {
-                dictDelete(c->db->blocking_keys, key);
-            }
         }
 
         dictDelete(c->bpop.blocking_keys, key);
@@ -114,12 +111,12 @@ void handleClientsOnBlockedList(void) {
                         break;
                     }
 
-                    listDelNode(clients, ln);
+                    if (listLength(clients) == 0) {
+                        listRelease(clients);
+                        dictDelete(rl->db->blocking_keys, rl->key);
+                    }
+
                 }
-
-                if (!listLength(clients))
-                    listRelease(clients);
-
             }
 
             decrRefCount(rl->key);

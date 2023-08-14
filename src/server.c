@@ -154,6 +154,7 @@ void createSharedObject(void) {
     shared.syntaxerr = createObject(REDIS_OBJECT_STRING, sdsnew("-ERR syntax err\r\n"));
     shared.wrongtypeerr = createObject(REDIS_OBJECT_STRING, sdsnew("-ERR wrong type against\r\n"));
     shared.nullbulk = createObject(REDIS_OBJECT_STRING, sdsnew("$-1\r\n"));
+    shared.nullmultibulk = createObject(REDIS_OBJECT_STRING, sdsnew("*-1\r\n"));
     shared.czero = createObject(REDIS_OBJECT_STRING, sdsnew(":0\r\n"));
     shared.cone = createObject(REDIS_OBJECT_STRING, sdsnew(":1\r\n"));
 
@@ -233,12 +234,45 @@ int listenPort(int backlog) {
 
 void beforeSleep (struct eventLoop *el) {
     handleClientsPendingWrite();
+    clientCron();
 }
 
 long long serverCron(struct eventLoop *el, int id, void *clientData) {
     freeClientInFreeQueueAsync();
 
     return SERVER_CRON_PERIOD_MS;
+}
+
+void replyUnBlockClientTimeout(client *c) {
+    addReply(c, shared.nullmultibulk);
+}
+
+void clientHandleCronTimeout(client *c, mstime_t nowms) {
+    if (c->flag & CLIENT_BLOCKED) {
+        if (c->bpop.timeout != 0 && (c->bpop.timeout < nowms)) {
+            replyUnBlockClientTimeout(c);
+            unblockClient(c);
+        }
+    }
+}
+
+#define CLIENT_CRON_MIN_ITERATION 5
+void clientCron(void) {
+
+    int clientsnum = listLength(server.client_list);
+
+    int iterations = clientsnum > CLIENT_CRON_MIN_ITERATION ? CLIENT_CRON_MIN_ITERATION : clientsnum;
+
+    mstime_t now = mstime();
+
+    while (listLength(server.client_list) && iterations--) {
+
+        listNode *ln = listFirst(server.client_list);
+        client *c = listNodeValue(ln);
+        listDelNode(server.client_list, ln);
+        clientHandleCronTimeout(c, now);
+    }
+
 }
 
 
