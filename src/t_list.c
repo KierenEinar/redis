@@ -171,6 +171,7 @@ void signalListAsReady(redisDb *db, robj *key) {
     rl = zmalloc(sizeof(*rl));
     rl->key = key;
     rl->db = db;
+    incrRefCount(rl->key);
     listAddNodeTail(server.ready_keys, rl);
 
     incrRefCount(key);

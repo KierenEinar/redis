@@ -35,7 +35,7 @@ void blockForKeys(client *c, robj **argv, int argc, long long timeout) {
     }
 
     c->bpop.timeout = timeout;
-    c->flag &= CLIENT_BLOCKED;
+    c->flag |= CLIENT_BLOCKED;
 }
 
 void unblockClient(client *c) {
@@ -43,7 +43,7 @@ void unblockClient(client *c) {
     dictIter di;
     dictEntry *de;
     dictGetIterator(c->bpop.blocking_keys, &di);
-    c->flag |= ~CLIENT_BLOCKED;
+    c->flag &= ~CLIENT_BLOCKED;
     while ((de = dictNext(&di)) != NULL) {
 
         robj *key = de->key;
@@ -52,6 +52,7 @@ void unblockClient(client *c) {
             listNode *node = listSearchKey(l, c);
             if (node) {
                 listDelNode(l, node);
+                zfree(node);
             }
         }
 
@@ -112,16 +113,18 @@ void handleClientsOnBlockedList(void) {
                     }
 
                     if (listLength(clients) == 0) {
-                        listRelease(clients);
                         dictDelete(rl->db->blocking_keys, rl->key);
+                        break;
                     }
 
                 }
             }
 
             decrRefCount(rl->key);
-            zfree(rl);
             listDelNode(l, node);
+            zfree(node);
+            zfree(rl);
+            node = NULL;
         }
 
     }

@@ -220,7 +220,7 @@ void processInputBuffer(client *c) {
             resetClient(c);
         } else {
 
-            if (processCommand(c) == C_OK) {
+            if (processCommand(c) == C_OK && !(c->flag & CLIENT_BLOCKED)) {
                 resetClient(c);
             }
 
