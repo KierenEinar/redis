@@ -638,6 +638,10 @@ quicklistIter *quicklistCreateIterator(quicklist *ql, int direction) {
     return iter;
 }
 
+quicklistIter *quicklistIteratorAtIndex(quicklist *ql, long long idx, int where) {
+    return NULL;
+}
+
 // iter the next entry.
 int quicklistNext(quicklistIter *iter, quicklistEntry *entry) {
 

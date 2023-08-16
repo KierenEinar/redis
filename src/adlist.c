@@ -3,7 +3,7 @@
 //
 
 #include "adlist.h"
-#include "zmalloc.h"
+#include "server.h"
 
 #include <stdlib.h>
 list* listCreate() {

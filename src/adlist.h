@@ -5,9 +5,6 @@
 #ifndef REDIS_ADLIST_H
 #define REDIS_ADLIST_H
 
-#define LIST_ITER_DIR_FORWARD 1
-#define LIST_ITER_DIR_BACKWARD 2
-
 typedef struct listNode {
     struct listNode *prev;
     struct listNode *next;

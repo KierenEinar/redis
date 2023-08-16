@@ -46,6 +46,9 @@
 #define DEFAULT_LIST_FILL_FACTOR -2
 #define SERVER_NETWORK_IP_FD_LEN 16
 
+#define LIST_ITER_DIR_FORWARD 1
+#define LIST_ITER_DIR_BACKWARD 2
+
 // define result
 #define C_OK 1
 #define C_ERR -1
@@ -189,7 +192,7 @@ typedef struct redisServer {
 #define OBJ_BULK_LEN_SIZE 32
 #define OBJ_SHARED_REFCOUNT INT_MAX
 struct redisSharedObject {
-    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk,
+    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk, *emptymultibulk,
     *integers[OBJ_SHARED_INTEGERS],
     *mbulkhdr[OBJ_BULK_LEN_SIZE],
     *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone;
@@ -310,6 +313,9 @@ void ttlCommand(client *c);
 
 // get the key pttl
 void pttlCommand(client *c);
+
+// lrange subject [start, end]
+void lrangeCommand(client *c);
 
 // push an element into head.
 void lpushCommand(client *c);

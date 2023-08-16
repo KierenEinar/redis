@@ -152,7 +152,11 @@ robj* getDecodedObject(robj *o) {
 int getLongLongFromObjectOrReply(robj *obj, long long *target, client *c, robj *reply) {
 
     if (getLongLongFromObject(obj, target) == C_ERR) {
-        addReply(c, reply);
+        if (reply) {
+            addReply(c, reply);
+        } else {
+            addReplyError(c, "invalid integer");
+        }
         return C_ERR;
     }
 

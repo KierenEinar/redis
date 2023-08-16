@@ -112,6 +112,9 @@ void *quicklistSaver(void *data, unsigned int size);
 // quicklistCreateIterator create a new iter.
 quicklistIter *quicklistCreateIterator(quicklist *ql, int direction);
 
+// create the iter that start at idx by reserve or forward.
+quicklistIter *quicklistIteratorAtIndex(quicklist *ql, long long idx, int where);
+
 // iter the next entry.
 int quicklistNext(quicklistIter *iter, quicklistEntry *entry);
 

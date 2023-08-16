@@ -157,6 +157,7 @@ void createSharedObject(void) {
     shared.wrongtypeerr = createObject(REDIS_OBJECT_STRING, sdsnew("-ERR wrong type against\r\n"));
     shared.nullbulk = createObject(REDIS_OBJECT_STRING, sdsnew("$-1\r\n"));
     shared.nullmultibulk = createObject(REDIS_OBJECT_STRING, sdsnew("*-1\r\n"));
+    shared.emptymultibulk = createObject(REDIS_OBJECT_STRING, sdsnew("*0\r\n"));
     shared.czero = createObject(REDIS_OBJECT_STRING, sdsnew(":0\r\n"));
     shared.cone = createObject(REDIS_OBJECT_STRING, sdsnew(":1\r\n"));
 
@@ -182,6 +183,8 @@ void createSharedObject(void) {
     makeObjectShared(shared.syntaxerr);
     makeObjectShared(shared.wrongtypeerr);
     makeObjectShared(shared.nullbulk);
+    makeObjectShared(shared.nullmultibulk);
+    makeObjectShared(shared.emptymultibulk);
     makeObjectShared(shared.cone);
     makeObjectShared(shared.czero);
 }
