@@ -431,6 +431,147 @@ void fprettystr(char *s, FILE *f, unsigned int maxlen) {
 
 }
 
+int matchstringlen(char *pattern, int patternlen, char *string, int strlen, int nocase) {
+
+    while (patternlen && strlen) {
+
+        switch (pattern[0]) {
+            case '[':
+                pattern++;
+                patternlen--;
+                int not, match;
+
+                if (pattern[1] == '^') {
+                    not = 1;
+                    pattern++;
+                    patternlen--;
+                }
+
+                while (1) {
+
+                    if (pattern[0] == ']') {
+                        break;
+                    } else if (patternlen == 0) {
+                        pattern--;
+                        patternlen++;
+                        break;
+                    } else if (pattern[1] == '-' && patternlen >= 3) {
+                        unsigned char start, end, c;
+                        start = pattern[0];
+                        end = pattern[2];
+                        c = string[0];
+
+                        if (end < start) {
+                            start = pattern[2];
+                            end = pattern[0];
+                        }
+
+                        if (nocase) {
+                            start = tolower((int)start);
+                            end = tolower((int)end);
+                            c = tolower((int)c);
+                        }
+
+                        if (c >= start && c <= end) {
+                            match = 1;
+                        }
+                        pattern+=2;
+                        patternlen-=2;
+
+                    } else {
+                        if (!nocase) {
+                            if (pattern[0] == string[0]) {
+                                match = 1;
+                            }
+                        } else {
+                            if (tolower((int)pattern[0]) == tolower((int)string[0])) {
+                                match = 1;
+                            }
+                        }
+                    }
+
+                    pattern++;
+                    patternlen--;
+
+                }
+
+                if (not)
+                    match = !match;
+
+                if (!match)
+                    return 0;
+
+                string++;
+                strlen--;
+                break;
+
+            case '?':
+                string++;
+                strlen--;
+                break;
+
+            case '*':
+                pattern++;
+                patternlen--;
+
+                while (pattern[0] == '*') {
+                    pattern++;
+                    patternlen--;
+                }
+
+                if (patternlen == 1)
+                    return 1;
+
+                while (strlen) {
+                    if (matchstringlen(pattern+1, patternlen-1, string, strlen, nocase)) {
+                        return 1;
+                    }
+                    string++;
+                    strlen--;
+                }
+
+                return 0;
+
+            default:
+
+                if (nocase) {
+                    if (pattern[0] != string[0]) {
+                        return 0;
+                    }
+                } else {
+                    if (tolower((int)pattern[0]) != tolower((int)string[0])) {
+                       return 0;
+                    }
+                }
+
+                string++;
+                strlen--;
+
+                break;
+        }
+
+        pattern++;
+        patternlen--;
+
+    }
+
+    if (strlen == 0) {
+        while (patternlen > 0 && pattern[0] == '*') {
+            pattern++;
+            patternlen--;
+        }
+    }
+
+
+    if (patternlen == 0 && strlen == 0) {
+        return 1;
+    }
+
+    return 0;
+
+
+}
+
 #ifdef RUN_UT
 int main(int argc, char **argv) {
 

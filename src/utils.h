@@ -23,6 +23,10 @@ size_t ull2string(char *s, unsigned long long value);
 // split string to tokens
 char** stringsplitargs(const char *line, int *argc);
 
+// glob style match string by pattern.
+int matchstringlen(char *pattern, int patternlen,
+                   char *string, int strlen, int nocase);
+
 // reverse long value
 // http://graphics.stanford.edu/~seander/bithacks.html#ReverseParallel
 unsigned long u_rev(unsigned long value);
