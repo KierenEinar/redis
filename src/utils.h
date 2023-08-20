@@ -24,8 +24,11 @@ size_t ull2string(char *s, unsigned long long value);
 char** stringsplitargs(const char *line, int *argc);
 
 // glob style match string by pattern.
-int matchstringlen(char *pattern, int patternlen,
-                   char *string, int strlen, int nocase);
+int matchstringlen(const char *pattern, int patternlen,
+                   const char *string, int strlen, int nocase);
+
+// unit test like.
+void testmatchstringlen();
 
 // reverse long value
 // http://graphics.stanford.edu/~seander/bithacks.html#ReverseParallel

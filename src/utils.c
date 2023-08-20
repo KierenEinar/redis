@@ -431,7 +431,7 @@ void fprettystr(char *s, FILE *f, unsigned int maxlen) {
 
 }
 
-int matchstringlen(char *pattern, int patternlen, char *string, int strlen, int nocase) {
+int matchstringlen(const char *pattern, int patternlen, const char *string, int strlen, int nocase) {
 
     while (patternlen && strlen) {
 
@@ -439,9 +439,9 @@ int matchstringlen(char *pattern, int patternlen, char *string, int strlen, int 
             case '[':
                 pattern++;
                 patternlen--;
-                int not, match;
+                int not = 0, match = 0;
 
-                if (pattern[1] == '^') {
+                if (pattern[0] == '^') {
                     not = 1;
                     pattern++;
                     patternlen--;
@@ -511,10 +511,8 @@ int matchstringlen(char *pattern, int patternlen, char *string, int strlen, int 
                 break;
 
             case '*':
-                pattern++;
-                patternlen--;
 
-                while (pattern[0] == '*') {
+                while (pattern[1] == '*') {
                     pattern++;
                     patternlen--;
                 }
@@ -523,9 +521,8 @@ int matchstringlen(char *pattern, int patternlen, char *string, int strlen, int 
                     return 1;
 
                 while (strlen) {
-                    if (matchstringlen(pattern+1, patternlen-1, string, strlen, nocase)) {
+                    if (matchstringlen(pattern+1, patternlen-1, string, strlen, nocase))
                         return 1;
-                    }
                     string++;
                     strlen--;
                 }
@@ -568,6 +565,26 @@ int matchstringlen(char *pattern, int patternlen, char *string, int strlen, int 
     }
 
     return 0;
+
+}
+
+void testmatchstringlen() {
+
+    char *pattern = "[a-z][0-9]*7?[^1]";
+    char *str = "b7111111aa8777";
+
+    int res = matchstringlen(pattern, (int)strlen(pattern), str, (int)strlen(str), 0);
+    printf("glob=%s, str=%s, matchres=%d\n", pattern, str, res);
+
+    pattern = "[a-z][0-9]*7?";
+    str = "b7111111aa8777";
+    res = matchstringlen(pattern, (int)strlen(pattern), str, (int)strlen(str), 0);
+    printf("glob=%s, str=%s, matchres=%d\n", pattern, str, res);
+
+    pattern = "[a-z][0-9]*5?";
+    str = "b7111111aa8777";
+    res = matchstringlen(pattern, (int)strlen(pattern), str, (int)strlen(str), 0);
+    printf("glob=%s, str=%s, matchres=%d\n", pattern, str, res);
 
 
 }
