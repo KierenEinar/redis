@@ -196,6 +196,11 @@ typedef struct redisServer {
 
 }redisServer;
 
+typedef struct pubsubPattern {
+    robj *pattern;
+    client *client;
+}pubsubPattern;
+
 
 #define OBJ_SHARED_INTEGERS 10000
 #define OBJ_BULK_LEN_SIZE 32
@@ -204,7 +209,7 @@ struct redisSharedObject {
     robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk, *emptymultibulk,
     *integers[OBJ_SHARED_INTEGERS],
     *mbulkhdr[OBJ_BULK_LEN_SIZE],
-    *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone;
+    *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone, *subscribe, *psubscribe;
 };
 
 extern struct redisServer server;
@@ -350,6 +355,15 @@ void blpopCommand(client *c);
 // pop and element from tail, when not exists, block the client with options.
 void brpopCommand(client *c);
 
+// subscribe the channel.
+void subscribeCommand(client *c);
+
+// subscribe the pattern with glob style input.
+void psubscribeCommand(client *c);
+
+// publish the message to the client who is interesting.
+void publishCommand(client *c);
+
 // for blpop, brpop
 void blockingGenericCommand(client *c, int where);
 
@@ -373,6 +387,9 @@ int pubsubSubscribeChannel(client *c, robj *channel);
 
 // subscribe pattern except glob like style input.
 int pubsubSubscribePattern(client *c, robj *pattern);
+
+// get the clients pubsub count.
+unsigned long clientSubscriptionCount(client *c);
 
 // publish message to all subscribe clients.
 int pubsubPublishMessage(robj *channel, robj *message);
@@ -497,6 +514,7 @@ long long serverCron(struct eventLoop *el, int id, void *clientData);
 // ------------process command -------------
 int processCommand(client *c);
 
-
-
+// ---------- free method -----------------
+void listFreePubsubPatterns(void *ptr);
+void listFreeObject(void *ptr);
 #endif //REDIS_SERVER_H

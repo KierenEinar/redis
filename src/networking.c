@@ -309,6 +309,7 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
 
     c->pubsub_channels = dictCreate(&objectKeyValuePtrDictType);
     c->pubsub_patterns = listCreate();
+    listSetFreeMethod(c->pubsub_patterns, listFreeObject);
 
 }
 

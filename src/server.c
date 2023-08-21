@@ -91,6 +91,9 @@ struct redisCommand redisCommandTable[] = {
     {"rpop", rpopCommand, 2},
     {"blpop", blpopCommand, -3},
     {"brpop", brpopCommand, -3},
+    {"subscribe", subscribeCommand, -2},
+    {"psubscribe", psubscribeCommand, -2},
+    {"publish", publishCommand, 3},
 };
 
 // dict type for command table
@@ -160,7 +163,8 @@ void createSharedObject(void) {
     shared.emptymultibulk = createObject(REDIS_OBJECT_STRING, sdsnew("*0\r\n"));
     shared.czero = createObject(REDIS_OBJECT_STRING, sdsnew(":0\r\n"));
     shared.cone = createObject(REDIS_OBJECT_STRING, sdsnew(":1\r\n"));
-
+    shared.subscribe = createObject(REDIS_OBJECT_STRING, sdsnew("$9\r\nsubscribe\r\n"));
+    shared.psubscribe = createObject(REDIS_OBJECT_STRING, sdsnew("$10\r\npsubscribe\r\n"));
     for (long j=0; j<OBJ_SHARED_INTEGERS; j++) {
         shared.integers[j] = createObject(REDIS_OBJECT_STRING, (void*)(j));
         shared.integers[j]->encoding = REDIS_ENCODING_INT;
@@ -187,6 +191,8 @@ void createSharedObject(void) {
     makeObjectShared(shared.emptymultibulk);
     makeObjectShared(shared.cone);
     makeObjectShared(shared.czero);
+    makeObjectShared(shared.subscribe);
+    makeObjectShared(shared.psubscribe);
 }
 
 
@@ -313,6 +319,7 @@ void initServer(void) {
 
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
     listSetMatchMethod(server.pubsub_patterns, listValueEqual);
+    listSetFreeMethod(server.pubsub_patterns, listFreePubsubPatterns);
     if (listenPort(server.backlog) == C_ERR) {
         exit(1);
     }
@@ -373,6 +380,17 @@ int processCommand(client *c) {
     return C_OK;
 }
 
+void listFreePubsubPatterns(void *ptr) {
+    // todo make sure ptr is pubsubPattern
+    pubsubPattern *pat = ptr;
+    decrRefCount(pat->pattern);
+    zfree(pat);
+}
+
+void listFreeObject(void *ptr) {
+    // todo make sure ptr is robj
+    decrRefCount(ptr);
+}
 
 int main(int argc, char **argv) {
     // testZiplist();
