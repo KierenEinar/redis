@@ -312,7 +312,7 @@ void initServer(void) {
     server.pubsub_patterns = listCreate();
 
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
-    listSetMatchMethod(server.pubsub_patterns, stringObjectEqual);
+    listSetMatchMethod(server.pubsub_patterns, listValueEqual);
     if (listenPort(server.backlog) == C_ERR) {
         exit(1);
     }

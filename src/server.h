@@ -275,8 +275,11 @@ int getLongLongFromObject(robj *obj, long long *target);
 // get long from redis object, reply on failed.
 int getLongLongFromObjectOrReply(robj *obj, long long *target, client *c, robj *reply);
 
+// object type equal.
+int listValueEqual(void *key1, void *key2);
+
 // robj string type, equal method.
-int stringObjectEqual(void *key1, void *key2);
+int stringObjectEqual(robj *robj1, robj *robj2);
 
 // create the golbal shared object
 void createSharedObject(void);

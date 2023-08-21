@@ -223,6 +223,39 @@ int getTimeoutFromObjectOrReply(client *c, robj *argv, int unit, long long *time
     return C_OK;
 }
 
-int stringObjectEqual(void *key1, void *key2) {
-    return 0;
+int stringObjectEqual(robj *robj1, robj *robj2) {
+
+    // todo make sure robj1 and robj2 encoding is sds.
+    size_t minlen;
+    sds s1, s2;
+    size_t slen1, slen2;
+    int ret;
+
+    s1 = robj1->ptr;
+    s2 = robj2->ptr;
+    slen1 = sdslen(s1);
+    slen2 = sdslen(s2);
+
+    minlen = slen1 < slen2 ? slen1 : slen2;
+    ret = memcmp(s1, s2, minlen);
+    if (ret == 0 && slen1 != slen2) {
+        return slen1 - slen2 < 0 ? -1 : 1;
+    }
+
+    return ret;
+}
+
+int listValueEqual(void *key1, void *key2) {
+
+    robj *robj1, *robj2;
+    robj1 = key1;
+    robj2 = key2;
+
+    // todo make sure object type is string.
+
+    if (robj1->encoding == REDIS_ENCODING_INT && robj2->encoding == REDIS_ENCODING_INT) {
+        return robj1->ptr == robj2->ptr;
+    } else {
+        return stringObjectEqual(robj1, robj2);
+    }
 }

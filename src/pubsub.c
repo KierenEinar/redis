@@ -30,7 +30,12 @@ int pubsubSubscribeChannel(client *c, robj *channel) {
 
 // subscribe pattern except glob like style input.
 int pubsubSubscribePattern(client *c, robj *pattern) {
+
+    int retval = 0;
+
+//    if (listSearchKey(server.pubsub_patterns, pattern))
     return 0;
+
 }
 
 // publish message to all subscribe clients.
