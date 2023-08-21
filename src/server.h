@@ -70,6 +70,7 @@
 #define CLIENT_CLOSE_ASAP (1 << 1)
 #define CLIENT_CLOSE_AFTER_REPLY (1 << 2)
 #define CLIENT_BLOCKED (1 << 3)
+#define CLIENT_PUBSUB (1 << 4)
 // server cron period
 #define SERVER_CRON_PERIOD_MS 1
 

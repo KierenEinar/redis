@@ -10,6 +10,7 @@ void subscribeCommand(client *c) {
     for (j = 1; j < c->argc; j++) {
         pubsubSubscribeChannel(c, c->argv[j]);
     }
+    c->flag &= CLIENT_PUBSUB;
 }
 
 
@@ -18,6 +19,7 @@ void psubscribeCommand(client *c) {
     for (j = 1; j < c->argc; j++) {
         pubsubSubscribePattern(c, c->argv[j]);
     }
+    c->flag &= CLIENT_PUBSUB;
 }
 
 
@@ -34,10 +36,12 @@ int pubsubSubscribeChannel(client *c, robj *channel) {
 
         channel = getDecodedObject(channel);
         dictAdd(c->pubsub_channels, channel, NULL);
-        l = dictFetchValue(server.pubsub_channels, channel->ptr);
+        l = dictFetchValue(server.pubsub_channels, channel);
+        incrRefCount(channel);
+
         if (l == NULL) {
             l = listCreate();
-            dictAdd(server.pubsub_channels, channel->ptr, l);
+            dictAdd(server.pubsub_channels, channel, l);
             incrRefCount(channel);
         }
 
@@ -58,15 +62,16 @@ int pubsubSubscribePattern(client *c, robj *pattern) {
     pubsubPattern *pat;
     if (listSearchKey(c->pubsub_patterns, pattern) == NULL) {
 
-        incrRefCount(pattern);
+
         listAddNodeTail(c->pubsub_patterns, pattern);
+        incrRefCount(pattern);
 
         pat = zmalloc(sizeof(*pat));
         pat->client = c;
         pat->pattern = pattern;
         listAddNodeTail(server.pubsub_patterns, pat);
-
         incrRefCount(pattern);
+
         retval = 1;
     }
 
