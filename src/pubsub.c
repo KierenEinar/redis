@@ -46,6 +46,8 @@ int pubsubSubscribeChannel(client *c, robj *channel) {
         retval = 1;
     }
 
+    addReplyLongLong(c, (long long)clientSubscriptionCount(c));
+
     return retval;
 }
 
@@ -65,8 +67,12 @@ int pubsubSubscribePattern(client *c, robj *pattern) {
         listAddNodeTail(server.pubsub_patterns, pat);
 
         incrRefCount(pattern);
+        retval = 1;
     }
-    return 0;
+
+    addReplyLongLong(c, (long long)clientSubscriptionCount(c));
+
+    return retval;
 
 }
 
