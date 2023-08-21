@@ -338,6 +338,9 @@ void pttlCommand(client *c);
 // lrange subject [start, end]
 void lrangeCommand(client *c);
 
+// ltrim subject [start, end]
+void ltrimCommand(client *c);
+
 // push an element into head.
 void lpushCommand(client *c);
 

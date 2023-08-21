@@ -92,6 +92,7 @@ struct redisCommand redisCommandTable[] = {
     {"blpop", blpopCommand, -3},
     {"brpop", brpopCommand, -3},
     {"lrange", lrangeCommand, 4},
+    {"ltrim", ltrimCommand, 4},
     {"subscribe", subscribeCommand, -2},
     {"psubscribe", psubscribeCommand, -2},
     {"publish", publishCommand, 3},

@@ -99,6 +99,51 @@ void lrangeCommand(client *c) {
     }
 }
 
+void ltrimCommand(client *c) {
+    long long start, end;
+    long long ltrim, rtrim;
+    robj *key, *subject;
+    unsigned int llen;
+
+    if (getLongLongFromObjectOrReply(c->argv[2], &start, c, NULL) == 0
+        || getLongLongFromObjectOrReply(c->argv[3], &end, c, NULL) == 0)
+        return;
+
+    key = c->argv[1];
+    if ((subject = lookupKeyReadOrReply(c, key, NULL)) == NULL || checkType(key, REDIS_OBJECT_LIST) == 0)
+        return;
+
+    llen = listTypeLen(subject);
+
+    if (start < 0) start = llen + start;
+    if (end < 0) end = llen + end;
+    if (start < 0) start = 0;
+    if (end >= llen) end = llen - 1;
+
+    if (start > end || start >= llen) {
+        ltrim = llen;
+        rtrim = 0;
+    } else {
+        ltrim = start;
+        rtrim = -end - 1;
+    }
+
+    if (subject->encoding == REDIS_ENCODING_LIST) {
+        quicklist *ql = subject->ptr;
+        quicklistDelRange(ql, 0, ltrim);
+        quicklistDelRange(ql, -rtrim, rtrim);
+    } else {
+        // make sure subject encoding is quick list
+    }
+
+    if (listTypeLen(subject) == 0) {
+        quicklistRelease(subject->ptr);
+        removeExpire(c, key);
+        dictDelete(c->db->dict, key);
+    }
+
+    addReplyBulk(c, shared.ok);
+}
 
 void lpushCommand(client *c) {
     pushGenericCommand(c, LIST_HEAD);
