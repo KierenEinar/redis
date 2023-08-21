@@ -308,9 +308,11 @@ void initServer(void) {
     server.client_list = listCreate();
     server.client_close_list = listCreate();
     server.ready_keys = listCreate();
+    server.pubsub_channels = dictCreate(&objectKeyValueListDictType);
+    server.pubsub_patterns = listCreate();
 
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
-
+    listSetMatchMethod(server.pubsub_patterns, stringObjectEqual);
     if (listenPort(server.backlog) == C_ERR) {
         exit(1);
     }

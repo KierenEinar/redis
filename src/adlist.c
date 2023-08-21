@@ -73,8 +73,14 @@ listNode *listSearchKey(list *l, void *value) {
 
     listNode *ln = l->head;
     while (ln) {
-        if (ln->value == value)
-            return ln;
+
+        if (l->match) {
+            if (l->match(ln->value, value) == 0)
+                return ln;
+        } else {
+            if (ln->value == value)
+                return ln;
+        }
         ln = ln->next;
     }
     return NULL;

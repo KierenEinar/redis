@@ -17,6 +17,7 @@ typedef struct list {
      unsigned long len;
      void *(*dup)(void *key);
      void (*free)(void *ptr);
+     int (*match)(void *ptr, void *value);
 }list;
 
 typedef struct listIter {
@@ -27,11 +28,11 @@ typedef struct listIter {
 // functions implemented as macros
 #define listSetFreeMethod(l, m) ((l)->free = (m))
 #define listSetDupMethod(l, d) ((l)->dup = (d))
+#define listSetMatchMethod(l, m) ((l)->match = (m))
 #define listFirst(l) ((l)->head)
 #define listLast(l) ((l)->tail)
 #define listLength(l) ((l)->len)
 #define listNodeValue(ln) ((ln)->value)
-
 // ------------------- API --------------------
 list* listCreate();
 void listDelNode(list* l, listNode* ln);

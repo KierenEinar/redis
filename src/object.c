@@ -222,3 +222,7 @@ int getTimeoutFromObjectOrReply(client *c, robj *argv, int unit, long long *time
     if (timeout) *timeout = now + unit + _timeout;
     return C_OK;
 }
+
+int stringObjectEqual(void *key1, void *key2) {
+    return 0;
+}

@@ -149,7 +149,12 @@ typedef struct client {
 
     struct redisCommand *cmd;
 
+    // b[rl]pop
     blockingStates bpop;
+
+    // pubsub
+    dict *pubsub_channels;
+    list *pubsub_patterns;
 
 } client;
 
@@ -184,6 +189,10 @@ typedef struct redisServer {
 
     dict *commands;
     int list_fill_factor;
+
+    dict *pubsub_channels;
+    list *pubsub_patterns;
+
 
 }redisServer;
 
@@ -265,6 +274,9 @@ int getLongLongFromObject(robj *obj, long long *target);
 
 // get long from redis object, reply on failed.
 int getLongLongFromObjectOrReply(robj *obj, long long *target, client *c, robj *reply);
+
+// robj string type, equal method.
+int stringObjectEqual(void *key1, void *key2);
 
 // create the golbal shared object
 void createSharedObject(void);
@@ -353,6 +365,15 @@ void unblockClient(client *c);
 // serve client on blocked list.
 int serveClientOnBlockedList(client *c, robj *key, robj *value);
 
+// subscribe channel.
+int pubsubSubscribeChannel(client *c, robj *channel);
+
+// subscribe pattern except glob like style input.
+int pubsubSubscribePattern(client *c, robj *pattern);
+
+// publish message to all subscribe clients.
+int pubsubPublishMessage(robj *channel, robj *message);
+
 // execute the command.
 void call(client *c);
 
@@ -404,7 +425,7 @@ void removeExpire(client *c, robj *key);
 // get the key expire milliseconds
 long long getExpire(redisDb *db, robj *key);
 
-// list prototype
+//------------- list prototype --------------
 
 // push command, lpush or rpush, where -> LIST_HEAD or LIST_TAIL.
 void pushGenericCommand(client *c, int where);

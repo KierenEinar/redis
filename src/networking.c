@@ -307,6 +307,9 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
     listAddNodeTail(server.client_list, c);
     c->client_list_node = listLast(server.client_list);
 
+    c->pubsub_channels = dictCreate(&objectKeyValuePtrDictType);
+    c->pubsub_patterns = listCreate();
+
 }
 
 int processMultiBulkBuffer(client *c){
