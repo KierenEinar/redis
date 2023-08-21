@@ -638,8 +638,22 @@ quicklistIter *quicklistCreateIterator(quicklist *ql, int direction) {
     return iter;
 }
 
-quicklistIter *quicklistIteratorAtIndex(quicklist *ql, long long idx, int where) {
-    return NULL;
+quicklistIter *quicklistIteratorAtIndex(quicklist *ql, long long idx, int direction) {
+
+    quicklistEntry entry;
+    quicklistIter *iter;
+
+    if (!quicklistIndex(ql, idx, &entry))
+        return NULL;
+
+    iter = quicklistCreateIterator(ql, direction);
+
+    iter->current = entry.node;
+    iter->offset = entry.idx;
+    iter->direction = direction;
+    iter->ql = ql;
+
+    return iter;
 }
 
 // iter the next entry.

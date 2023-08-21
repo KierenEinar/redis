@@ -12,7 +12,7 @@ typedef struct listTypeIterator{
 }listTypeIterator;
 
 typedef struct listTypeEntry{
-    quicklistEntry *entry;
+    quicklistEntry entry;
 }listTypeEntry;
 
 listTypeIterator *listTypeGetIterator(robj *subject, long long idx, int direction) {
@@ -23,10 +23,10 @@ listTypeIterator *listTypeGetIterator(robj *subject, long long idx, int directio
 
         iter = zmalloc(sizeof(*iter));
         iter->subject = subject;
+        incrRefCount(subject);
         iter->direction = direction;
-        int where = (direction == LIST_ITER_DIR_FORWARD) ? QUICK_LIST_HEAD : QUICK_LIST_TAIL;
-        iter->iter = quicklistIteratorAtIndex(subject->ptr, idx, where);
-
+        iter->iter = quicklistIteratorAtIndex(subject->ptr, idx,
+                                              direction == LIST_ITER_DIR_FORWARD ? AL_LIST_FORWARD : AL_LIST_BACKWARD);
     } else {
         // todo server panic
     }
@@ -36,11 +36,13 @@ listTypeIterator *listTypeGetIterator(robj *subject, long long idx, int directio
 }
 
 int listTypeNext(listTypeIterator *iter, listTypeEntry *entry) {
-    return 0;
+
+    return quicklistNext(iter->iter, &(entry->entry));
 }
 
 void listTypeReleaseIter(listTypeIterator *iter) {
-
+    decrRefCount(iter->subject);
+    zfree(iter);
 }
 
 void lrangeCommand(client *c) {
@@ -81,11 +83,12 @@ void lrangeCommand(client *c) {
         while (rangelen--) {
             listTypeEntry entry;
             listTypeNext(iter, &entry);
-            if (entry.entry->str) {
-                addReplyLongLongPrefix(c, entry.entry->size, '$');
-                addReplyString(c, (const char *)entry.entry->str, entry.entry->size);
+            if (entry.entry.str) {
+                addReplyLongLongPrefix(c, entry.entry.size, '$');
+                addReplyString(c, (const char *)entry.entry.str, entry.entry.size);
+                addReply(c, shared.crlf);
             } else {
-                addReplyLongLong(c, entry.entry->llvalue);
+                addReplyLongLong(c, entry.entry.llvalue);
             }
         }
 
