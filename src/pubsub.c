@@ -68,9 +68,9 @@ int pubsubSubscribePattern(client *c, robj *pattern) {
 
         pat = zmalloc(sizeof(*pat));
         pat->client = c;
-        pat->pattern = pattern;
+        pat->pattern = getDecodedObject(pattern);
         listAddNodeTail(server.pubsub_patterns, pat);
-        incrRefCount(pattern);
+        incrRefCount(pat->pattern);
 
         retval = 1;
     }
@@ -108,18 +108,21 @@ int pubsubPublishMessage(robj *channel, robj *message) {
             pubsubPattern *pat = node->value;
             sds pattern = pat->pattern->ptr;
             client *c = pat->client;
+            incrRefCount(pat->pattern);
             if (matchstringlen(pattern,
                                (int)sdslen(pattern),
                                channel->ptr,
                                (int)sdslen(channel->ptr),
                                0)) {
 
-                addReply(c, shared.mbulkhdr[3]);
+                addReply(c, shared.mbulkhdr[4]);
                 addReply(c, shared.psubscribe);
                 addReplyBulk(c, pat->pattern);
+                addReplyBulk(c, channel);
                 addReplyBulk(c, message);
 
             }
+            decrRefCount(pat->pattern);
             receivers++;
         }
 
