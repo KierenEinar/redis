@@ -167,6 +167,7 @@ void createSharedObject(void) {
     shared.cone = createObject(REDIS_OBJECT_STRING, sdsnew(":1\r\n"));
     shared.subscribe = createObject(REDIS_OBJECT_STRING, sdsnew("$9\r\nsubscribe\r\n"));
     shared.psubscribe = createObject(REDIS_OBJECT_STRING, sdsnew("$10\r\npsubscribe\r\n"));
+    shared.queued = createObject(REDIS_OBJECT_STRING, sdsnew("$6\r\nqueued\r\n"));
     for (long j=0; j<OBJ_SHARED_INTEGERS; j++) {
         shared.integers[j] = createObject(REDIS_OBJECT_STRING, (void*)(j));
         shared.integers[j]->encoding = REDIS_ENCODING_INT;
@@ -195,6 +196,7 @@ void createSharedObject(void) {
     makeObjectShared(shared.czero);
     makeObjectShared(shared.subscribe);
     makeObjectShared(shared.psubscribe);
+    makeObjectShared(shared.queued);
 }
 
 
@@ -305,6 +307,7 @@ void initServer(void) {
         server.dbs[j].expires = dictCreate(&keyptrDictType);
         server.dbs[j].blocking_keys = dictCreate(&objectKeyValueListDictType);
         server.dbs[j].ready_keys = dictCreate(&objectKeyValuePtrDictType);
+        server.dbs[j].watch_keys = dictCreate(&objectKeyValueListDictType);
     }
 
     server.list_fill_factor = DEFAULT_LIST_FILL_FACTOR;
@@ -363,18 +366,32 @@ int processCommand(client *c) {
     c->cmd=lookupCommand(c->argv[0]);
 
     if (c->cmd == NULL) {
+        flagTransactionAsDirty(c);
         addReplyError(c, "unknown command");
         return C_OK;
     }
 
 
-    if ( (c->cmd->arity > 0 && c->argc != c->cmd->arity)
+    if ((c->cmd->arity > 0 && c->argc != c->cmd->arity)
         || (c->cmd->arity <0 && c->argc < -c->cmd->arity)) {
+        flagTransactionAsDirty(c);
         addReplyError(c, "invalid argument");
         return C_OK;
     }
 
-    call(c);
+    if ((c->flag & CLIENT_MULTI) &&
+            c->cmd->proc != execCommand &&
+            c->cmd->proc != multiCommand &&
+            c->cmd->proc != watchCommand &&
+            c->cmd->proc != discardCommand) {
+
+        queueMultiCommand(c);
+
+    } else {
+
+        call(c);
+
+    }
 
     if (listLength(server.ready_keys))
         handleClientsOnBlockedList();

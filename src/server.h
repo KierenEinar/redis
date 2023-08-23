@@ -71,6 +71,9 @@
 #define CLIENT_CLOSE_AFTER_REPLY (1 << 2)
 #define CLIENT_BLOCKED (1 << 3)
 #define CLIENT_PUBSUB (1 << 4)
+#define CLIENT_MULTI (1 << 5)
+#define CLIENT_DIRTY_EXEC (1 << 6)
+#define CLIENT_CAS_EXEC (1 << 7)
 // server cron period
 #define SERVER_CRON_PERIOD_MS 1
 
@@ -109,6 +112,7 @@ typedef struct redisDb {
     dict* expires;
     dict *blocking_keys;
     dict *ready_keys;
+    dict *watch_keys;
 }redisDb;
 
 typedef struct blockingStates {
@@ -116,6 +120,17 @@ typedef struct blockingStates {
     dict* blocking_keys;
 
 }blockingStates;
+
+typedef struct multiCmd {
+    robj **argv;
+    int argc;
+    struct redisCommand *cmd;
+}multiCmd;
+
+typedef struct multiStates {
+    multiCmd **multi_cmds;
+    int count;
+}multiStates;
 
 typedef struct client {
     char err[255];
@@ -152,6 +167,9 @@ typedef struct client {
 
     // b[rl]pop
     blockingStates bpop;
+    // multi
+    multiStates mstate;
+    list *watch_keys;
 
     // pubsub
     dict *pubsub_channels;
@@ -202,6 +220,11 @@ typedef struct pubsubPattern {
     client *client;
 }pubsubPattern;
 
+typedef struct watchKey {
+    redisDb *db;
+    robj *key;
+}watchKey;
+
 
 #define OBJ_SHARED_INTEGERS 10000
 #define OBJ_BULK_LEN_SIZE 32
@@ -210,7 +233,7 @@ struct redisSharedObject {
     robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk, *emptymultibulk,
     *integers[OBJ_SHARED_INTEGERS],
     *mbulkhdr[OBJ_BULK_LEN_SIZE],
-    *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone, *subscribe, *psubscribe;
+    *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone, *subscribe, *psubscribe, *queued;
 };
 
 extern struct redisServer server;
@@ -368,8 +391,26 @@ void psubscribeCommand(client *c);
 // publish the message to the client who is interesting.
 void publishCommand(client *c);
 
-// for blpop, brpop
+// for blpop, brpop.
 void blockingGenericCommand(client *c, int where);
+
+// start the transaction.
+void multiCommand(client *c);
+
+// watch the keys.
+void watchCommand(client *c);
+
+// cancel watch the key
+void unWatchCommand(client *c);
+
+// discard the transaction.
+void discardCommand(client *c);
+
+// exec the transaction.
+void execCommand(client *c);
+
+// queued the command on multi context.
+void queueMultiCommand(client *c);
 
 // block client for multi input keys.
 void blockForKeys(client *c, robj **argv, int argc, long long timeout);
@@ -397,6 +438,12 @@ unsigned long clientSubscriptionCount(client *c);
 
 // publish message to all subscribe clients.
 int pubsubPublishMessage(robj *channel, robj *message);
+
+// flag transaction as dirty, so will exec failed.
+void flagTransactionAsDirty(client *c);
+
+// touch a key which been watched.
+void touchWatchedKey(redisDb *db, robj *key);
 
 // execute the command.
 void call(client *c);
@@ -508,6 +555,7 @@ void resetClient(client *c);
 void freeClient(client *c);
 void freeClientAsync(client *c);
 void freeClientInFreeQueueAsync(void);
+void initClientMultiState(client *c);
 
 //-------------cron job-----------------
 

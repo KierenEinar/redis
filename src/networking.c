@@ -306,11 +306,13 @@ void acceptCommandHandler(int cfd, char *ip, int port) {
     c->bpop.blocking_keys = dictCreate(&objectKeyValuePtrDictType);
     listAddNodeTail(server.client_list, c);
     c->client_list_node = listLast(server.client_list);
-
+    initClientMultiState(c);
     c->pubsub_channels = dictCreate(&objectKeyValuePtrDictType);
     c->pubsub_patterns = listCreate();
     listSetFreeMethod(c->pubsub_patterns, listFreeObject);
+    listSetMatchMethod(c->pubsub_patterns, listValueEqual);
 
+    c->watch_keys = listCreate();
 }
 
 int processMultiBulkBuffer(client *c){
