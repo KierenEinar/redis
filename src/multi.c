@@ -13,7 +13,7 @@ void freeClientMultiState(client *c) {
 
     for (int j=0; j<c->mstate.count; j++) {
         multiCmd *mc;
-        mc = c->mstate.multi_cmds[j];
+        mc = c->mstate.multi_cmds + j;
         for (int i=0; i<mc->argc; i++) {
             decrRefCount(mc->argv[i]);
         }
@@ -33,7 +33,7 @@ void flagTransactionAsDirty(client *c) {
 // start the transaction.
 void multiCommand(client *c) {
     if (c->flag & CLIENT_MULTI) {
-        addReplyError(c, "multi not support nested");
+        addReplyError(c, "MULTI not support nested");
         return;
     }
     c->flag |= CLIENT_MULTI;
@@ -42,16 +42,18 @@ void multiCommand(client *c) {
 
 void queueMultiCommand(client *c) {
 
-    c->mstate.multi_cmds = zrealloc(c->mstate.multi_cmds, sizeof(multiCmd*) * (c->mstate.count + 1));
-    c->mstate.count++;
+    multiCmd *mc;
 
-    multiCmd *cmd = c->mstate.multi_cmds[c->mstate.count - 1];
-    cmd->argc = c->argc;
-    cmd->argv = zmalloc(sizeof(robj*) * c->argc);
-    memcpy(cmd->argv, c->argv, sizeof(robj*) * c->argc);
+    c->mstate.multi_cmds = zrealloc(c->mstate.multi_cmds, sizeof(multiCmd) * (c->mstate.count + 1));
+    mc = c->mstate.multi_cmds + c->mstate.count;
+    mc->argc = c->argc;
+    mc->argv = zmalloc(sizeof(robj*) * c->argc);
+    mc->cmd = c->cmd;
+    memcpy(mc->argv, c->argv, sizeof(robj*) * c->argc);
     for (int j=0; j<c->argc; j++) {
-        incrRefCount(cmd->argv[j]);
+        incrRefCount(mc->argv[j]);
     }
+    c->mstate.count++;
     addReply(c, shared.queued);
 }
 
@@ -108,7 +110,6 @@ void unWatchAllKeys(client *c) {
         listDelNode(clients, listSearchKey(clients, c));
 
         if (listLength(clients) == 0) {
-            listRelease(clients);
             dictDelete(wk->db->watch_keys, wk->key);
             decrRefCount(wk->key);
         }
@@ -166,8 +167,41 @@ void discardCommand(client *c) {
 // exec the transaction.
 void execCommand(client *c) {
 
+    if (!(c->flag & CLIENT_MULTI)) {
+        addReplyError(c, "EXEC without MULTI");
+        return;
+    }
 
+    if (c->flag & (CLIENT_CAS_EXEC | CLIENT_DIRTY_EXEC)) {
+        addReply(c, c->flag & CLIENT_DIRTY_EXEC ? shared.execaborterr : shared.nullmultibulk);
+        discardTransaction(c);
+        return;
+    }
 
+    unWatchAllKeys(c);
+
+    int orig_argc = c->argc;
+    robj **orig_argv = c->argv;
+    struct redisCommand *orig_cmd = c->cmd;
+
+    addReplyMultiBulkLen(c, c->mstate.count);
+
+    for (int j=0; j<c->mstate.count; j++) {
+
+        multiCmd *mc = c->mstate.multi_cmds + j;
+
+        c->argc = mc->argc;
+        c->argv = mc->argv;
+        c->cmd = mc->cmd;
+
+        call(c);
+    }
+
+    c->argc = orig_argc;
+    c->argv = orig_argv;
+    c->cmd = orig_cmd;
+
+    discardTransaction(c);
 
 }
 

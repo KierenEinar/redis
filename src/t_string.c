@@ -12,7 +12,7 @@
 #define SET_OBJECT_PX 1 << 3
 
 
-int expireIfNeed(redisDb *db, const robj *key) {
+int expireIfNeed(redisDb *db, robj *key) {
     dictEntry *de;
     int64_t expired;
     if (dictSize(db->expires) == 0) return 0;
@@ -21,10 +21,10 @@ int expireIfNeed(redisDb *db, const robj *key) {
     expired = dictGetSignedInteger(de);
     mstime_t ms = mstime();
     if (expired >= ms) return 0;
-    return 1;
+    return dbSyncDelete(db, key);
 }
 
-robj *lookupKey(redisDb *db, const robj *key) {
+robj *lookupKey(redisDb *db, robj *key) {
     long long expired;
     if (dictSize(db->dict) == 0) return NULL;
 
@@ -40,12 +40,12 @@ robj *lookupKey(redisDb *db, const robj *key) {
     return value;
 }
 
-robj *lookupKeyRead(redisDb *db, const robj *key) {
+robj *lookupKeyRead(redisDb *db, robj *key) {
     expireIfNeed(db, key);
     return lookupKey(db, key);
 }
 
-robj *lookupKeyWrite(redisDb *db, const robj *key) {
+robj *lookupKeyWrite(redisDb *db, robj *key) {
     expireIfNeed(db, key);
     return lookupKey(db, key);
 }

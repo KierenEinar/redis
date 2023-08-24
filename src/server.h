@@ -128,7 +128,7 @@ typedef struct multiCmd {
 }multiCmd;
 
 typedef struct multiStates {
-    multiCmd **multi_cmds;
+    multiCmd *multi_cmds;
     int count;
 }multiStates;
 
@@ -233,7 +233,7 @@ struct redisSharedObject {
     robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk, *emptymultibulk,
     *integers[OBJ_SHARED_INTEGERS],
     *mbulkhdr[OBJ_BULK_LEN_SIZE],
-    *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone, *subscribe, *psubscribe, *queued;
+    *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone, *subscribe, *psubscribe, *queued, *execaborterr;
 };
 
 extern struct redisServer server;
@@ -439,12 +439,6 @@ unsigned long clientSubscriptionCount(client *c);
 // publish message to all subscribe clients.
 int pubsubPublishMessage(robj *channel, robj *message);
 
-// flag transaction as dirty, so will exec failed.
-void flagTransactionAsDirty(client *c);
-
-// touch a key which been watched.
-void touchWatchedKey(redisDb *db, robj *key);
-
 // execute the command.
 void call(client *c);
 
@@ -452,15 +446,15 @@ void call(client *c);
 
 // delete the key from expires set if exists, but logically has been expired.
 // return 1 if key remove from expires, 0 key not exists.
-int expireIfNeed(redisDb *db, const robj *key);
+int expireIfNeed(redisDb *db, robj *key);
 
 // lookup a key from select db, null received when key not exists or has been expired.
 // as a side effect, if key exists but logical expired, will delete by using dbSyncDelete or dbAsyncDelete.
-robj *lookupKeyRead(redisDb *db, const robj *key);
+robj *lookupKeyRead(redisDb *db, robj *key);
 
 // lookup a key from select db, null received when key not exists or has been expired.
 // as a side effect, if key exists but logical expired, will delete by using dbSyncDelete or dbAsyncDelete.
-robj *lookupKeyWrite(redisDb *db, const robj *key);
+robj *lookupKeyWrite(redisDb *db, robj *key);
 
 // lookup a key from select db, null received when key not exists or has been expired.
 // as a side effect, if key exists but logical expired, will delete by using dbSyncDelete or dbAsyncDelete.
@@ -491,10 +485,16 @@ void dbAdd(client *c, robj *key, robj *value);
 void dbReplace(client *c, robj *key, robj *value);
 
 // remove db expire key
-void removeExpire(client *c, robj *key);
+void removeExpire(redisDb *db, robj *key);
+
+// sync delete a key from db.
+int dbSyncDelete(redisDb *db, robj *key);
 
 // get the key expire milliseconds
 long long getExpire(redisDb *db, robj *key);
+
+// signal key as modified. useful for the client which interested the keys.
+void signalKeyAsModified(redisDb *db, robj *key);
 
 //------------- list prototype --------------
 
@@ -515,6 +515,26 @@ void* listPopSaver(void *data, unsigned int size);
 
 // list len.
 unsigned int listTypeLen(robj *lobj);
+
+//-------------multi prototype---------
+
+// watch a key.
+void watchForKey(client *c, robj *key);
+
+// unwatch all keys.
+void unWatchAllKeys(client *c);
+
+// flag transaction as dirty, so will exec failed.
+void flagTransactionAsDirty(client *c);
+
+// touch a key which been watched.
+void touchWatchedKey(redisDb *db, robj *key);
+
+// discard multi transaction.
+void discardTransaction(client *c);
+
+// touch a watched key.
+void touchWatchedKey(redisDb *db, robj *key);
 
 //-------------syncio-------------------
 size_t syncRead(int fd, char *ptr, size_t size, long long timeout);
@@ -556,7 +576,7 @@ void freeClient(client *c);
 void freeClientAsync(client *c);
 void freeClientInFreeQueueAsync(void);
 void initClientMultiState(client *c);
-
+void freeClientMultiState(client *c);
 //-------------cron job-----------------
 
 void clientCron(void);

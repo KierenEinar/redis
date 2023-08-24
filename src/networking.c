@@ -657,6 +657,10 @@ void freeClient(client *c) {
     }
 
     listDelNode(server.client_list, c->client_list_node);
+
+    unWatchAllKeys(c);
+    listRelease(c->watch_keys);
+
 }
 
 void freeClientAsync(client *c) {

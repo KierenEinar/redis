@@ -128,18 +128,23 @@ void ltrimCommand(client *c) {
         rtrim = -end - 1;
     }
 
+    int deleted = 0;
+
     if (subject->encoding == REDIS_ENCODING_LIST) {
         quicklist *ql = subject->ptr;
-        quicklistDelRange(ql, 0, ltrim);
-        quicklistDelRange(ql, -rtrim, rtrim);
+        deleted += quicklistDelRange(ql, 0, ltrim);
+        deleted += quicklistDelRange(ql, -rtrim, rtrim);
     } else {
         // make sure subject encoding is quick list
     }
 
     if (listTypeLen(subject) == 0) {
         quicklistRelease(subject->ptr);
-        removeExpire(c, key);
-        dictDelete(c->db->dict, key);
+        dbSyncDelete(c->db, subject);
+    }
+
+    if (deleted) {
+        signalKeyAsModified(c->db, subject);
     }
 
     addReplyBulk(c, shared.ok);
@@ -169,12 +174,19 @@ void pushGenericCommand(client *c, int where) {
         return;
     }
 
+    int pushed = 0;
+
     for (int j=2; j<c->argc; j++) {
         if (!lobj) {
             lobj = createListTypeObject();
             dbAdd(c, c->argv[1], lobj);
         }
         listTypePush(lobj, c->argv[j], where);
+        pushed++;
+    }
+
+    if (pushed) {
+        signalKeyAsModified(c->db, c->argv[1]);
     }
 
     addReplyLongLong(c, listTypeLen(lobj));
@@ -199,10 +211,12 @@ void popGenericCommand(client *c, int where) {
 
     if (!listTypeLen(lobj)) {
         quicklistRelease(lobj->ptr);
-        removeExpire(c, c->argv[1]);
-        dictDelete(c->db->dict, c->argv[1]->ptr);
+        dbSyncDelete(c->db, c->argv[1]);
     }
 
+    if (value) {
+        signalKeyAsModified(c->db, c->argv[1]);
+    }
 
 }
 
@@ -283,8 +297,7 @@ void blockingGenericCommand(client *c, int where) {
 
             if (!listTypeLen(o)) {
                 quicklistRelease(o->ptr);
-                removeExpire(c, c->argv[1]);
-                dictDelete(c->db->dict, c->argv[1]->ptr);
+                dbSyncDelete(c->db, c->argv[j]);
             }
 
             if (val != NULL) {

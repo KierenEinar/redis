@@ -13,9 +13,18 @@ void dbReplace(client *c, robj *key, robj *value) {
     dictReplace(c->db->dict, key->ptr, value);
 }
 
-void removeExpire(client *c, robj *key) {
-    if (dictSize(c->db->expires) == 0) return;
-    dictDelete(c->db->expires, key->ptr);
+void removeExpire(redisDb *db, robj *key) {
+    if (dictSize(db->expires) == 0) return;
+    dictDelete(db->expires, key->ptr);
+}
+
+int dbSyncDelete(redisDb *db, robj *key) {
+    if (dictFind(db->expires, key)) dictDelete(db->expires, key);
+    if (dictFind(db->dict, key)) {
+        dictDelete(db->dict, key);
+        return 1;
+    }
+    return 0;
 }
 
 void setKey(client *c, robj *key, robj *value) {
@@ -26,7 +35,8 @@ void setKey(client *c, robj *key, robj *value) {
         dbReplace(c, key, value);
     }
     incrRefCount(value);
-    removeExpire(c, key);
+    removeExpire(c->db, key);
+    signalKeyAsModified(c->db, key);
 }
 
 void setExpire(client *c, robj *key, long long expire) {
@@ -49,4 +59,8 @@ long long getExpire(redisDb *db, robj *key) {
 
     // todo assert de not null
     return dictGetSignedInteger(de);
+}
+
+void signalKeyAsModified(redisDb *db, robj *key) {
+    touchWatchedKey(db, key);
 }

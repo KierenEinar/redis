@@ -14,6 +14,7 @@ list* listCreate() {
     l->tail = NULL;
     l->free = NULL;
     l->dup = NULL;
+    l->match = NULL;
     return l;
 }
 

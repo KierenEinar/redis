@@ -96,6 +96,12 @@ struct redisCommand redisCommandTable[] = {
     {"subscribe", subscribeCommand, -2},
     {"psubscribe", psubscribeCommand, -2},
     {"publish", publishCommand, 3},
+    {"multi", multiCommand, 1},
+    {"watch", watchCommand, -2},
+    {"unwatch", unWatchCommand, 1},
+    {"exec", execCommand, 1},
+    {"discard", discardCommand, 1},
+
 };
 
 // dict type for command table
@@ -168,6 +174,7 @@ void createSharedObject(void) {
     shared.subscribe = createObject(REDIS_OBJECT_STRING, sdsnew("$9\r\nsubscribe\r\n"));
     shared.psubscribe = createObject(REDIS_OBJECT_STRING, sdsnew("$10\r\npsubscribe\r\n"));
     shared.queued = createObject(REDIS_OBJECT_STRING, sdsnew("$6\r\nqueued\r\n"));
+    shared.execaborterr = createObject(REDIS_OBJECT_STRING, sdsnew("-EXECABORT Transaction discarded because of previous errors.\r\n"));
     for (long j=0; j<OBJ_SHARED_INTEGERS; j++) {
         shared.integers[j] = createObject(REDIS_OBJECT_STRING, (void*)(j));
         shared.integers[j]->encoding = REDIS_ENCODING_INT;
@@ -197,6 +204,7 @@ void createSharedObject(void) {
     makeObjectShared(shared.subscribe);
     makeObjectShared(shared.psubscribe);
     makeObjectShared(shared.queued);
+    makeObjectShared(shared.execaborterr);
 }
 
 
