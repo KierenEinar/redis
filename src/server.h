@@ -99,6 +99,11 @@
 #define UNIT_SECONDS 1
 #define UNIT_MILLISECONDS 2
 
+// ------- propagate flags ------------
+#define PROPAGATE_CMD_NONE 0
+#define PROPAGATE_CMD_AOF 1
+#define PROPAGATE_CMD_FULL (PROPAGATE_CMD_AOF)
+
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -108,6 +113,7 @@ typedef struct redisObject {
 }robj;
 
 typedef struct redisDb {
+    long id;
     dict* dict;
     dict* expires;
     dict *blocking_keys;
@@ -212,6 +218,14 @@ typedef struct redisServer {
     dict *pubsub_channels;
     list *pubsub_patterns;
 
+    // aof
+    int aof_seldb;
+    sds aof_buf;
+    unsigned long long dirty;
+
+
+    struct redisCommand *expireCommand;
+    struct redisCommand *pexpireCommand;
 
 }redisServer;
 
@@ -333,6 +347,14 @@ void getCommand(client *c);
 // set key value [EX EXPIRES] [PX milliseconds] [NX|XX]
 void setCommand(client *c);
 
+// expire the key, value is ttl seconds.
+void expireCommand(client *c);
+
+// expire the key, value is ttl milliseconds.
+void pexpireCommand(client *c);
+
+void expireGenericCommand(client *c, int unit);
+
 // utils for redis command prototype
 // generic get command
 int getGenericCommand(client *c);
@@ -440,7 +462,7 @@ unsigned long clientSubscriptionCount(client *c);
 int pubsubPublishMessage(robj *channel, robj *message);
 
 // execute the command.
-void call(client *c);
+void call(client *c, int flags);
 
 // ----------- command utils -------------
 
@@ -586,6 +608,13 @@ long long serverCron(struct eventLoop *el, int id, void *clientData);
 // ------------process command -------------
 int processCommand(client *c);
 
+// ------------propagate command --------------
+void propagateCommand(client *c, int flags);
+
+// --------------- aof -----------------
+sds catAppendOnlyFileExpireCommand(sds buf, struct redisCommand *cmd, robj *key, robj *expire);
+sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv);
+void feedAppendOnlyFile(struct redisCommand *cmd, long dbid, int argc, robj **argv);
 // ---------- free method -----------------
 void listFreePubsubPatterns(void *ptr);
 void listFreeObject(void *ptr);

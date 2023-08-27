@@ -81,6 +81,8 @@ struct redisSharedObject shared;
 struct redisCommand redisCommandTable[] = {
     {"get", getCommand, 2},
     {"set", setCommand, -3},
+    {"expire", expireCommand, 3},
+    {"pexpire", pexpireCommand, 3},
     {"ttl", ttlCommand, 2},
     {"pttl", pttlCommand, 2},
     {"mset", msetCommand, -3},
@@ -301,6 +303,8 @@ void clientCron(void) {
 
 void initServer(void) {
 
+    robj *expireCommandKey, *pexpireCommandKey;
+
     createSharedObject();
 
     // create commands
@@ -311,12 +315,16 @@ void initServer(void) {
     server.dbnum = REDIS_DEFAULT_DB_NUM;
     server.dbs = zmalloc(sizeof(redisDb) * server.dbnum);
     for (int j=0; j<server.dbnum; j++) {
+        server.dbs[j].id = j;
         server.dbs[j].dict = dictCreate(&dbDictType);
         server.dbs[j].expires = dictCreate(&keyptrDictType);
         server.dbs[j].blocking_keys = dictCreate(&objectKeyValueListDictType);
         server.dbs[j].ready_keys = dictCreate(&objectKeyValuePtrDictType);
         server.dbs[j].watch_keys = dictCreate(&objectKeyValueListDictType);
     }
+
+    expireCommandKey = createStringObject("expire", 8);
+    pexpireCommandKey = createStringObject("pexpire", 9);
 
     server.list_fill_factor = DEFAULT_LIST_FILL_FACTOR;
     server.backlog = DEFAULT_BACKLOG;
@@ -329,6 +337,11 @@ void initServer(void) {
     server.ready_keys = listCreate();
     server.pubsub_channels = dictCreate(&objectKeyValueListDictType);
     server.pubsub_patterns = listCreate();
+    server.aof_seldb = -1;
+    server.aof_buf = sdsempty();
+    server.dirty = 0;
+    server.expireCommand = lookupCommand(expireCommandKey);
+    server.pexpireCommand = lookupCommand(pexpireCommandKey);
 
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
     listSetMatchMethod(server.pubsub_patterns, listValueEqual);
@@ -348,6 +361,9 @@ void initServer(void) {
 
     elCreateTimerEvent(server.el, SERVER_CRON_PERIOD_MS, serverCron, NULL, NULL);
 
+    decrRefCount(expireCommandKey);
+    decrRefCount(pexpireCommandKey);
+
 }
 
 void selectDb(client *c, int id) {
@@ -357,9 +373,16 @@ void selectDb(client *c, int id) {
     c->db = &server.dbs[id];
 }
 
-void call(client *c) {
+void call(client *c, int flags) {
+
+    unsigned long long dirty = server.dirty;
 
     c->cmd->proc(c);
+
+    if (dirty != server.dirty) {
+        propagateCommand(c, flags);
+    }
+
 }
 
 int processCommand(client *c) {
@@ -397,7 +420,7 @@ int processCommand(client *c) {
 
     } else {
 
-        call(c);
+        call(c, PROPAGATE_CMD_FULL);
 
     }
 
@@ -417,6 +440,13 @@ void listFreePubsubPatterns(void *ptr) {
 void listFreeObject(void *ptr) {
     // todo make sure ptr is robj
     decrRefCount(ptr);
+}
+
+void propagateCommand(client *c, int flags) {
+
+    if (flags & PROPAGATE_CMD_AOF) {
+        feedAppendOnlyFile(c->cmd, c->db->id, c->argc, c->argv);
+    }
 }
 
 int main(int argc, char **argv) {

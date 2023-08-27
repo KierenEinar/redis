@@ -66,8 +66,21 @@ sds sdsMakeRoomFor(sds s, size_t len) {
 sds sdscatlen(const char *c, size_t len) {
     return NULL;
 }
-sds sdscatsds(sds s) {
-    return NULL;
+sds sdscatsds(sds dest, sds src) {
+
+    size_t avail, dlen, slen;
+    sdshdr *dhdr;
+
+    avail = sdsavail(dest);
+    dlen = sdslen(dest);
+    slen = sdslen(src);
+    if (avail < slen) {
+       dest = sdsMakeRoomFor(dest, slen);
+    }
+
+    memcpy(dest + dlen, src, slen);
+    sdsincrlen(dest, slen);
+    return dest;
 }
 size_t sdslen(sds s) {
     sdshdr *sh;
@@ -180,7 +193,12 @@ sds sdscatfmt(sds s, const char *fmt, ...) {
 
 }
 sds sdscatprintf(sds s, const char *fmt, ...) {
-    return NULL;
+
+    va_list list;
+    va_start(list, fmt);
+    s = sdscatvnprintf(s, fmt, list);
+    va_end(list);
+    return s;
 }
 sds sdscatvnprintf(sds s, const char *fmt, va_list list) {
     return NULL;

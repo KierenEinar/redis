@@ -151,6 +151,43 @@ void setCommand(client *c) {
 
 }
 
+void expireCommand(client *c) {
+    expireGenericCommand(c, UNIT_SECONDS);
+}
+
+void pexpireCommand(client *c) {
+    expireGenericCommand(c, UNIT_MILLISECONDS);
+}
+
+void expireGenericCommand(client *c, int unit) {
+    robj *ttl;
+    long long when;
+
+    ttl = getDecodedObject(c->argv[2]);
+    if (!string2ll(ttl->ptr, sdslen(ttl->ptr), &when)) {
+        addReplyError(c, "integer invalid or out of bounds");
+        return;
+    }
+
+    if (when < 0) {
+        addReplyError(c, "invalid expire time");
+        return;
+    }
+
+    if (!lookupKeyReadOrReply(c, c->argv[1], shared.czero)) {
+        return;
+    }
+
+    if (unit == UNIT_SECONDS) {
+        when *= 1000;
+    }
+
+    setExpire(c, c->argv[1], when);
+    addReply(c, shared.cone);
+    signalKeyAsModified(c->db, c->argv[1]);
+}
+
+
 void msetCommand(client *c) {
     msetGenericCommand(c, 0);
 }

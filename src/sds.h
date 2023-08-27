@@ -25,7 +25,7 @@ sds sdsempty();
 void sdsfree(sds s);
 sds sdsMakeRoomFor(sds s, size_t len);
 sds sdscatlen(const char *c, size_t len);
-sds sdscatsds(sds s);
+sds sdscatsds(sds dest, sds src);
 size_t sdslen(sds s);
 void sdsincrlen(sds s, size_t len);
 // get the free space of sds.

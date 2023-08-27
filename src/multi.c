@@ -194,7 +194,7 @@ void execCommand(client *c) {
         c->argv = mc->argv;
         c->cmd = mc->cmd;
 
-        call(c);
+        call(c, PROPAGATE_CMD_FULL);
     }
 
     c->argc = orig_argc;
