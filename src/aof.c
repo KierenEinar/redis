@@ -102,10 +102,90 @@ void feedAppendOnlyFile(struct redisCommand *cmd, long dbid, int argc, robj **ar
 
 }
 
-ssize_t aofWrite(sds buf, ssize_t len) {
+ssize_t aofWrite(sds buf, size_t len) {
+
+    ssize_t totwritten = 0, nwritten = 0;
+
+    while (len > 0) {
+
+        nwritten = write(server.aof_fd, buf, len);
+        if (nwritten == -1) {
+            if (errno == EAGAIN || errno == EINTR) {
+                continue;
+            }
+            return totwritten > 0 ? totwritten : -1;
+        }
+        totwritten += nwritten;
+        buf+=nwritten;
+        len-=nwritten;
+    }
+
+    return totwritten > 0 ? totwritten : -1;
+
+}
+
+void flushAppendOnlyFile(void) {
+
+    unsigned long sync_in_progress = 0;
+    ssize_t towritten;
 
 
+    if (sdslen(server.aof_buf) == 0)
+        return;
+
+    if (server.aof_fsync == AOF_FSYNC_EVERYSEC) {
+
+        sync_in_progress = bioPendingJobsOfType(BIO_AOF_FSYNC);
+
+        if (sync_in_progress) {
+
+            if (server.aof_postponed_start == 0) {
+                server.aof_postponed_start = server.unix_time;
+                return;
+            }
+
+            if (server.unix_time - server.aof_postponed_start < 2) {
+                return;
+            }
+        }
+    }
 
 
+    towritten = aofWrite(server.aof_buf, sdslen(server.aof_buf));
+
+    if (towritten != sdslen(server.aof_buf)) {
+
+        if (towritten > 0) {
+            if (ftruncate(server.aof_fd, server.aof_update_size) == -1) {
+                server.aof_update_size += towritten;
+                server.aof_buf = sdsrange(server.aof_buf, towritten, -1);
+            }
+        }
+
+        if (server.aof_fsync == AOF_FSYNC_ALWAYS) {
+            exit(-1);
+        }
+
+        return;
+    }
+
+    server.aof_postponed_start = 0;
+    server.aof_update_size += towritten;
+
+    if (sdslen(server.aof_buf) + sdsavail(server.aof_buf) < 4000) {
+        server.aof_buf = sdsclear(server.aof_buf);
+    } else {
+        sdsfree(server.aof_buf);
+        server.aof_buf = sdsempty();
+    }
+
+    if (server.aof_fsync == AOF_FSYNC_ALWAYS) {
+        fsync(server.aof_fd);
+        server.aof_last_fsync = server.unix_time;
+    } else if (server.aof_fsync == AOF_FSYNC_EVERYSEC && server.aof_last_fsync - server.unix_time > 1){
+
+        if (!sync_in_progress) bioCreateBackgroundJob(BIO_AOF_FSYNC, (void *)(long long)server.aof_fd, NULL, NULL);
+        server.aof_last_fsync = server.unix_time;
+    }
 
 }

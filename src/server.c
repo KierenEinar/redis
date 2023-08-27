@@ -259,10 +259,14 @@ int listenPort(int backlog) {
 
 void beforeSleep (struct eventLoop *el) {
     handleClientsPendingWrite();
-    clientCron();
+
+    flushAppendOnlyFile();
 }
 
 long long serverCron(struct eventLoop *el, int id, void *clientData) {
+
+    clientCron();
+
     freeClientInFreeQueueAsync();
 
     return SERVER_CRON_PERIOD_MS;
@@ -343,6 +347,10 @@ void initServer(void) {
     server.dirty = 0;
     server.expireCommand = lookupCommand(expireCommandKey);
     server.pexpireCommand = lookupCommand(pexpireCommandKey);
+    server.aof_fsync = AOF_FSYNC_EVERYSEC;
+    server.aof_postponed_start = 0;
+    server.aof_update_size = 0;
+    server.aof_last_fsync = time(NULL);
 
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
     listSetMatchMethod(server.pubsub_patterns, listValueEqual);

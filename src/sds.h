@@ -22,6 +22,7 @@ sds sdsnew(const char *c);
 sds sdsnewlen(const char *c, size_t len);
 sds sdsdup(sds s);
 sds sdsempty();
+sds sdsclear(sds s);
 void sdsfree(sds s);
 sds sdsMakeRoomFor(sds s, size_t len);
 sds sdscatlen(const char *c, size_t len);
@@ -42,7 +43,7 @@ size_t sdsavail(sds s);
 sds sdscatfmt(sds s, const char *fmt, ...);
 sds sdscatprintf(sds s, const char *fmt, ...);
 sds sdscatvnprintf(sds s, const char *fmt, va_list list);
-
+sds sdsrange(sds s, ssize_t start, ssize_t end);
 #endif //REDIS_SDS_H
 
 

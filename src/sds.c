@@ -43,6 +43,11 @@ sds sdsdup(sds s) {
 sds sdsempty() {
     return sdsnewlen(NULL, 0);
 }
+
+sds sdsclear(sds s) {
+    return NULL;
+}
+
 sds sdsMakeRoomFor(sds s, size_t len) {
 
     if (sdsavail(s) >= len) {
@@ -201,5 +206,9 @@ sds sdscatprintf(sds s, const char *fmt, ...) {
     return s;
 }
 sds sdscatvnprintf(sds s, const char *fmt, va_list list) {
+    return NULL;
+}
+
+sds sdsrange(sds s, ssize_t start, ssize_t end) {
     return NULL;
 }

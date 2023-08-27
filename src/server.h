@@ -22,6 +22,7 @@
 #include <arpa/inet.h>
 #include <stdarg.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "varint.h"
 #include "utils.h"
@@ -105,6 +106,11 @@
 #define PROPAGATE_CMD_NONE 0
 #define PROPAGATE_CMD_AOF 1
 #define PROPAGATE_CMD_FULL (PROPAGATE_CMD_AOF)
+
+// ------------ AOF POLICY-------------
+#define AOF_FSYNC_NO  0
+#define AOF_FSYNC_ALWAYS 1
+#define AOF_FSYNC_EVERYSEC 2
 
 typedef struct redisObject {
     unsigned type:4;
@@ -224,8 +230,13 @@ typedef struct redisServer {
     int aof_seldb;
     sds aof_buf;
     unsigned long long dirty;
+    long long aof_postponed_start;
+    ssize_t aof_update_size;
     int aof_fd;
+    int aof_fsync;
     char *aof_filename;
+    time_t aof_last_fsync;
+
 
     struct redisCommand *expireCommand;
     struct redisCommand *pexpireCommand;
@@ -615,10 +626,11 @@ int processCommand(client *c);
 void propagateCommand(client *c, int flags);
 
 // --------------- aof -----------------
-ssize_t aofWrite(sds buf, ssize_t len);
+ssize_t aofWrite(sds buf, size_t len);
 sds catAppendOnlyFileExpireCommand(sds buf, struct redisCommand *cmd, robj *key, robj *expire);
 sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv);
 void feedAppendOnlyFile(struct redisCommand *cmd, long dbid, int argc, robj **argv);
+void flushAppendOnlyFile(void);
 // ---------- free method -----------------
 void listFreePubsubPatterns(void *ptr);
 void listFreeObject(void *ptr);
