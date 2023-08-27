@@ -102,3 +102,10 @@ void feedAppendOnlyFile(struct redisCommand *cmd, long dbid, int argc, robj **ar
 
 }
 
+ssize_t aofWrite(sds buf, ssize_t len) {
+
+
+
+
+
+}

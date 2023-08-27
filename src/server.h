@@ -46,6 +46,8 @@
 #define DEFAULT_LIST_FILL_FACTOR -2
 #define SERVER_NETWORK_IP_FD_LEN 16
 
+#define DEFAULT_AOF_FILENAME "appendonly.aof"
+
 #define LIST_ITER_DIR_FORWARD 1
 #define LIST_ITER_DIR_BACKWARD 2
 
@@ -222,7 +224,8 @@ typedef struct redisServer {
     int aof_seldb;
     sds aof_buf;
     unsigned long long dirty;
-
+    int aof_fd;
+    char *aof_filename;
 
     struct redisCommand *expireCommand;
     struct redisCommand *pexpireCommand;
@@ -612,6 +615,7 @@ int processCommand(client *c);
 void propagateCommand(client *c, int flags);
 
 // --------------- aof -----------------
+ssize_t aofWrite(sds buf, ssize_t len);
 sds catAppendOnlyFileExpireCommand(sds buf, struct redisCommand *cmd, robj *key, robj *expire);
 sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv);
 void feedAppendOnlyFile(struct redisCommand *cmd, long dbid, int argc, robj **argv);

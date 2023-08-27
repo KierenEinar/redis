@@ -339,6 +339,7 @@ void initServer(void) {
     server.pubsub_patterns = listCreate();
     server.aof_seldb = -1;
     server.aof_buf = sdsempty();
+    server.aof_filename = DEFAULT_AOF_FILENAME;
     server.dirty = 0;
     server.expireCommand = lookupCommand(expireCommandKey);
     server.pexpireCommand = lookupCommand(pexpireCommandKey);
@@ -355,6 +356,12 @@ void initServer(void) {
         if (elCreateFileEvent(server.el, fd, EL_READABLE, acceptTcpHandler, NULL) == EL_ERR) {
             exit(1);
         }
+    }
+
+    // open aof
+    server.aof_fd = open(server.aof_filename, O_CREAT | O_APPEND | O_WRONLY, 0644);
+    if (server.aof_fd == -1) {
+        exit(-1);
     }
 
     elSetBeforeSleepProc(server.el, beforeSleep);
