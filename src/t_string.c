@@ -109,6 +109,7 @@ int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expire
     setKey(c, key, value);
     if (expire) setExpire(c, key, expire);
     addReply(c, ok_reply ? ok_reply :shared.ok);
+    server.dirty++;
     return C_OK;
 }
 
@@ -235,6 +236,6 @@ int msetGenericCommand(client *c, int nx) {
     }
 
     addReply(c, nx ? shared.cone : shared.ok);
-
+    server.dirty+=(c->argc - 1) /2;
     return C_OK;
 }

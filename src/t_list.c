@@ -187,6 +187,7 @@ void pushGenericCommand(client *c, int where) {
 
     if (pushed) {
         signalKeyAsModified(c->db, c->argv[1]);
+        server.dirty+=pushed;
     }
 
     addReplyLongLong(c, listTypeLen(lobj));
