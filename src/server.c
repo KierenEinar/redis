@@ -459,7 +459,7 @@ void listFreeObject(void *ptr) {
 
 void propagateCommand(client *c, int flags) {
 
-    if (flags & PROPAGATE_CMD_AOF) {
+    if (flags & PROPAGATE_CMD_AOF && server.aof_state == AOF_ON) {
         feedAppendOnlyFile(c->cmd, c->db->id, c->argc, c->argv);
     }
 }

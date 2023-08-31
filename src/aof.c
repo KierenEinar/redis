@@ -51,13 +51,13 @@ sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv) {
     return buf;
 }
 
-void feedAppendOnlyFile(struct redisCommand *cmd, long dbid, int argc, robj **argv) {
+void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **argv) {
 
     sds buf = sdsempty();
 
     if (dbid != server.aof_seldb) {
         char db_buf[64];
-        snprintf(db_buf, sizeof(db_buf), "%ld", dbid);
+        snprintf(db_buf, sizeof(db_buf), "%d", dbid);
         buf = sdscatfmt(buf, "*2\r\n$6\r\nSELECT\r\n$%U\r\n%i\r\n", strlen(db_buf), dbid);
         server.aof_seldb = dbid;
     }
@@ -128,7 +128,6 @@ void flushAppendOnlyFile(void) {
 
     unsigned long sync_in_progress = 0;
     ssize_t towritten;
-
 
     if (sdslen(server.aof_buf) == 0)
         return;

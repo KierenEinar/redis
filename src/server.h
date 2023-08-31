@@ -112,6 +112,10 @@
 #define AOF_FSYNC_ALWAYS 1
 #define AOF_FSYNC_EVERYSEC 2
 
+// ------------ AOF STATE --------------
+#define AOF_OFF 0
+#define AOF_ON 1
+
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -121,7 +125,7 @@ typedef struct redisObject {
 }robj;
 
 typedef struct redisDb {
-    long id;
+    int id;
     dict* dict;
     dict* expires;
     dict *blocking_keys;
@@ -236,7 +240,7 @@ typedef struct redisServer {
     int aof_fsync;
     char *aof_filename;
     time_t aof_last_fsync;
-
+    int aof_state;
 
     struct redisCommand *expireCommand;
     struct redisCommand *pexpireCommand;
@@ -629,7 +633,7 @@ void propagateCommand(client *c, int flags);
 ssize_t aofWrite(sds buf, size_t len);
 sds catAppendOnlyFileExpireCommand(sds buf, struct redisCommand *cmd, robj *key, robj *expire);
 sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv);
-void feedAppendOnlyFile(struct redisCommand *cmd, long dbid, int argc, robj **argv);
+void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **argv);
 void flushAppendOnlyFile(void);
 // ---------- free method -----------------
 void listFreePubsubPatterns(void *ptr);

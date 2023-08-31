@@ -10,8 +10,8 @@
 void bioInit(void);
 unsigned long bioPendingJobsOfType(int type);
 void *bioProcessBackgroundJobs(void *argv);
-unsigned long waitStepOfType(int type);
-void bioCreateBackgroundJob(int type, void *arg1, void *arg2, void *arg3);
+int bioWaitJobFinish(int type);
+void bioCreateBackgroundJob(int type, ...);
 void bioKillThreads(void);
 
 #define BIO_CLOSE_FILE 0
@@ -21,9 +21,7 @@ void bioKillThreads(void);
 
 typedef struct bio_job {
     time_t time;
-    void *arg1;
-    void *arg2;
-    void *arg3;
+    va_list va_args;
 }bio_job;
 
 
