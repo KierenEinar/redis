@@ -258,9 +258,11 @@ int listenPort(int backlog) {
 }
 
 void beforeSleep (struct eventLoop *el) {
-    handleClientsPendingWrite();
 
     flushAppendOnlyFile();
+
+    handleClientsPendingWrite();
+
 }
 
 long long serverCron(struct eventLoop *el, int id, void *clientData) {

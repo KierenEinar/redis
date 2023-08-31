@@ -635,6 +635,7 @@ sds catAppendOnlyFileExpireCommand(sds buf, struct redisCommand *cmd, robj *key,
 sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv);
 void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **argv);
 void flushAppendOnlyFile(void);
+int loadAppendOnlyFile(char *filename);
 // ---------- free method -----------------
 void listFreePubsubPatterns(void *ptr);
 void listFreeObject(void *ptr);

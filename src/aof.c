@@ -104,7 +104,7 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **arg
 
 ssize_t aofWrite(sds buf, size_t len) {
 
-    ssize_t totwritten = 0, nwritten = 0;
+    ssize_t totwritten = 0, nwritten;
 
     while (len > 0) {
 
@@ -127,17 +127,14 @@ ssize_t aofWrite(sds buf, size_t len) {
 void flushAppendOnlyFile(void) {
 
     unsigned long sync_in_progress = 0;
-    ssize_t towritten;
+    ssize_t nwritten;
 
     if (sdslen(server.aof_buf) == 0)
         return;
 
     if (server.aof_fsync == AOF_FSYNC_EVERYSEC) {
-
         sync_in_progress = bioPendingJobsOfType(BIO_AOF_FSYNC);
-
         if (sync_in_progress) {
-
             if (server.aof_postponed_start == 0) {
                 server.aof_postponed_start = server.unix_time;
                 return;
@@ -150,26 +147,25 @@ void flushAppendOnlyFile(void) {
     }
 
 
-    towritten = aofWrite(server.aof_buf, sdslen(server.aof_buf));
-
-    if (towritten != sdslen(server.aof_buf)) {
-
-        if (towritten > 0) {
+    nwritten = aofWrite(server.aof_buf, sdslen(server.aof_buf));
+    if (nwritten != sdslen(server.aof_buf)) {
+        if (nwritten > 0) {
             if (ftruncate(server.aof_fd, server.aof_update_size) == -1) {
-                server.aof_update_size += towritten;
-                server.aof_buf = sdsrange(server.aof_buf, towritten, -1);
+                server.aof_update_size += nwritten;
+                server.aof_buf = sdsrange(server.aof_buf, nwritten, -1);
+            } else {
+                nwritten = -1;
             }
         }
 
         if (server.aof_fsync == AOF_FSYNC_ALWAYS) {
             exit(-1);
         }
-
         return;
     }
 
     server.aof_postponed_start = 0;
-    server.aof_update_size += towritten;
+    server.aof_update_size += nwritten;
 
     if (sdslen(server.aof_buf) + sdsavail(server.aof_buf) < 4000) {
         server.aof_buf = sdsclear(server.aof_buf);
@@ -187,4 +183,9 @@ void flushAppendOnlyFile(void) {
         server.aof_last_fsync = server.unix_time;
     }
 
+}
+
+
+int loadAppendOnlyFile(char *filename) {
+    return C_ERR;
 }

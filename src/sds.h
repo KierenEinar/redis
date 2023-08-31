@@ -43,7 +43,7 @@ size_t sdsavail(sds s);
 sds sdscatfmt(sds s, const char *fmt, ...);
 sds sdscatprintf(sds s, const char *fmt, ...);
 sds sdscatvnprintf(sds s, const char *fmt, va_list list);
-sds sdsrange(sds s, ssize_t start, ssize_t end);
+sds sdsrange(sds s, long start, long end);
 #endif //REDIS_SDS_H
 
 

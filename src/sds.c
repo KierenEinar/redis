@@ -209,6 +209,43 @@ sds sdscatvnprintf(sds s, const char *fmt, va_list list) {
     return NULL;
 }
 
-sds sdsrange(sds s, ssize_t start, ssize_t end) {
-    return NULL;
+sds sdsrange(sds s, long start, long end) {
+
+    sdshdr *sh;
+    size_t slen;
+    long trim;
+
+    sh = (sdshdr*)((char*)s - sizeof(sdshdr));
+    slen = sh->used;
+
+    if (start < 0)
+        start = start + (long)slen;
+
+    if (end < 0)
+        end = end + (long)slen;
+
+    if (start < 0)
+        start = 0;
+
+    if (end >= slen)
+        end = (long)slen - 1;
+
+    if (start >= end || start >= slen)
+        return s;
+
+    trim = end - start + 1;
+
+    if (trim * 2 < sh->used + sh->free) {
+        sds news = sdsnewlen(NULL, trim * 2);
+        memcpy(news, sh->buf+start, trim);
+        news[trim] = '\0';
+        sdsfree(s);
+        return news;
+    }
+
+    memmove(s, sh->buf+start, trim);
+    sh->free = sh->free + sh->used - trim;
+    sh->used = trim;
+    sh->buf[trim] = '\0';
+    return s;
 }
