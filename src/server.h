@@ -23,6 +23,7 @@
 #include <stdarg.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/stat.h>
 
 #include "varint.h"
 #include "utils.h"
@@ -158,7 +159,6 @@ typedef struct client {
     long multilen;
     long bulklen;
     robj **argv; // array of string
-    long argvlen;
     int argc;
 
     int reqtype; // protocol is inline or multibulk
@@ -235,16 +235,21 @@ typedef struct redisServer {
     sds aof_buf;
     unsigned long long dirty;
     long long aof_postponed_start;
-    ssize_t aof_update_size;
+    off_t aof_update_size;
     int aof_fd;
     int aof_fsync;
     char *aof_filename;
     time_t aof_last_fsync;
     int aof_state;
+    int loading;
+    time_t loading_time;
+    off_t aof_loaded_bytes;
+    off_t aof_loading_total_bytes;
+    int aof_loaded_truncated;
 
-    struct redisCommand *expireCommand;
-    struct redisCommand *pexpireCommand;
-
+    struct redisCommand *expire_command;
+    struct redisCommand *pexpire_command;
+    struct redisCommand *multi_command;
 }redisServer;
 
 typedef struct pubsubPattern {
@@ -589,7 +594,7 @@ int processInlineBuffer(client *client);
 int clientHasPendingWrites(client *c);
 int writeToClient(client *client, int handler_installed);
 void handleClientsPendingWrite(void);
-
+void processEventsWhileBlocked(void);
 //-------------reply--------------------
 void addReply(client *c, robj *r);
 // reply bulk string to client.
@@ -627,15 +632,21 @@ long long serverCron(struct eventLoop *el, int id, void *clientData);
 int processCommand(client *c);
 
 // ------------propagate command --------------
+void propagate(struct redisCommand *cmd, int dbid, int argc, robj **argv, int flag);
 void propagateCommand(client *c, int flags);
-
+void execCommandPropagateMulti(client *c);
 // --------------- aof -----------------
 ssize_t aofWrite(sds buf, size_t len);
 sds catAppendOnlyFileExpireCommand(sds buf, struct redisCommand *cmd, robj *key, robj *expire);
 sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv);
 void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **argv);
 void flushAppendOnlyFile(void);
+client *createFakeClient(void);
+void freeFakeClient(client *c);
 int loadAppendOnlyFile(char *filename);
+void aofUpdateCurrentSize(void);
+void startLoading(FILE *fp);
+void loadingProgress(off_t pos);
 // ---------- free method -----------------
 void listFreePubsubPatterns(void *ptr);
 void listFreeObject(void *ptr);

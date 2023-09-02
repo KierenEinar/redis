@@ -89,9 +89,9 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **arg
         catAppendOnlyFileGenericCommand(buf, 3, tempargvs);
 
         if (exargv)
-            catAppendOnlyFileExpireCommand(buf, server.expireCommand, argv[1], exargv);
+            catAppendOnlyFileExpireCommand(buf, server.expire_command, argv[1], exargv);
         if (pxargv)
-            catAppendOnlyFileExpireCommand(buf, server.pexpireCommand, argv[1], pxargv);
+            catAppendOnlyFileExpireCommand(buf, server.pexpire_command, argv[1], pxargv);
     }  else {
         catAppendOnlyFileGenericCommand(buf, argc, argv);
     }
@@ -185,7 +185,234 @@ void flushAppendOnlyFile(void) {
 
 }
 
+client *createFakeClient(void) {
+    client *c;
+
+    c = zmalloc(sizeof(*c));
+
+    c->argc = 0;
+    c->argv = NULL;
+    selectDb(c, 0);
+    initClientMultiState(c);
+    c->flag = 0;
+    c->reqtype = PROTO_REQ_MULTI;
+    c->bulklen = 0l;
+    c->multilen = 0l;
+    c->querybuf = NULL;
+    c->bufpos = 0l;
+    c->bufcap = 0l;
+    c->reply_bytes = 0l;
+    c->cmd = NULL;
+    c->client_list_node = NULL;
+    c->client_close_node = NULL;
+    c->watch_keys = NULL;
+    c->reply = listCreate();
+    c->fd = -1;
+    c->sentlen = 0l;
+    return c;
+
+}
+
+void freeFakeClientArgv(int argc, robj **argv) {
+    int j;
+
+    for (j=0; j<argc; j++) {
+        decrRefCount(argv[j]);
+    }
+
+    zfree(argv);
+}
+
+void freeFakeClient(client *c) {
+
+    int j;
+
+    freeFakeClientArgv(c->argc, c->argv);
+
+    if (c->querybuf) {
+        zfree(c->querybuf);
+    }
+
+    zfree(c);
+}
+
+void startLoading(FILE *fp) {
+    struct stat st;
+
+    fstat(fileno(fp), &st);
+    server.loading = 1;
+    server.loading_time = time(NULL);
+    server.aof_loaded_bytes = 0;
+    server.aof_loading_total_bytes = st.st_size;
+}
+
+void loadingProgress(off_t pos) {
+    server.aof_loaded_bytes = pos;
+}
+
+void stopLoading(void) {
+    server.loading = 0;
+}
 
 int loadAppendOnlyFile(char *filename) {
-    return C_ERR;
+
+    client *fake_client;
+    struct stat st;
+    off_t valid_up_to, valid_up_to_multi;
+    int old_state;
+    long loops;
+
+    fake_client = createFakeClient();
+    FILE *fp = fopen(filename, "r");
+    if (fp == NULL || fstat(fileno(fp), &st) == -1) {
+        exit(-1);
+    }
+    if (st.st_size == 0) {
+        fclose(fp);
+        return C_ERR;
+    }
+
+    startLoading(fp);
+
+    old_state = server.aof_state;
+    loops = 0;
+    server.aof_state = AOF_OFF;
+
+    while (1) {
+
+        char buf[128];
+        int argc, j;
+        long arglen;
+        sds argsds;
+        robj **argv;
+
+        struct redisCommand *cmd;
+
+        if ((loops++)%1000 == 0) {
+            loadingProgress(ftello(fp));
+            processEventsWhileBlocked();
+        }
+
+        if (fgets(buf, sizeof(buf), fp) == NULL) {
+            if (feof(fp)) {
+                break;
+            } else {
+                goto readerr;
+            }
+        }
+
+        if (buf[0] != '*') goto fmterr;
+        if (buf[1] == '\0') goto readerr;
+
+        argc = atoi(buf+1);
+        if (argc < 1) goto fmterr;
+
+        argv = zmalloc(sizeof(robj*) * argc);
+
+        for (j=0; j<argc; j++) {
+
+            if (fgets(buf, sizeof(buf), fp) == NULL) {
+                freeFakeClientArgv(j, argv);
+                goto readerr;
+            }
+
+            if (buf[0] != '$') {
+                freeFakeClientArgv(j, argv);
+                goto fmterr;
+            }
+            if (buf[0] == '\0') {
+                freeFakeClientArgv(j, argv);
+                goto readerr;
+            }
+
+            arglen = strtol(buf+1, NULL, 10);
+            if (arglen < 1) {
+                freeFakeClientArgv(j, argv);
+                goto fmterr;
+            }
+
+            argsds = sdsnewlen(NULL, arglen);
+            if (fread(argsds, arglen, 1, fp) < arglen) {
+                sdsfree(argsds);
+                freeFakeClientArgv(j, argv);
+                goto readerr;
+            }
+
+            robj *obj = createObject(REDIS_OBJECT_STRING, argsds);
+            argv[j] = obj;
+        }
+
+        fake_client->argc = argc;
+        fake_client->argv = argv;
+
+        cmd = lookupCommand(fake_client->argv[0]);
+        if (cmd == NULL) {
+            exit(1);
+        }
+
+        if (cmd->proc == multiCommand) valid_up_to_multi = valid_up_to;
+
+        fake_client->cmd = cmd;
+        if (fake_client->flag & CLIENT_MULTI && cmd->proc != execCommand) {
+            queueMultiCommand(fake_client);
+        } else {
+            cmd->proc(fake_client);
+        }
+
+        if (!(fake_client->flag & CLIENT_MULTI)) {
+            valid_up_to = ftello(fp);
+        }
+
+        fake_client->cmd = NULL;
+        freeFakeClientArgv(fake_client->argc, fake_client->argv);
+
+    }
+
+    if (fake_client->flag & CLIENT_MULTI) {
+        valid_up_to = valid_up_to_multi;
+        goto uxeof;
+    }
+
+
+loaded_ok:
+    fclose(fp);
+    aofUpdateCurrentSize();
+    freeFakeClient(fake_client);
+    server.aof_state = old_state;
+    stopLoading();
+    return C_OK;
+readerr:
+    if (!feof(fp)) {
+        freeFakeClient(fake_client);
+        fclose(fp);
+        exit(-1);
+    }
+uxeof:
+    if (server.aof_loaded_truncated) {
+        if (valid_up_to > 0 && ftruncate(fileno(fp), valid_up_to) > 0) {
+            if (fseek(fp, 0, SEEK_END) == 0) {
+                goto loaded_ok;
+            }
+        }
+    }
+
+    freeFakeClient(fake_client);
+    fclose(fp);
+    exit(-1);
+fmterr:
+    freeFakeClient(fake_client);
+    fclose(fp);
+    exit(-1);
+}
+
+
+void aofUpdateCurrentSize(void) {
+
+    struct stat st;
+
+    if (fstat(server.aof_fd, &st) == -1) {
+        exit(1);
+    }
+
+    server.aof_update_size = st.st_size;
 }

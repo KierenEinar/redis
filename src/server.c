@@ -306,10 +306,16 @@ void clientCron(void) {
 
 }
 
+void loadDataFromDisk() {
+    if (server.aof_state == AOF_ON) {
+        loadAppendOnlyFile(server.aof_filename);
+    }
+}
+
 
 void initServer(void) {
 
-    robj *expireCommandKey, *pexpireCommandKey;
+    robj *expire_command_key, *pexpire_command_key, *multi_command_key;
 
     createSharedObject();
 
@@ -329,9 +335,9 @@ void initServer(void) {
         server.dbs[j].watch_keys = dictCreate(&objectKeyValueListDictType);
     }
 
-    expireCommandKey = createStringObject("expire", 8);
-    pexpireCommandKey = createStringObject("pexpire", 9);
-
+    expire_command_key = createStringObject("EXPIRE", 8);
+    pexpire_command_key = createStringObject("PEXPIRE", 9);
+    multi_command_key = createStringObject("MULTI", 6);
     server.list_fill_factor = DEFAULT_LIST_FILL_FACTOR;
     server.backlog = DEFAULT_BACKLOG;
     server.port = DEFAULT_BIND_PORT;
@@ -347,12 +353,18 @@ void initServer(void) {
     server.aof_buf = sdsempty();
     server.aof_filename = DEFAULT_AOF_FILENAME;
     server.dirty = 0;
-    server.expireCommand = lookupCommand(expireCommandKey);
-    server.pexpireCommand = lookupCommand(pexpireCommandKey);
+    server.expire_command = lookupCommand(expire_command_key);
+    server.pexpire_command = lookupCommand(pexpire_command_key);
+    server.multi_command = lookupCommand(multi_command_key);
     server.aof_fsync = AOF_FSYNC_EVERYSEC;
     server.aof_postponed_start = 0;
     server.aof_update_size = 0;
     server.aof_last_fsync = time(NULL);
+    server.loading = 0;
+    server.aof_state = AOF_ON;
+    server.aof_loaded_bytes = 0;
+    server.aof_loading_total_bytes = 0;
+    server.aof_loaded_truncated = 1;
 
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
     listSetMatchMethod(server.pubsub_patterns, listValueEqual);
@@ -374,12 +386,13 @@ void initServer(void) {
         exit(-1);
     }
 
+    loadDataFromDisk();
+    bioInit();
     elSetBeforeSleepProc(server.el, beforeSleep);
-
     elCreateTimerEvent(server.el, SERVER_CRON_PERIOD_MS, serverCron, NULL, NULL);
 
-    decrRefCount(expireCommandKey);
-    decrRefCount(pexpireCommandKey);
+    decrRefCount(expire_command_key);
+    decrRefCount(pexpire_command_key);
 
 }
 
@@ -459,11 +472,14 @@ void listFreeObject(void *ptr) {
     decrRefCount(ptr);
 }
 
-void propagateCommand(client *c, int flags) {
-
+void propagate(struct redisCommand *cmd, int dbid, int argc, robj **argv, int flags) {
     if (flags & PROPAGATE_CMD_AOF && server.aof_state == AOF_ON) {
-        feedAppendOnlyFile(c->cmd, c->db->id, c->argc, c->argv);
+        feedAppendOnlyFile(cmd, dbid, argc, argv);
     }
+}
+
+void propagateCommand(client *c, int flags) {
+    propagate(c->cmd, c->db->id, c->argc, c->argv, flags);
 }
 
 int main(int argc, char **argv) {

@@ -212,7 +212,7 @@ sds sdscatvnprintf(sds s, const char *fmt, va_list list) {
 sds sdsrange(sds s, long start, long end) {
 
     sdshdr *sh;
-    size_t slen;
+    size_t slen, realloc_len;
     long trim;
 
     sh = (sdshdr*)((char*)s - sizeof(sdshdr));
@@ -235,17 +235,21 @@ sds sdsrange(sds s, long start, long end) {
 
     trim = end - start + 1;
 
+    memmove(s, sh->buf+start, trim);
+    s[trim] = '\0';
+
     if (trim * 2 < sh->used + sh->free) {
-        sds news = sdsnewlen(NULL, trim * 2);
-        memcpy(news, sh->buf+start, trim);
-        news[trim] = '\0';
-        sdsfree(s);
-        return news;
+        realloc_len = trim * 2 + 1;
+        s = zrealloc(s, realloc_len);
+        sh = (sdshdr*)((char*)s - sizeof(sdshdr));
+        sh->used = trim;
+        sh->free = realloc_len - trim - 1;
+    } else {
+
+        sh->free = sh->free + sh->used - trim;
+        sh->used = trim;
+        sh->buf[trim] = '\0';
     }
 
-    memmove(s, sh->buf+start, trim);
-    sh->free = sh->free + sh->used - trim;
-    sh->used = trim;
-    sh->buf[trim] = '\0';
     return s;
 }

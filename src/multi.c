@@ -167,6 +167,8 @@ void discardCommand(client *c) {
 // exec the transaction.
 void execCommand(client *c) {
 
+    int must_propagate = 0;
+
     if (!(c->flag & CLIENT_MULTI)) {
         addReplyError(c, "EXEC without MULTI");
         return;
@@ -194,6 +196,12 @@ void execCommand(client *c) {
         c->argv = mc->argv;
         c->cmd = mc->cmd;
 
+        if (!must_propagate) {
+            // todo check cmd not read.
+            execCommandPropagateMulti(c);
+            must_propagate = 1;
+        }
+
         call(c, PROPAGATE_CMD_FULL);
     }
 
@@ -202,6 +210,10 @@ void execCommand(client *c) {
     c->cmd = orig_cmd;
 
     discardTransaction(c);
+
+    if (must_propagate) {
+        server.dirty++; // make sure the exec command will write to aof .
+    }
 
 }
 
@@ -223,4 +235,10 @@ void touchWatchedKey(redisDb *db, robj *key) {
         c->flag |= CLIENT_CAS_EXEC;
     }
 
+}
+
+void execCommandPropagateMulti(client *c) {
+    robj * multi = createObject(REDIS_OBJECT_STRING, "MULTI");
+    propagate(server.multi_command, c->db->id, c->argc, c->argv, PROPAGATE_CMD_FULL);
+    decrRefCount(multi);
 }

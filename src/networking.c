@@ -244,7 +244,7 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
     size_t nread;
     size_t readlen = PROTO_NREAD;
 
-    if (c->flag & CLIENT_CLOSE_AFTER_REPLY | c->flag & CLIENT_CLOSE_ASAP) return;
+    if ((c->flag & CLIENT_CLOSE_AFTER_REPLY) || (c->flag & CLIENT_CLOSE_ASAP)) return;
 
     if (c->bufcap - c->buflen < readlen) {
         if (c->querybuf == NULL) {
@@ -259,11 +259,9 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
     }
     fprintf(stdout, "fd=%d, mask=%d\r\n", fd, mask);
     nread = read(fd, c->querybuf+c->buflen, readlen);
-    if (nread <= 0) {
-        if (nread == -1) {
-            if (errno == EAGAIN) return;
-            freeClient(c);
-        }
+    if (nread == 0) {
+        if (errno == EAGAIN) return;
+        freeClient(c);
         return;
     }
 
@@ -590,6 +588,14 @@ void handleClientsPendingWrite(void) {
         }
     }
 
+}
+
+void processEventsWhileBlocked(void) {
+
+    int iterations = 4;
+    while (iterations--) {
+
+    }
 }
 
 void unlinkClient(client *c) {
