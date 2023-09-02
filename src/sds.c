@@ -45,7 +45,14 @@ sds sdsempty() {
 }
 
 sds sdsclear(sds s) {
-    return NULL;
+
+    sdshdr *sh;
+    sh = (sdshdr*)(s - sizeof(*sh));
+    memset(s, 0, sh->used);
+    sh->free+=sh->used;
+    sh->used = 0;
+    sh->buf[0] = '\0';
+    return s;
 }
 
 sds sdsMakeRoomFor(sds s, size_t len) {
