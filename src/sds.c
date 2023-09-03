@@ -32,7 +32,7 @@ sds sdsnewlen(const char *c, size_t len) {
 
 void sdsfree(sds s) {
     sdshdr *sh;
-    sh = (sdshdr*)(s - sizeof(*sh));
+    sh = (sdshdr*)((char *)s - sizeof(*sh));
     zfree(sh);
 }
 
@@ -64,7 +64,7 @@ sds sdsMakeRoomFor(sds s, size_t len) {
     sdshdr *sh;
     sh = (sdshdr*)((char*)s - sizeof(sdshdr));
 
-    size_t reallen = sh->used + len;
+    size_t reallen = sh->used + sh->free + len;
 
     if (reallen < SDS_PREALLOC) {
         reallen *= 2;
@@ -72,8 +72,11 @@ sds sdsMakeRoomFor(sds s, size_t len) {
         reallen +=SDS_PREALLOC;
     }
     sh->free = reallen - sh->used;
-    zrealloc(sh, sizeof(*sh) + reallen + 1);
-    return sh->buf;
+    sh = zrealloc(sh, sizeof(*sh) + reallen);
+
+    s = (char*)sh + sizeof(*sh);
+    return s;
+
 }
 sds sdscatlen(const char *c, size_t len) {
     return NULL;
@@ -81,7 +84,6 @@ sds sdscatlen(const char *c, size_t len) {
 sds sdscatsds(sds dest, sds src) {
 
     size_t avail, dlen, slen;
-    sdshdr *dhdr;
 
     avail = sdsavail(dest);
     dlen = sdslen(dest);
@@ -92,6 +94,7 @@ sds sdscatsds(sds dest, sds src) {
 
     memcpy(dest + dlen, src, slen);
     sdsincrlen(dest, slen);
+    dest[dlen+slen] = '\0';
     return dest;
 }
 size_t sdslen(sds s) {
@@ -104,6 +107,7 @@ void sdsincrlen(sds s, size_t len) {
     sdshdr *sh;
     sh = (sdshdr*)((char*)s - sizeof(sdshdr));
     sh->used+=len;
+    sh->free-=len;
 }
 
 size_t sdsavail(sds s) {
@@ -201,6 +205,10 @@ sds sdscatfmt(sds s, const char *fmt, ...) {
     }
 
     va_end(ap);
+    if (sdsavail(s) == 0) {
+        s = sdsMakeRoomFor(s, 1);
+    }
+    s[i] = '\0';
     return s;
 
 }
@@ -247,8 +255,7 @@ sds sdsrange(sds s, long start, long end) {
 
     if (trim * 2 < sh->used + sh->free) {
         realloc_len = trim * 2 + 1;
-        s = zrealloc(s, realloc_len);
-        sh = (sdshdr*)((char*)s - sizeof(sdshdr));
+        sh = zrealloc(sh, realloc_len);
         sh->used = trim;
         sh->free = realloc_len - trim - 1;
     } else {

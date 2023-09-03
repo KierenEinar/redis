@@ -393,7 +393,7 @@ void initServer(void) {
 
     decrRefCount(expire_command_key);
     decrRefCount(pexpire_command_key);
-
+    decrRefCount(multi_command_key);
 }
 
 void selectDb(client *c, int id) {
@@ -485,6 +485,14 @@ void propagateCommand(client *c, int flags) {
 int main(int argc, char **argv) {
     // testZiplist();
     // quicklistTest();
+//    char _buf[1024];
+//    memset(_buf, 'h', sizeof(_buf)-1);
+//    _buf[1023] = '\0';
+//    sds buf = sdsempty();
+//    buf = sdscatfmt(buf, "%i\r\n", 10);
+//    buf = sdscatsds(buf, sdsnew(_buf));
+//    sdsfree(buf);
+
     printf("server start...., pid=%d\r\n", getpid());
     initServer();
     elMain(server.el);

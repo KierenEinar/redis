@@ -38,13 +38,13 @@ sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv) {
     int j;
 
     buf = sdscatfmt(buf, "*%i\r\n", argc);
-
     for (j = 0; j < argc; j++) {
         robj *obj = argv[j];
         obj = getDecodedObject(obj);
-        buf = sdscatfmt(buf, "$%i\r\n", sdslen(obj->ptr));
-        buf = sdscatsds(buf, obj->ptr);
-        buf = sdscatfmt(buf, shared.crlf->ptr);
+        sds s = obj->ptr;
+        buf = sdscatfmt(buf, "$%i\r\n", sdslen(s));
+        buf = sdscatsds(buf, s);
+        buf = sdscatsds(buf, shared.crlf->ptr);
         decrRefCount(obj);
     }
 
@@ -86,14 +86,14 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **arg
         tempargvs[1] = argv[1];
         tempargvs[2] = argv[2];
 
-        catAppendOnlyFileGenericCommand(buf, 3, tempargvs);
+        buf = catAppendOnlyFileGenericCommand(buf, 3, tempargvs);
 
         if (exargv)
-            catAppendOnlyFileExpireCommand(buf, server.expire_command, argv[1], exargv);
+            buf = catAppendOnlyFileExpireCommand(buf, server.expire_command, argv[1], exargv);
         if (pxargv)
-            catAppendOnlyFileExpireCommand(buf, server.pexpire_command, argv[1], pxargv);
+            buf = catAppendOnlyFileExpireCommand(buf, server.pexpire_command, argv[1], pxargv);
     }  else {
-        catAppendOnlyFileGenericCommand(buf, argc, argv);
+        buf = catAppendOnlyFileGenericCommand(buf, argc, argv);
     }
 
     server.aof_buf = sdscatsds(server.aof_buf, buf);
