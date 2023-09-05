@@ -251,6 +251,12 @@ typedef struct redisServer {
     int aof_loaded_truncated;
     int aof_child_pid;
     list *aof_rw_block_list;
+    int aof_pipe_read_data_from_parent;
+    int aof_pipe_write_data_to_child;
+    int aof_pipe_read_ack_from_child;
+    int aof_pipe_write_ack_to_parent;
+    int aof_pipe_read_ack_from_parent;
+    int aof_pipe_write_ack_to_child;
 
     struct redisCommand *expire_command;
     struct redisCommand *pexpire_command;
@@ -656,6 +662,8 @@ client *createFakeClient(void);
 void freeFakeClient(client *c);
 int loadAppendOnlyFile(char *filename);
 void aofUpdateCurrentSize(void);
+int rewriteAppendOnlyFileBackground(void);
+int aofCreatePipes(void);
 void startLoading(FILE *fp);
 void loadingProgress(off_t pos);
 // ---------- free method -----------------

@@ -450,3 +450,51 @@ void aofUpdateCurrentSize(void) {
 
     server.aof_update_size = st.st_size;
 }
+
+
+int rewriteAppendOnlyFileBackground(void) {
+
+    if (server.aof_child_pid != -1) {
+        return C_ERR;
+    }
+
+    aofCreatePipes();
+
+    return C_OK;
+}
+
+void pipeReadableFromChild(struct eventLoop *el, int fd, int mask, void *clientData) {
+
+}
+
+
+int aofCreatePipes(void) {
+
+    int j;
+    int fds[] = {-1, -1, -1, -1, -1, -1};
+
+    for (j=0; j< sizeof(fds)/2; j++) {
+        if (pipe(fds+j) == -1)
+            goto cleanup;
+    }
+
+    anetNonBlock(fds[0]);
+    anetNonBlock(fds[1]);
+
+    elCreateFileEvent(server.el, fds[2], EL_READABLE, pipeReadableFromChild, NULL);
+
+    server.aof_pipe_read_data_from_parent = fds[0];
+    server.aof_pipe_write_data_to_child = fds[1];
+    server.aof_pipe_read_ack_from_child = fds[2];
+    server.aof_pipe_write_ack_to_parent = fds[3];
+    server.aof_pipe_read_ack_from_parent = fds[4];
+    server.aof_pipe_write_ack_to_child = fds[5];
+    return C_OK;
+
+cleanup:
+    for (j=0; j< sizeof(fds)/2; j++) {
+        if (fds[j] != -1)
+            close(fds[j]);
+    }
+    return C_ERR;
+}
