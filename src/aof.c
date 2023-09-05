@@ -96,9 +96,43 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **arg
         buf = catAppendOnlyFileGenericCommand(buf, argc, argv);
     }
 
-    server.aof_buf = sdscatsds(server.aof_buf, buf);
+    if (server.aof_state == AOF_ON)
+        server.aof_buf = sdscatsds(server.aof_buf, buf);
+
+    if (server.aof_child_pid != -1)
+        aofRewriteBufferAppend(buf);
 
     sdsfree(buf);
+
+}
+
+void aofRewriteBufferAppend(sds buf) {
+    listNode *ln;
+    aof_rwblock *rwblock;
+    size_t totlen, nlen, len;
+
+    len = sdslen(buf);
+    totlen = 0;
+
+    while (len) {
+        nlen = 0;
+        ln = listLast(server.aof_rw_block_list);
+        rwblock = ln ? ln->value : NULL;
+
+        if (rwblock && rwblock->free) {
+            nlen = rwblock->free >= len ? len : rwblock->free;
+            memcpy(rwblock->buf+rwblock->used, buf+totlen, nlen);
+            totlen+=nlen;
+            len-=nlen;
+        }
+
+        if (len) {
+            rwblock = zmalloc(sizeof(*rwblock));
+            rwblock->free = AOF_REWRITE_BLOCK_SIZE;
+            rwblock->used = 0;
+            listAddNodeTail(server.aof_rw_block_list, rwblock);
+        }
+    }
 
 }
 

@@ -171,6 +171,7 @@ void createSharedObject(void) {
     shared.nullbulk = createObject(REDIS_OBJECT_STRING, sdsnew("$-1\r\n"));
     shared.nullmultibulk = createObject(REDIS_OBJECT_STRING, sdsnew("*-1\r\n"));
     shared.emptymultibulk = createObject(REDIS_OBJECT_STRING, sdsnew("*0\r\n"));
+    shared.loadingerr = createObject(REDIS_OBJECT_STRING, sdsnew("-Err loaded\r\n"));
     shared.czero = createObject(REDIS_OBJECT_STRING, sdsnew(":0\r\n"));
     shared.cone = createObject(REDIS_OBJECT_STRING, sdsnew(":1\r\n"));
     shared.subscribe = createObject(REDIS_OBJECT_STRING, sdsnew("$9\r\nsubscribe\r\n"));
@@ -201,6 +202,7 @@ void createSharedObject(void) {
     makeObjectShared(shared.nullbulk);
     makeObjectShared(shared.nullmultibulk);
     makeObjectShared(shared.emptymultibulk);
+    makeObjectShared(shared.loadingerr);
     makeObjectShared(shared.cone);
     makeObjectShared(shared.czero);
     makeObjectShared(shared.subscribe);
@@ -365,6 +367,8 @@ void initServer(void) {
     server.aof_loaded_bytes = 0;
     server.aof_loading_total_bytes = 0;
     server.aof_loaded_truncated = 1;
+    server.aof_child_pid = -1;
+    server.aof_rw_block_list = listCreate();
 
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
     listSetMatchMethod(server.pubsub_patterns, listValueEqual);
@@ -440,6 +444,11 @@ int processCommand(client *c) {
         return C_OK;
     }
 
+    if (server.loading) {
+        addReply(c, shared.loadingerr);
+        return C_OK;
+    }
+
     if ((c->flag & CLIENT_MULTI) &&
             c->cmd->proc != execCommand &&
             c->cmd->proc != multiCommand &&
@@ -451,7 +460,6 @@ int processCommand(client *c) {
     } else {
 
         call(c, PROPAGATE_CMD_FULL);
-
     }
 
     if (listLength(server.ready_keys))

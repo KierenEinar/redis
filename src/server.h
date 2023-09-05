@@ -117,6 +117,9 @@
 #define AOF_OFF 0
 #define AOF_ON 1
 
+//------------ AOF REWRITE --------------
+#define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
+
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -246,6 +249,8 @@ typedef struct redisServer {
     off_t aof_loaded_bytes;
     off_t aof_loading_total_bytes;
     int aof_loaded_truncated;
+    int aof_child_pid;
+    list *aof_rw_block_list;
 
     struct redisCommand *expire_command;
     struct redisCommand *pexpire_command;
@@ -262,12 +267,17 @@ typedef struct watchKey {
     robj *key;
 }watchKey;
 
+typedef struct aof_rwblock {
+    size_t free;
+    size_t used;
+    char buf[AOF_REWRITE_BLOCK_SIZE];
+}aof_rwblock;
 
 #define OBJ_SHARED_INTEGERS 10000
 #define OBJ_BULK_LEN_SIZE 32
 #define OBJ_SHARED_REFCOUNT INT_MAX
 struct redisSharedObject {
-    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk, *emptymultibulk,
+    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk, *emptymultibulk, *loadingerr,
     *integers[OBJ_SHARED_INTEGERS],
     *mbulkhdr[OBJ_BULK_LEN_SIZE],
     *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone, *subscribe, *psubscribe, *queued, *execaborterr;
@@ -640,6 +650,7 @@ ssize_t aofWrite(sds buf, size_t len);
 sds catAppendOnlyFileExpireCommand(sds buf, struct redisCommand *cmd, robj *key, robj *expire);
 sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv);
 void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **argv);
+void aofRewriteBufferAppend(sds buf);
 void flushAppendOnlyFile(void);
 client *createFakeClient(void);
 void freeFakeClient(client *c);
