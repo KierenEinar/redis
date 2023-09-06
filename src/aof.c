@@ -718,3 +718,7 @@ int sendParentStopWriteAppendDiff(void) {
 
     return C_OK;
 }
+
+void aofRewriteDoneHandler(int bysignal, int code) {
+
+}

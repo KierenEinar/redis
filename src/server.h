@@ -669,6 +669,7 @@ int rewriteAppendOnlyFileChild(char *name);
 int rewriteAppendOnlyFile(FILE *fp);
 int sendParentStopWriteAppendDiff(void);
 size_t readDiffFromParent(void);
+void aofRewriteDoneHandler(int bysignal, int code);
 void exitFromChild(int code);
 int aofCreatePipes(void);
 void aofClosePipes(void);
