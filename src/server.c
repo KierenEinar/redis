@@ -369,6 +369,13 @@ void initServer(void) {
     server.aof_loaded_truncated = 1;
     server.aof_child_pid = -1;
     server.aof_rw_block_list = listCreate();
+    server.aof_pipe_read_data_from_parent = -1;
+    server.aof_pipe_write_data_to_child = -1;
+    server.aof_pipe_read_ack_from_child = -1;
+    server.aof_pipe_write_ack_to_parent = -1;
+    server.aof_pipe_read_ack_from_parent = -1;
+    server.aof_pipe_write_ack_to_child = -1;
+    server.aof_stop_sending_diff = -1;
 
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
     listSetMatchMethod(server.pubsub_patterns, listValueEqual);

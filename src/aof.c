@@ -454,16 +454,50 @@ void aofUpdateCurrentSize(void) {
 
 int rewriteAppendOnlyFileBackground(void) {
 
+    pid_t child_pid;
+
     if (server.aof_child_pid != -1) {
         return C_ERR;
     }
 
-    aofCreatePipes();
+    if (aofCreatePipes()==C_ERR) {
+        return C_ERR;
+    }
+
+    if ((child_pid = fork()) > 0) { // child process
+        closeListeningSockets();
+        char temp_file[128];
+        server.aof_child_diff = sdsempty();
+        snprintf(temp_file, sizeof(temp_file), "temp_aof_rewrite_bg_%d.aof", child_pid);
+        if (rewriteAppendOnlyFileChild(temp_file) == C_OK) {
+            exitFromChild(0);
+        }
+        exitFromChild(1);
+
+    } else if (child_pid == -1) { // fork failed
+        aofClosePipes();
+        return C_ERR;
+    } else { // parent process
+        server.aof_child_pid = child_pid;
+        server.aof_seldb = -1;
+        dictDisableResize();
+    }
 
     return C_OK;
 }
 
-void pipeReadableFromChild(struct eventLoop *el, int fd, int mask, void *clientData) {
+void pipeFromChildReadable(struct eventLoop *el, int fd, int mask, void *clientData) {
+
+    char buf[128];
+
+    if (read(fd, buf, sizeof(buf)) == 1 && buf[0] == '!') {
+        server.aof_stop_sending_diff = 1;
+        if (write(server.aof_pipe_write_ack_to_child, "!", 1) != 1) {
+            // todo logger error
+        }
+    }
+
+    elDeleteFileEvent(el, fd, mask);
 
 }
 
@@ -481,7 +515,7 @@ int aofCreatePipes(void) {
     anetNonBlock(fds[0]);
     anetNonBlock(fds[1]);
 
-    elCreateFileEvent(server.el, fds[2], EL_READABLE, pipeReadableFromChild, NULL);
+    elCreateFileEvent(server.el, fds[2], EL_READABLE, pipeFromChildReadable, NULL);
 
     server.aof_pipe_read_data_from_parent = fds[0];
     server.aof_pipe_write_data_to_child = fds[1];
@@ -489,6 +523,8 @@ int aofCreatePipes(void) {
     server.aof_pipe_write_ack_to_parent = fds[3];
     server.aof_pipe_read_ack_from_parent = fds[4];
     server.aof_pipe_write_ack_to_child = fds[5];
+
+    server.aof_stop_sending_diff = 0;
     return C_OK;
 
 cleanup:
@@ -497,4 +533,188 @@ cleanup:
             close(fds[j]);
     }
     return C_ERR;
+}
+
+void aofClosePipes(void) {
+
+    elDeleteFileEvent(server.el, server.aof_pipe_write_data_to_child, EL_READABLE);
+
+    server.aof_pipe_read_data_from_parent = -1;
+    server.aof_pipe_write_data_to_child = -1;
+    server.aof_pipe_read_ack_from_child = -1;
+    server.aof_pipe_write_ack_to_parent = -1;
+    server.aof_pipe_read_ack_from_parent = -1;
+    server.aof_pipe_write_ack_to_child = -1;
+}
+
+int rewriteAppendOnlyFileChild(char *name) {
+
+    char buf[128];
+    FILE *fp;
+
+    char *filename = "temp_aof_rewrite_%d.aof";
+    snprintf(buf, sizeof(buf), filename, getpid());
+
+    fp = fopen(buf, "w");
+    if (fp == NULL) goto err;
+
+    if (rewriteAppendOnlyFile(fp) == C_ERR)
+        goto err;
+
+    fclose(fp);
+    fp = NULL;
+
+    if (rename(filename, name) == -1)
+        goto err;
+
+    unlink(filename);
+    return C_OK;
+
+err:
+    if (fp != NULL) {
+        fclose(fp);
+        fp = NULL;
+    }
+
+    unlink(filename);
+    return C_ERR;
+
+}
+
+int rewriteAppendOnlyFile(FILE *fp) {
+
+    int j;
+    sds buf;
+    size_t nwriten;
+    mstime_t start;
+    int nodata;
+    char read_ack_from_parent[128];
+
+    buf = sdsempty();
+    for (j=0; j<server.dbnum; j++) {
+        dictIter iter;
+        redisDb db;
+        dictEntry *de;
+        size_t db_num_size;
+        robj *key, *value;
+        long long expire;
+
+        db = server.dbs[j];
+        dictSafeGetIterator(db.dict, &iter);
+        char db_num[128];
+        db_num_size = ll2string(db_num, (long long)j);
+        buf = sdscatfmt(buf, "*2\r\n$6\r\nSELECT\r\n$%u\r\n", j, db_num_size);
+        while ((de=dictNext(&iter)) != NULL) {
+            key = de->key;
+            value = de->value.ptr;
+            expire = getExpire(&db, key);
+            if (expire != -1 && expire < mstime()) continue;
+
+            if (value->type == REDIS_OBJECT_STRING) {
+
+                buf = sdscatprintf(buf, "*3\r\n$3\r\nSET\r\n");
+                buf = sdscatfmt(buf, "$%u\r\n", sdslen(key->ptr));
+                buf = sdscatsds(buf, key->ptr);
+                buf = sdscatsds(buf, shared.crlf->ptr);
+
+                buf = sdscatfmt(buf, "$%u\r\n", sdslen(value->ptr));
+                buf = sdscatsds(buf, value->ptr);
+                buf = sdscatsds(buf, shared.crlf->ptr);
+
+            } else if (value->type == REDIS_OBJECT_LIST) {
+
+            } else { // todo more object type is coming in future.
+
+            }
+
+            if (expire != -1) {
+
+                buf = sdscatprintf(buf, "*2\r\n$9\r\nPEXPIREAT\r\n");
+                buf = sdscatfmt(buf, "$%u\r\n", sdslen(key->ptr));
+                buf = sdscatsds(buf, key->ptr);
+                buf = sdscatsds(buf, shared.crlf->ptr);
+
+                buf = sdscatfmt(buf, "$%u\r\n", sdslen(value->ptr));
+                buf = sdscatfmt(buf, "%U", mstime() + expire);
+                buf = sdscatsds(buf, shared.crlf->ptr);
+            }
+
+            if (sdslen(buf) >= AOF_FWRITE_BLOCK_SIZE ) {
+                if ((nwriten = fwrite(buf, AOF_FWRITE_BLOCK_SIZE, 1, fp)) == 0) {
+                    if (errno == EAGAIN) continue;
+                    goto err;
+                }
+            }
+
+            if (j % 100 == 0) {
+                readDiffFromParent();
+            }
+        }
+    }
+
+    if (sdslen(buf) >= AOF_FWRITE_BLOCK_SIZE ) {
+        if ((nwriten = fwrite(buf, AOF_FWRITE_BLOCK_SIZE, 1, fp)) == 0) {
+            goto err;
+        }
+    }
+
+    start = mstime();
+    nodata = 0;
+
+    while (mstime() - start < 1000 && nodata < 20) {
+
+        if (elWait(server.aof_pipe_read_data_from_parent, EL_READABLE, 1) <= 0) {
+            nodata++;
+            continue;
+        }
+
+        nodata = 0;
+        readDiffFromParent();
+    }
+
+    if (sendParentStopWriteAppendDiff() == C_ERR)
+        goto err;
+
+    anetNonBlock(server.aof_pipe_read_ack_from_parent);
+
+    if (syncRead(server.aof_pipe_read_ack_from_parent, read_ack_from_parent,
+                 sizeof(read_ack_from_parent), 5000) != 1 || read_ack_from_parent[0] != '!') {
+        goto err;
+    }
+
+    readDiffFromParent();
+
+    fflush(fp);
+    fsync(fileno(fp));
+    sdsfree(buf);
+    return C_OK;
+
+err:
+    sdsfree(buf);
+    return C_ERR;
+
+
+
+}
+
+size_t readDiffFromParent(void) {
+
+    char buf[65535];
+    size_t nread;
+    nread = read(server.aof_pipe_read_data_from_parent, buf, sizeof(buf));
+    if (nread > 0) {
+        sds s = sdsnewlen(buf, nread);
+        server.aof_child_diff = sdscatsds(server.aof_child_diff, s);
+        sdsfree(s);
+    }
+    return nread;
+}
+
+int sendParentStopWriteAppendDiff(void) {
+
+    if (write(server.aof_pipe_write_ack_to_parent, "!", 1) == -1) {
+        return C_ERR;
+    }
+
+    return C_OK;
 }

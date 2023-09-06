@@ -119,7 +119,7 @@
 
 //------------ AOF REWRITE --------------
 #define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
-
+#define AOF_FWRITE_BLOCK_SIZE (1024 * 4)
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -257,6 +257,8 @@ typedef struct redisServer {
     int aof_pipe_write_ack_to_parent;
     int aof_pipe_read_ack_from_parent;
     int aof_pipe_write_ack_to_child;
+    int aof_stop_sending_diff;
+    sds aof_child_diff;
 
     struct redisCommand *expire_command;
     struct redisCommand *pexpire_command;
@@ -663,7 +665,13 @@ void freeFakeClient(client *c);
 int loadAppendOnlyFile(char *filename);
 void aofUpdateCurrentSize(void);
 int rewriteAppendOnlyFileBackground(void);
+int rewriteAppendOnlyFileChild(char *name);
+int rewriteAppendOnlyFile(FILE *fp);
+int sendParentStopWriteAppendDiff(void);
+size_t readDiffFromParent(void);
+void exitFromChild(int code);
 int aofCreatePipes(void);
+void aofClosePipes(void);
 void startLoading(FILE *fp);
 void loadingProgress(off_t pos);
 // ---------- free method -----------------
