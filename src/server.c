@@ -273,6 +273,27 @@ long long serverCron(struct eventLoop *el, int id, void *clientData) {
 
     freeClientInFreeQueueAsync();
 
+    int statloc;
+    pid_t pid;
+    if ((pid = wait4(-1, &statloc, WNOHANG, NULL)) > 0) {
+
+        int exitcode = 0;
+        int bysignal = 0;
+
+        if (WIFEXITED(statloc)) {
+            exitcode = WEXITSTATUS(statloc);
+        }
+
+        if (WIFSIGNALED(statloc)) {
+            bysignal = WTERMSIG(statloc);
+        }
+
+        if (pid == server.aof_child_pid) {
+            aofRewriteDoneHandler(bysignal, exitcode);
+        }
+    }
+
+
     return SERVER_CRON_PERIOD_MS;
 }
 
@@ -369,6 +390,7 @@ void initServer(void) {
     server.aof_loaded_truncated = 1;
     server.aof_child_pid = -1;
     server.aof_rw_block_list = listCreate();
+    listSetFreeMethod(server.aof_rw_block_list, zfree);
     server.aof_pipe_read_data_from_parent = -1;
     server.aof_pipe_write_data_to_child = -1;
     server.aof_pipe_read_ack_from_child = -1;

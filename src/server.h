@@ -659,6 +659,8 @@ sds catAppendOnlyFileExpireCommand(sds buf, struct redisCommand *cmd, robj *key,
 sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv);
 void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **argv);
 void aofRewriteBufferAppend(sds buf);
+size_t aofRewriteBufferWrite(int fd);
+void aofRewriteBufferReset();
 void flushAppendOnlyFile(void);
 client *createFakeClient(void);
 void freeFakeClient(client *c);

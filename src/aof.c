@@ -136,6 +136,29 @@ void aofRewriteBufferAppend(sds buf) {
 
 }
 
+size_t aofRewriteBufferWrite(int fd) {
+
+    listNode *node = listFirst(server.aof_rw_block_list);
+    size_t totwrite = 0;
+    while (node) {
+        aof_rwblock * block = node->value;
+        if (write(fd, block->buf, block->used) != block->used) {
+            return -1;
+        }
+        totwrite += block->used;
+        listDelNode(server.aof_rw_block_list, node);
+    }
+
+    return totwrite;
+}
+
+void aofRewriteBufferReset() {
+
+    listRelease(server.aof_rw_block_list);
+    server.aof_rw_block_list = listCreate();
+    listSetFreeMethod(server.aof_rw_block_list, zfree);
+}
+
 ssize_t aofWrite(sds buf, size_t len) {
 
     ssize_t totwritten = 0, nwritten;
@@ -567,7 +590,6 @@ int rewriteAppendOnlyFileChild(char *name) {
     if (rename(filename, name) == -1)
         goto err;
 
-    unlink(filename);
     return C_OK;
 
 err:
@@ -721,4 +743,56 @@ int sendParentStopWriteAppendDiff(void) {
 
 void aofRewriteDoneHandler(int bysignal, int code) {
 
+    int newfd = -1;
+
+    if (!bysignal && code == 0) {
+
+        if (server.aof_child_pid == -1)
+            goto cleanup;
+
+        char tempfile[255];
+        snprintf(tempfile, 255, "temp_aof_rewrite_%d.aof", server.aof_child_pid);
+
+        newfd = open(tempfile, O_WRONLY | O_APPEND);
+        if (newfd == -1) {
+            unlink(tempfile);
+            goto cleanup;
+        }
+
+        if (aofRewriteBufferWrite(newfd) == -1) {
+            unlink(tempfile);
+            goto cleanup;
+        }
+
+        if (rename(tempfile, server.aof_filename) == -1) {
+            unlink(tempfile);
+            goto cleanup;
+        }
+
+        if (server.aof_fsync == AOF_FSYNC_ALWAYS) {
+            fsync(newfd);
+        } else if (server.aof_fsync == AOF_FSYNC_EVERYSEC) {
+            bioCreateBackgroundJob(BIO_AOF_FSYNC, newfd);
+        }
+
+        if (server.aof_fd == -1) {
+            goto cleanup;
+        } else {
+            int oldfd = server.aof_fd;
+            server.aof_fd = newfd;
+            bioCreateBackgroundJob(BIO_CLOSE_FILE, oldfd);
+            newfd = -1;
+        }
+    }
+
+
+cleanup:
+    if (newfd != -1)
+        close(newfd);
+
+    aofClosePipes();
+    aofRewriteBufferReset();
+    server.aof_child_pid = -1;
+    sdsfree(server.aof_buf);
+    server.aof_buf = sdsempty();
 }
