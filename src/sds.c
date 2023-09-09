@@ -245,7 +245,7 @@ sds sdsrange(sds s, long start, long end) {
     if (end >= slen)
         end = (long)slen - 1;
 
-    if (start >= end || start >= slen)
+    if (start > end || start >= slen)
         return s;
 
     trim = end - start + 1;

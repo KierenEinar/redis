@@ -112,6 +112,9 @@ void aofRewriteBufferAppend(sds buf) {
     size_t totlen, nlen, len;
 
     len = sdslen(buf);
+    if (len == 0)
+        return;
+
     totlen = 0;
 
     while (len) {
@@ -133,6 +136,10 @@ void aofRewriteBufferAppend(sds buf) {
             listAddNodeTail(server.aof_rw_block_list, rwblock);
         }
     }
+
+    if (elGetFileEvent(server.el, server.aof_pipe_write_data_to_child, EL_WRITABLE) == 0)
+        elCreateFileEvent(server.el,  server.aof_pipe_write_data_to_child,
+                          EL_WRITABLE, aofRewriteBufferPipeWritable, NULL);
 
 }
 
@@ -264,6 +271,7 @@ client *createFakeClient(void) {
     c->client_close_node = NULL;
     c->watch_keys = NULL;
     c->reply = listCreate();
+    listSetFreeMethod(c->reply, zfree);
     c->fd = -1;
     c->sentlen = 0l;
     return c;
@@ -284,18 +292,20 @@ void freeFakeClient(client *c) {
 
     int j;
 
-    freeFakeClientArgv(c->argc, c->argv);
-
     if (c->querybuf) {
         zfree(c->querybuf);
     }
 
+    listRelease(c->reply);
     zfree(c);
+
+    debug("freeFakeClient...\r\n");
+
 }
 
 void startLoading(FILE *fp) {
     struct stat st;
-
+    debug("loading aof, start...\r\n");
     fstat(fileno(fp), &st);
     server.loading = 1;
     server.loading_time = time(NULL);
@@ -308,6 +318,7 @@ void loadingProgress(off_t pos) {
 }
 
 void stopLoading(void) {
+    debug("loading aof, finished...\r\n");
     server.loading = 0;
 }
 
@@ -322,9 +333,11 @@ int loadAppendOnlyFile(char *filename) {
     fake_client = createFakeClient();
     FILE *fp = fopen(filename, "r");
     if (fp == NULL || fstat(fileno(fp), &st) == -1) {
+        debug("loading aof, open aof file exception...\r\n");
         exit(-1);
     }
     if (st.st_size == 0) {
+        debug("loading aof, warning, file size is 0\r\n");
         fclose(fp);
         return C_ERR;
     }
@@ -342,6 +355,8 @@ int loadAppendOnlyFile(char *filename) {
         long arglen;
         sds argsds;
         robj **argv;
+        size_t nread;
+
 
         struct redisCommand *cmd;
 
@@ -377,7 +392,7 @@ int loadAppendOnlyFile(char *filename) {
                 freeFakeClientArgv(j, argv);
                 goto fmterr;
             }
-            if (buf[0] == '\0') {
+            if (buf[1] == '\0') {
                 freeFakeClientArgv(j, argv);
                 goto readerr;
             }
@@ -389,7 +404,8 @@ int loadAppendOnlyFile(char *filename) {
             }
 
             argsds = sdsnewlen(NULL, arglen);
-            if (fread(argsds, arglen, 1, fp) < arglen) {
+            nread = fread(argsds, arglen, 1, fp);
+            if (nread < 1) {
                 sdsfree(argsds);
                 freeFakeClientArgv(j, argv);
                 goto readerr;
@@ -397,6 +413,7 @@ int loadAppendOnlyFile(char *filename) {
 
             robj *obj = createObject(REDIS_OBJECT_STRING, argsds);
             argv[j] = obj;
+            fseek(fp, 2, SEEK_CUR);
         }
 
         fake_client->argc = argc;
@@ -404,7 +421,8 @@ int loadAppendOnlyFile(char *filename) {
 
         cmd = lookupCommand(fake_client->argv[0]);
         if (cmd == NULL) {
-            exit(1);
+            debug("loading aof, cmd[%s] not found...\r\n", (char *)fake_client->argv[0]->ptr);
+            exit(-1);
         }
 
         if (cmd->proc == multiCommand) valid_up_to_multi = valid_up_to;
@@ -439,12 +457,14 @@ loaded_ok:
     stopLoading();
     return C_OK;
 readerr:
+    debug("aof readerr...\r\n");
     if (!feof(fp)) {
         freeFakeClient(fake_client);
         fclose(fp);
         exit(-1);
     }
 uxeof:
+    debug("aof uxeof...\r\n");
     if (server.aof_loaded_truncated) {
         if (valid_up_to > 0 && ftruncate(fileno(fp), valid_up_to) > 0) {
             if (fseek(fp, 0, SEEK_END) == 0) {
@@ -457,6 +477,7 @@ uxeof:
     fclose(fp);
     exit(-1);
 fmterr:
+    debug("aof fmterr...\r\n");
     freeFakeClient(fake_client);
     fclose(fp);
     exit(-1);
@@ -468,6 +489,7 @@ void aofUpdateCurrentSize(void) {
     struct stat st;
 
     if (fstat(server.aof_fd, &st) == -1) {
+        debug("aofUpdateCurrentSize fstat failed, fd[%d]...\r\n", server.aof_fd);
         exit(1);
     }
 
@@ -524,6 +546,44 @@ void pipeFromChildReadable(struct eventLoop *el, int fd, int mask, void *clientD
 
 }
 
+void aofRewriteBufferPipeWritable(struct eventLoop *el, int fd, int mask, void *clientData) {
+
+    listNode *ln;
+    aof_rwblock *rwblock;
+
+    if (!(mask & EL_WRITABLE)) {
+        return;
+    }
+
+    while (1) {
+        ssize_t nwritten;
+
+        ln = listFirst(server.aof_rw_block_list);
+
+        if (!ln || server.aof_stop_sending_diff) {
+            elDeleteFileEvent(el, fd, EL_WRITABLE);
+            return;
+        }
+
+        rwblock = ln->value;
+        while (1) {
+
+            if ((nwritten = write(fd, rwblock->buf, rwblock->used)) <= 0) {
+                return;
+            }
+
+            if (nwritten == rwblock->used) {
+                listDelNode(server.aof_rw_block_list, ln);
+                break;
+            } else {
+                memmove(rwblock->buf, rwblock->buf+nwritten, rwblock->used+rwblock->free-nwritten);
+                rwblock->used-=nwritten;
+                rwblock->free+=nwritten;
+            }
+        }
+    }
+
+}
 
 int aofCreatePipes(void) {
 

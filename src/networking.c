@@ -493,6 +493,9 @@ int writeToClient(client *c, int handler_installed) {
 
     size_t totwritten;
     size_t nwritten;
+
+    if (c->fd == -1) return C_ERR;
+
     while (clientHasPendingWrites(c)) {
 
         if (c->bufpos) {

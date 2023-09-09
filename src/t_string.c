@@ -74,6 +74,14 @@ int getGenericCommand(client *c) {
     return C_OK;
 }
 
+void selectCommand(client *c) {
+    int dbid = atoi(c->argv[1]->ptr);
+    if (dbid < 0 || dbid > server.dbnum) {
+        addReply(c, shared.syntaxerr);
+        return;
+    }
+    selectDb(c, dbid);
+}
 
 void getCommand(client *c) {
     getGenericCommand(c);

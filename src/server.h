@@ -120,6 +120,10 @@
 //------------ AOF REWRITE --------------
 #define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
 #define AOF_FWRITE_BLOCK_SIZE (1024 * 4)
+
+// ------------debug --------------
+#define debug(...) printf(__VA_ARGS__)
+
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
@@ -379,6 +383,8 @@ void populateCommandTable(void);
 
 // lookup command by redis object, should be the string type object.
 struct redisCommand* lookupCommand(robj *o);
+
+void selectCommand(client *c);
 
 // getCommand get the value from kv, if key exists but not string type, client will receive wrong type error.
 // as side effect, key will delete when go expire, client will receive nullbulk.
@@ -659,6 +665,8 @@ sds catAppendOnlyFileExpireCommand(sds buf, struct redisCommand *cmd, robj *key,
 sds catAppendOnlyFileGenericCommand(sds buf, int argc, robj **argv);
 void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **argv);
 void aofRewriteBufferAppend(sds buf);
+void pipeFromChildReadable(struct eventLoop *el, int fd, int mask, void *clientData);
+void aofRewriteBufferPipeWritable(struct eventLoop *el, int fd, int mask, void *clientData);
 size_t aofRewriteBufferWrite(int fd);
 void aofRewriteBufferReset();
 void flushAppendOnlyFile(void);

@@ -79,6 +79,7 @@ struct redisServer server;
 struct redisSharedObject shared;
 
 struct redisCommand redisCommandTable[] = {
+    {"select", selectCommand, 2},
     {"get", getCommand, 2},
     {"set", setCommand, -3},
     {"expire", expireCommand, 3},
@@ -358,9 +359,9 @@ void initServer(void) {
         server.dbs[j].watch_keys = dictCreate(&objectKeyValueListDictType);
     }
 
-    expire_command_key = createStringObject("EXPIRE", 8);
-    pexpire_command_key = createStringObject("PEXPIRE", 9);
-    multi_command_key = createStringObject("MULTI", 6);
+    expire_command_key = createStringObject("EXPIRE", 6);
+    pexpire_command_key = createStringObject("PEXPIRE", 7);
+    multi_command_key = createStringObject("MULTI", 5);
     server.list_fill_factor = DEFAULT_LIST_FILL_FACTOR;
     server.backlog = DEFAULT_BACKLOG;
     server.port = DEFAULT_BIND_PORT;
