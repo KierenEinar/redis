@@ -73,11 +73,14 @@ void *bioProcessBackgroundJobs(void *argv) {
             pthread_cond_wait(&new_job_cond[job_type], &mutex[job_type]);
             continue;
         }
+        debug("bioProcessBackgroundJobs...\r\n");
         node = listFirst(jobs[job_type]);
         pthread_mutex_unlock(&mutex[job_type]);
         job = node->value;
         if (job_type == BIO_AOF_FSYNC) {
-            flushAppendOnlyFile();
+            debug("bioProcessBackgroundJobs start flushAppendOnlyFile ...\r\n");
+            fsync(server.aof_fd);
+            debug("bioProcessBackgroundJobs finished flushAppendOnlyFile ...\r\n");
         }
         pthread_mutex_lock(&mutex[job_type]);
         pthread_cond_broadcast(&job_finish_cond[job_type]);

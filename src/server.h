@@ -305,7 +305,7 @@ extern struct dictType objectKeyValuePtrDictType;
 // --------------mstime---------------
 typedef int64_t mstime_t;
 mstime_t mstime();
-
+void updateCachedTime();
 
 // -------------dictType functions------------
 int dictSdsCompare(const void *ptr1, const void *ptr2);

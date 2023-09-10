@@ -272,6 +272,8 @@ long long serverCron(struct eventLoop *el, int id, void *clientData) {
 
     clientCron();
 
+    updateCachedTime();
+
     freeClientInFreeQueueAsync();
 
     int statloc;
@@ -330,6 +332,10 @@ void clientCron(void) {
 
 }
 
+void updateCachedTime() {
+    server.unix_time = time(NULL);
+}
+
 void loadDataFromDisk() {
     if (server.aof_state == AOF_ON) {
         loadAppendOnlyFile(server.aof_filename);
@@ -365,7 +371,7 @@ void initServer(void) {
     server.list_fill_factor = DEFAULT_LIST_FILL_FACTOR;
     server.backlog = DEFAULT_BACKLOG;
     server.port = DEFAULT_BIND_PORT;
-    server.unix_time = time(NULL);
+    updateCachedTime();
     server.el = elCreateEventLoop(1024);
     server.client_pending_writes = listCreate();
     server.client_list = listCreate();
@@ -383,7 +389,7 @@ void initServer(void) {
     server.aof_fsync = AOF_FSYNC_EVERYSEC;
     server.aof_postponed_start = 0;
     server.aof_update_size = 0;
-    server.aof_last_fsync = time(NULL);
+    server.aof_last_fsync = -1;
     server.loading = 0;
     server.aof_state = AOF_ON;
     server.aof_loaded_bytes = 0;

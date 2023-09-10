@@ -241,7 +241,7 @@ void flushAppendOnlyFile(void) {
     if (server.aof_fsync == AOF_FSYNC_ALWAYS) {
         fsync(server.aof_fd);
         server.aof_last_fsync = server.unix_time;
-    } else if (server.aof_fsync == AOF_FSYNC_EVERYSEC && server.aof_last_fsync - server.unix_time > 1){
+    } else if (server.aof_fsync == AOF_FSYNC_EVERYSEC && (server.unix_time - server.aof_last_fsync > 1 || server.aof_last_fsync == -1)){
 
         if (!sync_in_progress) bioCreateBackgroundJob(BIO_AOF_FSYNC, (void *)(long long)server.aof_fd, NULL, NULL);
         server.aof_last_fsync = server.unix_time;
