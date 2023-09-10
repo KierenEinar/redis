@@ -258,7 +258,6 @@ client *createFakeClient(void) {
     c->argv = NULL;
     selectDb(c, 0);
     initClientMultiState(c);
-    c->flag = 0;
     c->reqtype = PROTO_REQ_MULTI;
     c->bulklen = 0l;
     c->multilen = 0l;
@@ -271,6 +270,7 @@ client *createFakeClient(void) {
     c->client_close_node = NULL;
     c->watch_keys = NULL;
     c->reply = listCreate();
+    c->flag |= CLIENT_FAKE;
     listSetFreeMethod(c->reply, zfree);
     c->fd = -1;
     c->sentlen = 0l;

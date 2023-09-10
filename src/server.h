@@ -78,6 +78,7 @@
 #define CLIENT_MULTI (1 << 5)
 #define CLIENT_DIRTY_EXEC (1 << 6)
 #define CLIENT_CAS_EXEC (1 << 7)
+#define CLIENT_FAKE (1 << 8)
 // server cron period
 #define SERVER_CRON_PERIOD_MS 1
 
