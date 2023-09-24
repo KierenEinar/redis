@@ -17,9 +17,9 @@ void readTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
     while (1) {
         nwritten = read(fd, buf, sizeof(buf)-1);
         if (nwritten <= 0) return;
-        printf("nwritten = %ld\r\n", nwritten);
+        printf("nwritten = %ld\n", nwritten);
         buf[nwritten] = '\0';
-        fprintf(stdout, "get from client, content=%s\r\n", buf);
+        fprintf(stdout, "get from client, content=%s\n", buf);
 
         if (!elGetFileEvent(el, fd, EL_WRITABLE))
             elCreateFileEvent(server.el, fd, EL_WRITABLE, writeTcpHandler, NULL);
@@ -257,7 +257,7 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
         }
         c->bufcap += readlen;
     }
-    fprintf(stdout, "fd=%d, mask=%d\r\n", fd, mask);
+    fprintf(stdout, "fd=%d, mask=%d\n", fd, mask);
     nread = read(fd, c->querybuf+c->buflen, readlen);
     if (nread == 0) {
         if (errno == EAGAIN) return;
@@ -323,11 +323,9 @@ int processMultiBulkBuffer(client *c){
           $1\r\n
           b\r\n
     */
-    fprintf(stdout, "processMultiBulkBuffer msg=%s\r\n", c->querybuf);
     long pos = 0;
     if (c->multilen == 0) {
         char *newline = strchr(c->querybuf, '\r');
-        fprintf(stdout, "buflen=%ld, bufcap=%ld\r\n", c->buflen, c->bufcap);
         if (newline == NULL) {
             if (c->buflen >= RESP_PROTO_MAX_INLINE_SEG) {
                 char errmsg[] = "inline len limit 64k";
@@ -344,7 +342,6 @@ int processMultiBulkBuffer(client *c){
         }
 
         long value;
-        fprintf(stdout, "s=%s\r\n", c->querybuf+1);
         int ok = string2l(c->querybuf+1, newline-(c->querybuf+1), &value);
         if (!ok || value <=0 || value >= 1024 * 1024) {
             char errmsg[] = "multi len limit";
@@ -427,7 +424,6 @@ int processMultiBulkBuffer(client *c){
 
     if (c->multilen == 0) {
         c->reqtype = 0;
-        fprintf(stdout, "processMultiBulkBuffer success\r\n");
         return RESP_PROCESS_OK;
     }
 
@@ -639,7 +635,7 @@ void resetClient(client *c) {
 
 void freeClient(client *c) {
 
-    fprintf(stdout, "free client, c=%p\r\n", c);
+    fprintf(stdout, "free client, c=%p\n", c);
 
     if (c->querybuf) {
         zfree(c->querybuf);

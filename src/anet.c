@@ -77,7 +77,88 @@ end:
     return s;
 }
 
-void anetSetBlock(int fd, int block) {
+
+int _anetTcpGenericConnect(char *host, int port, char *sourceaddr, int flags) {
+
+    char _port[6], err[255];
+    struct addrinfo hints, *serverinfo, *bserverinfo, *p, *bp;
+    int error, s;
+
+    error = 0;
+    snprintf(_port, sizeof(_port), "%d", port);
+    memset(&hints, 0, sizeof(hints));
+
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+
+    if ((error = getaddrinfo(host, _port, &hints, &serverinfo)) == -1) {
+        debug("anetGenericConnect getaddrinfo, err=%s\n", gai_strerror(error));
+        return ANET_ERR;
+    }
+
+    for (p=serverinfo; p; p=serverinfo->ai_next) {
+        if ((s = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+            continue;
+
+        if (anetReuseAddr(err, s) == ANET_ERR) {
+            debug("anetTcpGenericConnect anetReuseAddr failed\n");
+            goto error;
+        }
+
+        if (flags & O_NONBLOCK && anetNonBlock(s) == ANET_ERR) {
+            debug("anetTcpGenericConnect anetNonBlock socket failed\n");
+            goto error;
+        }
+
+        if (sourceaddr) {
+
+            if ((error = getaddrinfo(host, _port, &hints, &bserverinfo)) == -1) {
+                debug("anetGenericConnect getaddrinfo, sourceaddr=%s, err=%s\n", sourceaddr, gai_strerror(error));
+                goto  error;
+            }
+
+            for (bp = bserverinfo; bp; bp = bserverinfo->ai_next) {
+
+                if (bind(s, bp->ai_addr, bp->ai_addrlen) == -1) {
+                    debug("warnimg anetTcpGenericConnect bind sourceaddr failed, err=%s\n", strerror(error));
+                    error = errno;
+                    continue;
+                }
+
+                error = 0;
+                break;
+            }
+
+            freeaddrinfo(bserverinfo);
+            if (error != 0) goto error;
+
+        }
+
+        if (connect(s, p->ai_addr, p->ai_addrlen) == -1) {
+            if (errno == EINPROGRESS && flags & O_NONBLOCK) {
+                goto end;
+            }
+
+            close(s);
+            s = ANET_ERR;
+            continue;
+        }
+
+        goto end;
+    }
+
+error:
+    if (s != ANET_ERR) close(s);
+    s = ANET_ERR;
+
+end:
+    freeaddrinfo(serverinfo);
+    if (sourceaddr && error != 0)
+        return anetTcpGenericConnect(host, port, NULL, flags);
+    return s;
+}
+
+int anetSetBlock(int fd, int block) {
     int flag = fcntl(fd, F_GETFL);
     if (block) {
         flag &= ~O_NONBLOCK;
@@ -85,15 +166,18 @@ void anetSetBlock(int fd, int block) {
         flag |= O_NONBLOCK;
     }
 
-    fcntl(fd, F_SETFL, flag);
+    if (fcntl(fd, F_SETFL, flag) == -1)
+        return ANET_ERR;
+
+    return ANET_OK;
 }
 
-void anetNonBlock(int fd) {
-    anetSetBlock(fd, 0);
+int anetNonBlock(int fd) {
+    return anetSetBlock(fd, 0);
 }
 
-void anetBlock(int fd) {
-    anetSetBlock(fd, 1);
+int anetBlock(int fd) {
+    return anetSetBlock(fd, 1);
 }
 
 int anetTcpServer(char *err, int port, int backlog) {
@@ -120,7 +204,7 @@ int anetTcpAccept(char *err, int fd, char *ip, size_t iplen, int *port) {
         break;
     }
 
-    fprintf(stdout, "anetTcpAccept cfd=%d\r\n", cfd);
+    fprintf(stdout, "anetTcpAccept cfd=%d\n", cfd);
 
     if (addr.ss_family == AF_INET) {
         struct sockaddr_in *in = (struct sockaddr_in *)&addr;
@@ -134,7 +218,7 @@ int anetTcpAccept(char *err, int fd, char *ip, size_t iplen, int *port) {
         if (port) *port = ntohs(in6->sin6_port);
     }
 
-    fprintf(stdout, "accept, ip=%s, port=%d\r\n", ip, *port);
+    fprintf(stdout, "accept, ip=%s, port=%d\n", ip, *port);
     return cfd;
 }
 

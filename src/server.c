@@ -237,7 +237,7 @@ int listenPort(int backlog) {
     server.ipfd[server.ipfd_count] = anetTcp6Server(server.neterr, server.port, backlog);
     if (server.ipfd[server.ipfd_count] != ANET_ERR) {
         anetNonBlock(server.ipfd[server.ipfd_count]);
-        fprintf(stdout, "server listen, fd=%d\r\n", server.ipfd[server.ipfd_count]);
+        fprintf(stdout, "server listen, fd=%d\n", server.ipfd[server.ipfd_count]);
         server.ipfd_count++;
     } else if (errno == EAFNOSUPPORT) {
         unsupported++;
@@ -537,7 +537,7 @@ int main(int argc, char **argv) {
 //    buf = sdscatsds(buf, sdsnew(_buf));
 //    sdsfree(buf);
 
-    printf("server start...., pid=%d\r\n", getpid());
+    printf("server start...., pid=%d\n", getpid());
     initServer();
     elMain(server.el);
     return 0;

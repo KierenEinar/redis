@@ -40,7 +40,7 @@ void setKey(client *c, robj *key, robj *value) {
 }
 
 void setExpire(client *c, robj *key, long long expire) {
-    fprintf(stdout, "dict size=%ld\r\n", dictSize(c->db->expires));
+    fprintf(stdout, "dict size=%ld\n", dictSize(c->db->expires));
     dictEntry *de, *expireRow;
     de = dictFind(c->db->dict, key->ptr);
     // todo assert de not null

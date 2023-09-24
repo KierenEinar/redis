@@ -299,13 +299,13 @@ void freeFakeClient(client *c) {
     listRelease(c->reply);
     zfree(c);
 
-    debug("freeFakeClient...\r\n");
+    debug("freeFakeClient...\n");
 
 }
 
 void startLoading(FILE *fp) {
     struct stat st;
-    debug("loading aof, start...\r\n");
+    debug("loading aof, start...\n");
     fstat(fileno(fp), &st);
     server.loading = 1;
     server.loading_time = time(NULL);
@@ -318,7 +318,7 @@ void loadingProgress(off_t pos) {
 }
 
 void stopLoading(void) {
-    debug("loading aof, finished...\r\n");
+    debug("loading aof, finished...\n");
     server.loading = 0;
 }
 

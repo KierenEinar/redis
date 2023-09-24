@@ -51,7 +51,7 @@ void lrangeCommand(client *c) {
 
     robj *subject;
     if ((subject=lookupKeyReadOrReply(c, c->argv[1], shared.emptymultibulk)) == NULL
-        || checkType(subject, REDIS_OBJECT_LIST)) {
+        || !checkType(subject, REDIS_OBJECT_LIST)) {
         return;
     }
 
@@ -60,7 +60,7 @@ void lrangeCommand(client *c) {
         return;
     }
 
-    llen = listTypeLen(c->argv[1]);
+    llen = listTypeLen(subject);
 
     if (start<0) start = llen + start;
     if (end<0) end = llen + end;
@@ -72,7 +72,7 @@ void lrangeCommand(client *c) {
         return;
     }
 
-    rangelen = end - start;
+    rangelen = end - start + 1;
 
     if (subject->encoding == REDIS_ENCODING_LIST) {
 
