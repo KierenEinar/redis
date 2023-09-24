@@ -122,6 +122,11 @@
 #define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
 #define AOF_FWRITE_BLOCK_SIZE (1024 * 4)
 
+// ----------- REPL_STATE -----------
+#define REPL_STATE_NONE 0
+#define REPL_STATE_CONNECT 1
+#define REPL_STATE_CONNECTING 2
+
 // ------------debug --------------
 #define debug(...) printf(__VA_ARGS__)
 
@@ -264,6 +269,13 @@ typedef struct redisServer {
     int aof_pipe_write_ack_to_child;
     int aof_stop_sending_diff;
     sds aof_child_diff;
+
+    // replicate
+    int repl_state;
+    int repl_transfer_s;
+    char *master_host;
+    int master_port;
+
 
     struct redisCommand *expire_command;
     struct redisCommand *pexpire_command;
@@ -651,8 +663,13 @@ void freeClientMultiState(client *c);
 
 void clientCron(void);
 void clientHandleCronTimeout(client *c, mstime_t nowms);
+void slaveCron(void);
 long long serverCron(struct eventLoop *el, int id, void *clientData);
 
+
+// ------------ replicate -----------------
+int connectWithMaster(void);
+void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);
 // ------------process command -------------
 int processCommand(client *c);
 

@@ -16,5 +16,6 @@ int anetBlock(int fd);
 int anetTcpServer(char *err, int port, int backlog);
 int anetTcp6Server(char *err, int port, int backlog);
 int anetTcpAccept(char *err, int fd, char *ip, size_t iplen, int *port);
+int anetTcpConnect(char *host, int port, char *sourceaddr, int flags);
 void closeListeningSockets();
 #endif //REDIS_ANET_H

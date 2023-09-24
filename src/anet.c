@@ -154,7 +154,7 @@ error:
 end:
     freeaddrinfo(serverinfo);
     if (sourceaddr && error != 0)
-        return anetTcpGenericConnect(host, port, NULL, flags);
+        return _anetTcpGenericConnect(host, port, NULL, flags);
     return s;
 }
 
@@ -220,6 +220,10 @@ int anetTcpAccept(char *err, int fd, char *ip, size_t iplen, int *port) {
 
     fprintf(stdout, "accept, ip=%s, port=%d\n", ip, *port);
     return cfd;
+}
+
+int anetTcpConnect(char *host, int port, char *sourceaddr, int flags) {
+    return _anetTcpGenericConnect(host, port, sourceaddr, flags);
 }
 
 void closeListeningSockets() {

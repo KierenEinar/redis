@@ -332,6 +332,13 @@ void clientCron(void) {
 
 }
 
+void slaveCron(void) {
+
+    if (server.repl_state == REPL_STATE_CONNECT) {
+        connectWithMaster();
+    }
+}
+
 void updateCachedTime() {
     server.unix_time = time(NULL);
 }
