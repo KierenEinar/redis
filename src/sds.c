@@ -78,8 +78,16 @@ sds sdsMakeRoomFor(sds s, size_t len) {
     return s;
 
 }
-sds sdscatlen(const char *c, size_t len) {
-    return NULL;
+sds sdscatlen(sds dest, const char *c, size_t len) {
+
+    sdshdr *sh;
+    dest = sdsMakeRoomFor(dest, len);
+    sh = (sdshdr*)((char*)dest - sizeof(sdshdr));
+    memcpy(sh->buf+sh->used, c, len);
+    sh->free-=len;
+    sh->used+=len;
+    return dest;
+
 }
 sds sdscatsds(sds dest, sds src) {
 

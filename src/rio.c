@@ -19,8 +19,8 @@ static size_t rioBufferWrite(rio *rio, const char *s, size_t len) {
     if (sdslen(rio->io.buffer.ptr) < len)
         rio->io.buffer.ptr = sdsMakeRoomFor(rio->io.buffer.ptr, len);
 
-    rio->io.buffer.ptr = sdscatlen(rio->io.buffer.ptr, len);
-    rio->io.buffer.pos+=len;
+    rio->io.buffer.ptr = sdscatlen(rio->io.buffer.ptr, s, len);
+    rio->io.buffer.pos+=(off_t)len;
     return 1;
 }
 

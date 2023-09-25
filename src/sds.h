@@ -25,7 +25,7 @@ sds sdsempty();
 sds sdsclear(sds s);
 void sdsfree(sds s);
 sds sdsMakeRoomFor(sds s, size_t len);
-sds sdscatlen(const char *c, size_t len);
+sds sdscatlen(sds dest, const char *c, size_t len);
 sds sdscatsds(sds dest, sds src);
 size_t sdslen(sds s);
 void sdsincrlen(sds s, size_t len);

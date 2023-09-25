@@ -127,7 +127,15 @@
 #define REPL_STATE_CONNECT 1
 #define REPL_STATE_CONNECTING 2
 #define REPL_STATE_RECEIVE_PONG 3
-
+#define REPL_STATE_SEND_AUTH 4
+#define REPL_STATE_RECEIVE_AUTH 5
+#define REPL_STATE_SEND_PORT 6
+#define REPL_STATE_RECEIVE_PORT 7
+#define REPL_STATE_SEND_IPADDRESS 8
+#define REPL_STATE_RECEIVE_IPADDRESS 9
+#define REPL_STATE_SEND_CAPA 10
+#define REPL_STATE_RECEIVE_CAPA 11
+#define REPL_STATE_SEND_PSYNC 12
 // ------------debug --------------
 #define debug(...) printf(__VA_ARGS__)
 
@@ -276,6 +284,9 @@ typedef struct redisServer {
     int repl_transfer_s;
     char *master_host;
     int master_port;
+    char *master_auth;
+    long long repl_send_timeout;
+    long long repl_read_timeout;
 
 
     struct redisCommand *expire_command;
