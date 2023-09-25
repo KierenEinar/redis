@@ -126,6 +126,7 @@
 #define REPL_STATE_NONE 0
 #define REPL_STATE_CONNECT 1
 #define REPL_STATE_CONNECTING 2
+#define REPL_STATE_RECEIVE_PONG 3
 
 // ------------debug --------------
 #define debug(...) printf(__VA_ARGS__)
@@ -619,8 +620,9 @@ void discardTransaction(client *c);
 void touchWatchedKey(redisDb *db, robj *key);
 
 //-------------syncio-------------------
+size_t syncWrite(int fd, char *ptr, size_t size, long long timeout);
 size_t syncRead(int fd, char *ptr, size_t size, long long timeout);
-
+size_t syncReadLine(int fd, char *ptr, size_t size, long long timeout);
 //-------------networking----------------
 void acceptTcpHandler(struct eventLoop *el, int fd, int mask, void *clientData);
 void acceptCommandHandler(int cfd, char *ip, int port);
