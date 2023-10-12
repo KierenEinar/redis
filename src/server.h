@@ -49,6 +49,8 @@
 #define SERVER_NETWORK_IP_FD_LEN 16
 
 #define DEFAULT_AOF_FILENAME "appendonly.aof"
+#define CONFIG_REPL_RUNID_LEN 40
+
 
 #define LIST_ITER_DIR_FORWARD 1
 #define LIST_ITER_DIR_BACKWARD 2
@@ -136,6 +138,14 @@
 #define REPL_STATE_SEND_CAPA 10
 #define REPL_STATE_RECEIVE_CAPA 11
 #define REPL_STATE_SEND_PSYNC 12
+#define REPL_STATE_RECEIVE_PSYNC 13
+#define REPL_STATE_TRANSFER 14
+// ------------- REPL_PARTIAL-------------
+#define PSYNC_WRITE_ERROR 1
+#define PSYNC_WAIT_REPLY 2
+#define PSYNC_READ_ERROR 3
+#define PSYNC_FULL_RESYNC 4
+#define PSYNC_NOT_SUPPORT 5
 // ------------debug --------------
 #define debug(...) printf(__VA_ARGS__)
 
@@ -215,6 +225,10 @@ typedef struct client {
     dict *pubsub_channels;
     list *pubsub_patterns;
 
+    // replicate
+    char replid[32];
+    long long repl_offset;
+
 } client;
 
 typedef struct readyList {
@@ -287,7 +301,11 @@ typedef struct redisServer {
     char *master_auth;
     long long repl_send_timeout;
     long long repl_read_timeout;
-
+    long long master_initial_offset;
+    char master_replid[CONFIG_REPL_RUNID_LEN+1];
+    client *cache_master;
+    int repl_transfer_tmp_fd;
+    char repl_transfer_tmp_file[255];
 
     struct redisCommand *expire_command;
     struct redisCommand *pexpire_command;
@@ -683,6 +701,8 @@ long long serverCron(struct eventLoop *el, int id, void *clientData);
 // ------------ replicate -----------------
 int connectWithMaster(void);
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);
+void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData);
+void replicationDiscardCacheMaster();
 // ------------process command -------------
 int processCommand(client *c);
 

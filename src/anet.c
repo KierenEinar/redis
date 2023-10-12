@@ -112,7 +112,7 @@ int _anetTcpGenericConnect(char *host, int port, char *sourceaddr, int flags) {
 
         if (sourceaddr) {
 
-            if ((error = getaddrinfo(host, _port, &hints, &bserverinfo)) == -1) {
+            if ((error = getaddrinfo(sourceaddr, NULL, &hints, &bserverinfo)) == -1) {
                 debug("anetGenericConnect getaddrinfo, sourceaddr=%s, err=%s\n", sourceaddr, gai_strerror(error));
                 goto  error;
             }
