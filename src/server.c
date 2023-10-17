@@ -262,7 +262,7 @@ int listenPort(int backlog) {
 
 void beforeSleep (struct eventLoop *el) {
 
-    flushAppendOnlyFile();
+    flushAppendOnlyFile(0);
 
     handleClientsPendingWrite();
 

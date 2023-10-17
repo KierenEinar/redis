@@ -188,7 +188,7 @@ ssize_t aofWrite(sds buf, size_t len) {
 
 }
 
-void flushAppendOnlyFile(void) {
+void flushAppendOnlyFile(int force) {
 
     unsigned long sync_in_progress = 0;
     ssize_t nwritten;
@@ -196,7 +196,7 @@ void flushAppendOnlyFile(void) {
     if (sdslen(server.aof_buf) == 0)
         return;
 
-    if (server.aof_fsync == AOF_FSYNC_EVERYSEC) {
+    if (server.aof_fsync == AOF_FSYNC_EVERYSEC && !force) {
         sync_in_progress = bioPendingJobsOfType(BIO_AOF_FSYNC);
         if (sync_in_progress) {
             if (server.aof_postponed_start == 0) {
@@ -243,7 +243,7 @@ void flushAppendOnlyFile(void) {
         server.aof_last_fsync = server.unix_time;
     } else if (server.aof_fsync == AOF_FSYNC_EVERYSEC && (server.unix_time - server.aof_last_fsync > 1 || server.aof_last_fsync == -1)){
 
-        if (!sync_in_progress) bioCreateBackgroundJob(BIO_AOF_FSYNC, (void *)(long long)server.aof_fd, NULL, NULL);
+        if (!sync_in_progress || force) bioCreateBackgroundJob(BIO_AOF_FSYNC, (void *)(long long)server.aof_fd, NULL, NULL);
         server.aof_last_fsync = server.unix_time;
     }
 
@@ -855,4 +855,34 @@ cleanup:
     server.aof_child_pid = -1;
     sdsfree(server.aof_buf);
     server.aof_buf = sdsempty();
+}
+
+void stopAppendOnly() {
+
+    char tmp_file[256];
+
+    // todo assert server.aof_state is AOF_ON
+
+    flushAppendOnlyFile(1);
+    server.aof_state = AOF_OFF;
+    sdsfree(server.aof_buf);
+    server.aof_buf = sdsempty();
+    close(server.aof_fd);
+    if (server.aof_child_pid == -1) return;
+    // stop aof RW child process.
+    kill(server.aof_child_pid, SIGUSR1);
+
+    int stat_loc;
+    while (wait3(&stat_loc, WNOHANG, NULL) != server.aof_child_pid);
+
+    char *filename = "temp_aof_rewrite_%d.aof";
+    snprintf(tmp_file, sizeof(tmp_file), filename, server.aof_child_pid);
+    unlink(tmp_file);
+    aofRewriteBufferReset();
+    server.aof_child_pid = -1;
+    aofClosePipes();
+}
+
+void startAppendOnly() {
+
 }

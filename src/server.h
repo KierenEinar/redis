@@ -140,6 +140,7 @@
 #define REPL_STATE_SEND_PSYNC 12
 #define REPL_STATE_RECEIVE_PSYNC 13
 #define REPL_STATE_TRANSFER 14
+#define REPL_STATE_CONNECTED 15
 // ------------- REPL_PARTIAL-------------
 #define PSYNC_WRITE_ERROR 1
 #define PSYNC_WAIT_REPLY 2
@@ -305,8 +306,9 @@ typedef struct redisServer {
     char master_replid[CONFIG_REPL_RUNID_LEN+1];
     client *cache_master;
     int repl_transfer_tmp_fd;
+    long long repl_transfer_size;
     char repl_transfer_tmp_file[255];
-
+    size_t repl_transfer_nread;
     struct redisCommand *expire_command;
     struct redisCommand *pexpire_command;
     struct redisCommand *multi_command;
@@ -608,6 +610,9 @@ long long getExpire(redisDb *db, robj *key);
 // signal key as modified. useful for the client which interested the keys.
 void signalKeyAsModified(redisDb *db, robj *key);
 
+// clear the dbid.
+int emptyDb(int dbid);
+
 //------------- list prototype --------------
 
 // push command, lpush or rpush, where -> LIST_HEAD or LIST_TAIL.
@@ -644,9 +649,6 @@ void touchWatchedKey(redisDb *db, robj *key);
 
 // discard multi transaction.
 void discardTransaction(client *c);
-
-// touch a watched key.
-void touchWatchedKey(redisDb *db, robj *key);
 
 //-------------syncio-------------------
 size_t syncWrite(int fd, char *ptr, size_t size, long long timeout);
@@ -720,7 +722,7 @@ void pipeFromChildReadable(struct eventLoop *el, int fd, int mask, void *clientD
 void aofRewriteBufferPipeWritable(struct eventLoop *el, int fd, int mask, void *clientData);
 size_t aofRewriteBufferWrite(int fd);
 void aofRewriteBufferReset();
-void flushAppendOnlyFile(void);
+void flushAppendOnlyFile(int force);
 client *createFakeClient(void);
 void freeFakeClient(client *c);
 int loadAppendOnlyFile(char *filename);
@@ -736,6 +738,8 @@ int aofCreatePipes(void);
 void aofClosePipes(void);
 void startLoading(FILE *fp);
 void loadingProgress(off_t pos);
+void stopAppendOnly();
+void startAppendOnly();
 // ---------- free method -----------------
 void listFreePubsubPatterns(void *ptr);
 void listFreeObject(void *ptr);

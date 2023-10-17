@@ -64,3 +64,8 @@ long long getExpire(redisDb *db, robj *key) {
 void signalKeyAsModified(redisDb *db, robj *key) {
     touchWatchedKey(db, key);
 }
+
+// todo implement.
+int emptyDb(int dbid) {
+    return 0;
+}

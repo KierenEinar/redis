@@ -239,7 +239,6 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
         while (max_retry--) {
             snprintf(tmpfile, 256, "tmp-%d-appendonly.aof", (int)server.unix_time);
-            tmpfile[strlen(tmpfile)] = '\0';
             dfd = open(tmpfile, O_CREAT | O_WRONLY, 0644);
             if (dfd != -1) break;
             sleep(1);
@@ -257,6 +256,8 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
         server.repl_state = REPL_STATE_TRANSFER;
         server.repl_transfer_tmp_fd = dfd;
+        server.repl_transfer_size = -1l;
+        server.repl_transfer_nread = 0;
         memcpy(server.repl_transfer_tmp_file, tmpfile, strlen(tmpfile)+1);
 
         return;
@@ -291,6 +292,134 @@ int connectWithMaster(void) {
     return C_OK;
 }
 
+void createReplicationMaterClient(int fd) {
+
+}
+
+void cancelReplicationHandShake() {
+
+}
+
 void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData) {
 
+
+    char buf[4096];
+    int eof_reached;
+    int old_aof_state;
+    size_t nread;
+
+    static char eofmark[CONFIG_REPL_RUNID_LEN];
+    static char lastbytes[CONFIG_REPL_RUNID_LEN];
+
+    if (server.repl_transfer_size == -1) {
+
+        if ((nread = syncReadLine(fd, buf, 1024, server.repl_read_timeout*1000)) == -1) {
+            debug("<REPLICATE PSYNC> I/O error reading bulk count from MASTER: %s", strerror(errno));
+            goto error;
+        }
+
+        // $EOF:<40bytes>
+        if (buf[0] == '-') {
+            debug("<REPLICATE PSYNC> MASTER abort replication, error msg: %s", buf+1);
+            goto error;
+        }
+
+        if (buf[0] == '\0') {
+            // at this stage, master used new lines to work as PING to keepalive the connections.
+            // so we ignore it.
+            return;
+        }
+
+        if (buf[0] != '$') {
+            debug("<REPLICATE PSYNC> SLAVE bad protocol received: %s, are you sure the host and port is master?", buf+1);
+            goto error;
+        }
+
+        if (!strncmp(buf+1, "EOF:", 4) && strlen(buf+5) >= CONFIG_REPL_RUNID_LEN) {
+            memcpy(eofmark, buf+5, CONFIG_REPL_RUNID_LEN);
+            memcpy(lastbytes, 0, CONFIG_REPL_RUNID_LEN);
+            server.repl_transfer_size = 0; // use 0 to mark is eof capa.
+            return;
+        }
+
+        debug("<REPLICATE PSYNC> SLAVE protocol we are not support, are you sure the master version right?");
+        goto error;
+
+    }
+
+    eof_reached = 0;
+    nread = read(fd, buf, sizeof(buf));
+
+    if (nread <= 0) {
+        debug("<REPLICATE PSYNC> SLAVE TRANSFER I/O trying to sync with master: %s",
+              nread == -1 ? strerror(errno) : "lost connection");
+        goto error;
+    }
+
+    // update the lastbytes
+    if (nread >= CONFIG_REPL_RUNID_LEN) {
+        memcpy(lastbytes, buf+(nread-CONFIG_REPL_RUNID_LEN), CONFIG_REPL_RUNID_LEN);
+    } else {
+        memmove(lastbytes, lastbytes+nread, CONFIG_REPL_RUNID_LEN-nread);
+        memcpy(lastbytes+(CONFIG_REPL_RUNID_LEN-nread), buf, nread);
+    }
+
+    if (memcmp(lastbytes, eofmark, CONFIG_REPL_RUNID_LEN) == 0) {
+        eof_reached = 1;
+    }
+
+    if (write(server.repl_transfer_tmp_fd, buf, nread) != nread) {
+        debug("<REPLICATE PSYNC> SLAVE TRANSFER write buf to disk failed, err:%s", strerror(errno));
+        goto  error;
+    }
+
+    server.repl_transfer_nread += nread;
+
+    if (eof_reached) {
+
+        if (ftruncate(server.repl_transfer_tmp_fd, (off_t)server.repl_transfer_nread-CONFIG_REPL_RUNID_LEN) == -1) {
+            debug("<REPLICATE PSYNC> SLAVE ftruncate EOF fd:%d, file_name:%s, failed:%s",
+                  server.repl_transfer_tmp_fd, server.repl_transfer_tmp_file, strerror(errno));
+            goto error;
+        }
+
+        old_aof_state = server.aof_state;
+        if (old_aof_state == AOF_ON) stopAppendOnly();
+
+        // rename aof.
+        if (rename(server.repl_transfer_tmp_file, server.aof_filename) == -1) {
+            debug("<REPLICATE PSYNC> SLAVE rename  file_name:%s to aof file failed:%s",
+                  server.repl_transfer_tmp_file, strerror(errno));
+            goto error;
+        }
+
+        // clear whole dbs.
+        emptyDb(-1);
+
+        elDeleteFileEvent(server.el, server.repl_transfer_s, EL_READABLE);
+
+        if (loadAppendOnlyFile(server.aof_filename) == C_ERR) {
+            debug("<REPLICATE PSYNC> SLAVE load append only file from MASTER failed");
+            goto error;
+        }
+
+        debug("<REPLICATE PSYNC> SLAVE load append only file from MASTER completed");
+        server.repl_state = REPL_STATE_CONNECTED;
+        elDeleteFileEvent(server.el, server.repl_transfer_s, EL_WRITABLE);
+        close(server.repl_transfer_tmp_fd);
+        server.repl_transfer_tmp_fd = -1;
+        memcpy(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
+        createReplicationMaterClient(server.repl_transfer_s);
+        server.repl_transfer_s = -1;
+
+    }
+
+    return;
+
+
+error:
+
+    cancelReplicationHandShake();
+
+    return;
 }
