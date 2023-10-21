@@ -230,8 +230,7 @@ void closeListeningSockets() {
     int j;
 
     for (j=0; j<server.ipfd_count; j++) {
-        elDeleteFileEvent(server.el, server.ipfd[j], EL_READABLE);
-        elDeleteFileEvent(server.el, server.ipfd[j], EL_WRITABLE);
+        elDeleteFileEvent(server.el, server.ipfd[j], EL_READABLE|EL_WRITABLE);
         close(server.ipfd[j]);
     }
 }

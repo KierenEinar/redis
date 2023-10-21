@@ -356,6 +356,8 @@ void initServer(void) {
 
     createSharedObject();
 
+    server.nextid = 0;
+
     // create commands
     server.commands = dictCreate(&commandTableDictType);
     populateCommandTable();

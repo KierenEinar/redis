@@ -81,6 +81,7 @@
 #define CLIENT_DIRTY_EXEC (1 << 6)
 #define CLIENT_CAS_EXEC (1 << 7)
 #define CLIENT_FAKE (1 << 8)
+#define CLIENT_MASTER (1 << 9)
 // server cron period
 #define SERVER_CRON_PERIOD_MS 1
 
@@ -119,6 +120,7 @@
 // ------------ AOF STATE --------------
 #define AOF_OFF 0
 #define AOF_ON 1
+#define AOF_RW 2
 
 //------------ AOF REWRITE --------------
 #define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
@@ -185,6 +187,9 @@ typedef struct multiStates {
 }multiStates;
 
 typedef struct client {
+
+    unsigned long long id;
+
     char err[255];
     char *querybuf;
     size_t buflen;
@@ -227,7 +232,7 @@ typedef struct client {
     list *pubsub_patterns;
 
     // replicate
-    char replid[32];
+    char replid[CONFIG_REPL_RUNID_LEN+1];
     long long repl_offset;
 
 } client;
@@ -238,6 +243,9 @@ typedef struct readyList {
 }readyList;
 
 typedef struct redisServer {
+
+    // clients
+    unsigned long long nextid;
 
     // event loop
     eventLoop *el;
@@ -305,6 +313,7 @@ typedef struct redisServer {
     long long master_initial_offset;
     char master_replid[CONFIG_REPL_RUNID_LEN+1];
     client *cache_master;
+    client *master;
     int repl_transfer_tmp_fd;
     long long repl_transfer_size;
     char repl_transfer_tmp_file[255];
@@ -686,7 +695,7 @@ void replyUnBlockClientTimeout(client *c);
 
 // reset the client so it can process command again.
 void resetClient(client *c);
-
+clent* createClient(int fd);
 void freeClient(client *c);
 void freeClientAsync(client *c);
 void freeClientInFreeQueueAsync(void);
@@ -738,8 +747,10 @@ int aofCreatePipes(void);
 void aofClosePipes(void);
 void startLoading(FILE *fp);
 void loadingProgress(off_t pos);
+void killAppendOnlyChild();
 void stopAppendOnly();
-void startAppendOnly();
+int startAppendOnly();
+void restartAOF();
 // ---------- free method -----------------
 void listFreePubsubPatterns(void *ptr);
 void listFreeObject(void *ptr);

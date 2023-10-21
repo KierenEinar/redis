@@ -137,26 +137,30 @@ void aofRewriteBufferAppend(sds buf) {
         }
     }
 
-    if (elGetFileEvent(server.el, server.aof_pipe_write_data_to_child, EL_WRITABLE) == 0)
+    if (elGetFileEvent(server.el, server.aof_pipe_write_data_to_child, EL_WRITABLE) == 0 &&
+        !server.aof_stop_sending_diff) {
         elCreateFileEvent(server.el,  server.aof_pipe_write_data_to_child,
                           EL_WRITABLE, aofRewriteBufferPipeWritable, NULL);
+    }
 
 }
 
 size_t aofRewriteBufferWrite(int fd) {
 
-    listNode *node = listFirst(server.aof_rw_block_list);
-    size_t totwrite = 0;
-    while (node) {
+    listNode *node;
+    size_t nwritten;
+
+    nwritten = -1;
+    while ((node = listFirst(server.aof_rw_block_list)) != NULL) {
         aof_rwblock * block = node->value;
         if (write(fd, block->buf, block->used) != block->used) {
             return -1;
         }
-        totwrite += block->used;
+        nwritten += block->used;
         listDelNode(server.aof_rw_block_list, node);
     }
 
-    return totwrite;
+    return nwritten;
 }
 
 void aofRewriteBufferReset() {
@@ -509,6 +513,8 @@ int rewriteAppendOnlyFileBackground(void) {
         return C_ERR;
     }
 
+    dictDisableResize();
+
     if ((child_pid = fork()) > 0) { // child process
         closeListeningSockets();
         char temp_file[128];
@@ -521,11 +527,11 @@ int rewriteAppendOnlyFileBackground(void) {
 
     } else if (child_pid == -1) { // fork failed
         aofClosePipes();
+        dictEnableResize();
         return C_ERR;
     } else { // parent process
         server.aof_child_pid = child_pid;
         server.aof_seldb = -1;
-        dictDisableResize();
     }
 
     return C_OK;
@@ -542,7 +548,7 @@ void pipeFromChildReadable(struct eventLoop *el, int fd, int mask, void *clientD
         }
     }
 
-    elDeleteFileEvent(el, fd, mask);
+    elDeleteFileEvent(el, server.aof_pipe_read_ack_from_parent, EL_READABLE);
 
 }
 
@@ -595,11 +601,6 @@ int aofCreatePipes(void) {
             goto cleanup;
     }
 
-    anetNonBlock(fds[0]);
-    anetNonBlock(fds[1]);
-
-    elCreateFileEvent(server.el, fds[2], EL_READABLE, pipeFromChildReadable, NULL);
-
     server.aof_pipe_read_data_from_parent = fds[0];
     server.aof_pipe_write_data_to_child = fds[1];
     server.aof_pipe_read_ack_from_child = fds[2];
@@ -607,11 +608,17 @@ int aofCreatePipes(void) {
     server.aof_pipe_read_ack_from_parent = fds[4];
     server.aof_pipe_write_ack_to_child = fds[5];
 
+    anetNonBlock(server.aof_pipe_read_data_from_parent);
+    anetNonBlock(server.aof_pipe_write_data_to_child);
+
+    elCreateFileEvent(server.el, server.aof_pipe_read_ack_from_child,
+                      EL_READABLE, pipeFromChildReadable, NULL);
+
     server.aof_stop_sending_diff = 0;
     return C_OK;
 
 cleanup:
-    for (j=0; j< sizeof(fds)/2; j++) {
+    for (j=0; j< sizeof(fds); j++) {
         if (fds[j] != -1)
             close(fds[j]);
     }
@@ -668,6 +675,7 @@ int rewriteAppendOnlyFile(FILE *fp) {
     int j;
     sds buf;
     size_t nwriten;
+    size_t ndiff;
     mstime_t start;
     int nodata;
     char read_ack_from_parent[128];
@@ -721,7 +729,7 @@ int rewriteAppendOnlyFile(FILE *fp) {
                 buf = sdscatsds(buf, shared.crlf->ptr);
             }
 
-            if (sdslen(buf) >= AOF_FWRITE_BLOCK_SIZE ) {
+            if (sdslen(buf) >= AOF_FWRITE_BLOCK_SIZE) {
                 if ((nwriten = fwrite(buf, AOF_FWRITE_BLOCK_SIZE, 1, fp)) == 0) {
                     if (errno == EAGAIN) continue;
                     goto err;
@@ -732,13 +740,15 @@ int rewriteAppendOnlyFile(FILE *fp) {
                 readDiffFromParent();
             }
         }
+
+        if (sdslen(buf)) {
+            if ((nwriten = fwrite(buf, sdslen(buf), 1, fp)) == 0) {
+                goto err;
+            }
+        }
+
     }
 
-    if (sdslen(buf) >= AOF_FWRITE_BLOCK_SIZE ) {
-        if ((nwriten = fwrite(buf, AOF_FWRITE_BLOCK_SIZE, 1, fp)) == 0) {
-            goto err;
-        }
-    }
 
     start = mstime();
     nodata = 0;
@@ -766,16 +776,25 @@ int rewriteAppendOnlyFile(FILE *fp) {
 
     readDiffFromParent();
 
+    ndiff = sdslen(server.aof_child_diff);
+
+    // write the diff to the disk
+    if (ndiff) {
+        if (fwrite(server.aof_child_diff, ndiff, 1, fp) != ndiff) {
+            goto err;
+        }
+    }
+
     fflush(fp);
     fsync(fileno(fp));
     sdsfree(buf);
+    sdsfree(server.aof_child_diff);
     return C_OK;
 
 err:
     sdsfree(buf);
+    sdsfree(server.aof_child_diff);
     return C_ERR;
-
-
 
 }
 
@@ -785,9 +804,7 @@ size_t readDiffFromParent(void) {
     size_t nread;
     nread = read(server.aof_pipe_read_data_from_parent, buf, sizeof(buf));
     if (nread > 0) {
-        sds s = sdsnewlen(buf, nread);
-        server.aof_child_diff = sdscatsds(server.aof_child_diff, s);
-        sdsfree(s);
+        server.aof_child_diff = sdscatlen(server.aof_child_diff, buf, nread);
     }
     return nread;
 }
@@ -807,25 +824,22 @@ void aofRewriteDoneHandler(int bysignal, int code) {
 
     if (!bysignal && code == 0) {
 
-        if (server.aof_child_pid == -1)
-            goto cleanup;
+        char temp_file[255];
+        snprintf(temp_file, sizeof(temp_file), "temp_aof_rewrite_bg_%d.aof", server.aof_child_pid);
 
-        char tempfile[255];
-        snprintf(tempfile, 255, "temp_aof_rewrite_%d.aof", server.aof_child_pid);
-
-        newfd = open(tempfile, O_WRONLY | O_APPEND);
+        newfd = open(temp_file, O_WRONLY | O_APPEND);
         if (newfd == -1) {
-            unlink(tempfile);
+            unlink(temp_file);
             goto cleanup;
         }
 
         if (aofRewriteBufferWrite(newfd) == -1) {
-            unlink(tempfile);
+            unlink(temp_file);
             goto cleanup;
         }
 
-        if (rename(tempfile, server.aof_filename) == -1) {
-            unlink(tempfile);
+        if (rename(temp_file, server.aof_filename) == -1) {
+            unlink(temp_file);
             goto cleanup;
         }
 
@@ -853,36 +867,64 @@ cleanup:
     aofClosePipes();
     aofRewriteBufferReset();
     server.aof_child_pid = -1;
+    server.aof_seldb = -1;
     sdsfree(server.aof_buf);
     server.aof_buf = sdsempty();
 }
 
-void stopAppendOnly() {
+void killAppendOnlyChild() {
 
     char tmp_file[256];
-
-    // todo assert server.aof_state is AOF_ON
-
-    flushAppendOnlyFile(1);
-    server.aof_state = AOF_OFF;
-    sdsfree(server.aof_buf);
-    server.aof_buf = sdsempty();
-    close(server.aof_fd);
-    if (server.aof_child_pid == -1) return;
-    // stop aof RW child process.
-    kill(server.aof_child_pid, SIGUSR1);
-
     int stat_loc;
-    while (wait3(&stat_loc, WNOHANG, NULL) != server.aof_child_pid);
+
+    if (kill(server.aof_child_pid, SIGUSR1) != -1) {
+        while (wait3(&stat_loc, WNOHANG, NULL) != server.aof_child_pid);
+    }
 
     char *filename = "temp_aof_rewrite_%d.aof";
     snprintf(tmp_file, sizeof(tmp_file), filename, server.aof_child_pid);
     unlink(tmp_file);
     aofRewriteBufferReset();
     server.aof_child_pid = -1;
+    server.aof_seldb = -1;
     aofClosePipes();
 }
 
-void startAppendOnly() {
+void stopAppendOnly() {
+
+    // todo assert server.aof_state is AOF_ON
+    flushAppendOnlyFile(1);
+    server.aof_state = AOF_OFF;
+    sdsfree(server.aof_buf);
+    server.aof_buf = sdsempty();
+    close(server.aof_fd);
+    if (server.aof_child_pid == -1) return;
+    killAppendOnlyChild();
+}
+
+int startAppendOnly() {
+
+    // todo assert server.aof_state is AOF_OFF
+    int newfd;
+
+    newfd = open(server.aof_filename, O_CREAT | O_APPEND | O_RDWR, 0644);
+    if (newfd == -1) {
+        debug("start append only failed, err=%s", strerror(errno));
+        return C_ERR;
+    }
+
+    if (server.aof_child_pid != -1) {
+        killAppendOnlyChild();
+    }
+
+    aofRewriteBufferReset();
+
+    if (rewriteAppendOnlyFileBackground() == C_ERR) {
+        return C_ERR;
+    }
+
+    server.aof_state = AOF_RW;
+
+    return C_OK;
 
 }

@@ -274,43 +274,13 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
 
 void acceptCommandHandler(int cfd, char *ip, int port) {
 
-    client *c;
-    c = zmalloc(sizeof(*c));
-    anetNonBlock(cfd);
-    if (EL_ERR == elCreateFileEvent(server.el, cfd, EL_READABLE, readQueryFromClient, c)) {
-        // todo free something
+    client *c = createClient(cfd);
+    if (c == NULL) {
+        close(cfd);
         return;
     }
 
-    c->querybuf = NULL;
-    c->buflen = 0;
-    c->bufcap = 0;
-    c->multilen = 0;
-    c->bulklen = -1;
-    c->argv = NULL;
-    c->argc = 0;
 
-    c->flag = 0;
-
-    c->fd = cfd;
-    c->reqtype = 0;
-    selectDb(c, 0);
-    c->cmd = NULL;
-    c->bufpos = 0;
-    c->sentlen = 0;
-    c->reply = listCreate();
-    listSetFreeMethod(c->reply, zfree);
-    c->reply_bytes = 0ll;
-    c->bpop.blocking_keys = dictCreate(&objectKeyValuePtrDictType);
-    listAddNodeTail(server.client_list, c);
-    c->client_list_node = listLast(server.client_list);
-    initClientMultiState(c);
-    c->pubsub_channels = dictCreate(&objectKeyValuePtrDictType);
-    c->pubsub_patterns = listCreate();
-    listSetFreeMethod(c->pubsub_patterns, listFreeObject);
-    listSetMatchMethod(c->pubsub_patterns, listValueEqual);
-
-    c->watch_keys = listCreate();
 }
 
 int processMultiBulkBuffer(client *c){
@@ -631,6 +601,53 @@ void resetClient(client *c) {
     c->reqtype = 0;
     c->multilen = 0;
     c->bulklen = -1;
+}
+
+client* createClient(int cfd) {
+
+    client *c;
+    c = zmalloc(sizeof(*c));
+
+    if (cfd != -1) {
+        anetNonBlock(cfd);
+        if (EL_ERR == elCreateFileEvent(server.el, cfd, EL_READABLE, readQueryFromClient, c)) {
+            // todo free something
+            zfree(c);
+            return NULL;
+        }
+    }
+    // todo next id may be need lock ?
+    c->id = server.nextid++;
+    c->querybuf = NULL;
+    c->buflen = 0;
+    c->bufcap = 0;
+    c->multilen = 0;
+    c->bulklen = -1;
+    c->argv = NULL;
+    c->argc = 0;
+
+    c->flag = 0;
+    c->fd = cfd;
+    c->reqtype = 0;
+    selectDb(c, 0);
+    c->cmd = NULL;
+    c->bufpos = 0;
+    c->sentlen = 0;
+    c->reply = listCreate();
+    listSetFreeMethod(c->reply, zfree);
+    c->reply_bytes = 0ll;
+    c->bpop.blocking_keys = dictCreate(&objectKeyValuePtrDictType);
+    listAddNodeTail(server.client_list, c);
+    c->client_list_node = listLast(server.client_list);
+    initClientMultiState(c);
+    c->pubsub_channels = dictCreate(&objectKeyValuePtrDictType);
+    c->pubsub_patterns = listCreate();
+    listSetFreeMethod(c->pubsub_patterns, listFreeObject);
+    listSetMatchMethod(c->pubsub_patterns, listValueEqual);
+    c->watch_keys = listCreate();
+
+    return c;
+
 }
 
 void freeClient(client *c) {

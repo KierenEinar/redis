@@ -359,7 +359,7 @@ int elWait(int fd, int mask, long long milliseconds) {
     pollfd.fd = fd;
     if (mask & EL_READABLE) pollfd.events |= POLLIN;
     if (mask & EL_WRITABLE) pollfd.events |= POLLOUT;
-    if ((retval = poll(&pollfd, 1, milliseconds)) > 0) {
+    if ((retval = poll(&pollfd, 1, (int)milliseconds)) > 0) {
         if (pollfd.revents & POLLIN)  retmask |= EL_READABLE;
         if (pollfd.revents & POLLOUT) retmask |= EL_WRITABLE;
         if (pollfd.revents & POLLHUP) retmask |= EL_WRITABLE;

@@ -292,8 +292,12 @@ int connectWithMaster(void) {
     return C_OK;
 }
 
-void createReplicationMaterClient(int fd) {
-
+void replicationCreateMaterClient(int fd) {
+    server.master = createClient(fd);
+    server.master->flag |= CLIENT_MASTER;
+    server.master->repl_offset = server.master_initial_offset;
+    memcpy(server.master->replid, server.master_replid, CONFIG_REPL_RUNID_LEN);
+    server.master->replid[CONFIG_REPL_RUNID_LEN] = '\0';
 }
 
 void cancelReplicationHandShake() {
@@ -384,7 +388,7 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
         }
 
         old_aof_state = server.aof_state;
-        if (old_aof_state == AOF_ON) stopAppendOnly();
+        if (old_aof_state != AOF_OFF) stopAppendOnly();
 
         // rename aof.
         if (rename(server.repl_transfer_tmp_file, server.aof_filename) == -1) {
@@ -405,21 +409,25 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
 
         debug("<REPLICATE PSYNC> SLAVE load append only file from MASTER completed");
         server.repl_state = REPL_STATE_CONNECTED;
+        memcpy(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
+        replicationCreateMaterClient(server.repl_transfer_s);
         elDeleteFileEvent(server.el, server.repl_transfer_s, EL_WRITABLE);
         close(server.repl_transfer_tmp_fd);
+        close(server.repl_transfer_s);
         server.repl_transfer_tmp_fd = -1;
-        memcpy(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
-        createReplicationMaterClient(server.repl_transfer_s);
         server.repl_transfer_s = -1;
-
+        if (old_aof_state) restartAOF();
     }
 
     return;
 
 
 error:
-
     cancelReplicationHandShake();
 
     return;
+}
+
+void restartAOF() {
+
 }
