@@ -627,7 +627,15 @@ cleanup:
 
 void aofClosePipes(void) {
 
-    elDeleteFileEvent(server.el, server.aof_pipe_write_data_to_child, EL_READABLE);
+    if (elGetFileEvent(server.el, server.aof_pipe_write_data_to_child, EL_WRITABLE))
+        elDeleteFileEvent(server.el, server.aof_pipe_write_data_to_child, EL_WRITABLE);
+
+    close(server.aof_pipe_read_data_from_parent);
+    close(server.aof_pipe_write_data_to_child);
+    close(server.aof_pipe_read_ack_from_child);
+    close(server.aof_pipe_write_ack_to_parent);
+    close(server.aof_pipe_read_ack_from_parent);
+    close(server.aof_pipe_write_ack_to_child);
 
     server.aof_pipe_read_data_from_parent = -1;
     server.aof_pipe_write_data_to_child = -1;
@@ -849,6 +857,10 @@ void aofRewriteDoneHandler(int bysignal, int code) {
             bioCreateBackgroundJob(BIO_AOF_FSYNC, newfd);
         }
 
+        if (server.aof_state == AOF_RW) {
+            server.aof_state = AOF_ON;
+        }
+
         if (server.aof_fd == -1) {
             goto cleanup;
         } else {
@@ -857,19 +869,23 @@ void aofRewriteDoneHandler(int bysignal, int code) {
             bioCreateBackgroundJob(BIO_CLOSE_FILE, oldfd);
             newfd = -1;
         }
+
+    } else if (bysignal) {
+
+        if (bysignal != SIGUSR1) {
+            // server log error
+        }
     }
 
 
 cleanup:
     if (newfd != -1)
         close(newfd);
-
     aofClosePipes();
+    dictEnableResize();
     aofRewriteBufferReset();
     server.aof_child_pid = -1;
     server.aof_seldb = -1;
-    sdsfree(server.aof_buf);
-    server.aof_buf = sdsempty();
 }
 
 void killAppendOnlyChild() {
@@ -907,7 +923,7 @@ int startAppendOnly() {
     // todo assert server.aof_state is AOF_OFF
     int newfd;
 
-    newfd = open(server.aof_filename, O_CREAT | O_APPEND | O_RDWR, 0644);
+    newfd = open(server.aof_filename, O_CREAT | O_APPEND | O_RDWR);
     if (newfd == -1) {
         debug("start append only failed, err=%s", strerror(errno));
         return C_ERR;
@@ -917,14 +933,12 @@ int startAppendOnly() {
         killAppendOnlyChild();
     }
 
-    aofRewriteBufferReset();
-
     if (rewriteAppendOnlyFileBackground() == C_ERR) {
         return C_ERR;
     }
 
     server.aof_state = AOF_RW;
-
+    server.aof_fd = newfd;
     return C_OK;
 
 }
