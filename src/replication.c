@@ -86,7 +86,7 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
         return PSYNC_WAIT_REPLY;
     }
 
-    elDeleteFileEvent(server.el, fd, EL_READABLE | EL_WRITABLE);
+    elDeleteFileEvent(server.el, fd, EL_READABLE);
 
     if (!strncmp(reply, "+FULLRESYNC", 11)) {
 
@@ -239,7 +239,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
         while (max_retry--) {
             snprintf(tmpfile, 256, "tmp-%d-appendonly.aof", (int)server.unix_time);
-            dfd = open(tmpfile, O_CREAT | O_WRONLY, 0644);
+            dfd = open(tmpfile, O_CREAT | O_WRONLY);
             if (dfd != -1) break;
             sleep(1);
         }
@@ -254,6 +254,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
             goto error;
         }
 
+        anetNonBlock(dfd);
         server.repl_state = REPL_STATE_TRANSFER;
         server.repl_transfer_tmp_fd = dfd;
         server.repl_transfer_size = -1l;
@@ -300,7 +301,39 @@ void replicationCreateMaterClient(int fd) {
     server.master->replid[CONFIG_REPL_RUNID_LEN] = '\0';
 }
 
+int replicationIsInHandshake(void) {
+    return server.repl_state >= REPL_STATE_RECEIVE_PONG &&
+        server.repl_state <= REPL_STATE_RECEIVE_PSYNC;
+}
+
+void undoConnectWithMaster(void){
+    elDeleteFileEvent(server.el, server.repl_transfer_s, EL_WRITABLE | EL_READABLE);
+    close(server.repl_transfer_s);
+    server.repl_transfer_s = -1;
+
+    server.master_initial_offset = -1;
+    memcpy(server.master_replid, 0, sizeof(server.master_replid));
+    server.repl_state = REPL_STATE_CONNECT;
+}
+
+void replicationAbortSyncTransfer(void) {
+
+    undoConnectWithMaster();
+    close(server.repl_transfer_tmp_fd);
+    server.repl_transfer_tmp_fd = -1;
+    unlink(server.repl_transfer_tmp_file);
+    memcpy(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
+}
+
+
 void cancelReplicationHandShake() {
+
+    if (server.repl_state == REPL_STATE_TRANSFER) {
+        replicationAbortSyncTransfer();
+    } else if (server.repl_state == REPL_STATE_CONNECTING ||
+            replicationIsInHandshake()) {
+        undoConnectWithMaster();
+    }
 
 }
 
@@ -411,12 +444,10 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
         server.repl_state = REPL_STATE_CONNECTED;
         memcpy(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
         replicationCreateMaterClient(server.repl_transfer_s);
-        elDeleteFileEvent(server.el, server.repl_transfer_s, EL_WRITABLE);
         close(server.repl_transfer_tmp_fd);
-        close(server.repl_transfer_s);
         server.repl_transfer_tmp_fd = -1;
         server.repl_transfer_s = -1;
-        if (old_aof_state) restartAOF();
+        if (old_aof_state != AOF_OFF) restartAOF();
     }
 
     return;
@@ -429,5 +460,16 @@ error:
 }
 
 void restartAOF() {
+    int max_retry;
+    max_retry = 10;
+    while (max_retry--) {
+        if (startAppendOnly() == C_OK) {
+            return;
+        }
+        debug("Failed enabling the AOF after successful master synchronization! Trying it again in one second.");
+        sleep(1);
+    }
 
+    debug("FATAL: this slave instance finished the synchronization with its master, but the AOF can't be turned on. Exiting now.");
+    exit(1);
 }
