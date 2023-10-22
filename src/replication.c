@@ -123,19 +123,26 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
     sds err, reply;
-    int max_retry, dfd, psync_result;
+    int max_retry, dfd, psync_result, sock_err;
+    socklen_t sock_err_size;
     char tmpfile[256];
 
     max_retry = 5;
     dfd = -1;
-    // todo check the socket
 
+    sock_err_size = sizeof(sock_err);
+    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &sock_err, &sock_err_size) == -1) {
+        goto error;
+    }
+
+    if (sock_err > 0) {
+        goto error;
+    }
 
     if (server.repl_state == REPL_STATE_CONNECTING) {
 
         elDeleteFileEvent(el, fd, EL_WRITABLE);
         if ((err=sendSynchronousCommand(SYNC_CMD_WRITE, fd, "PING", NULL)) != NULL) {
-            sdsfree(err);
             goto write_error;
         }
         server.repl_state = REPL_STATE_RECEIVE_PONG;
@@ -162,7 +169,6 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
         if (server.master_auth) {
             if ((err = sendSynchronousCommand(SYNC_CMD_WRITE, fd, "AUTH", server.master_auth, NULL)) != NULL) {
                 debug("slave send auth failed, err=%s\n", strerror(errno));
-                sdsfree(err);
                 goto write_error;
             }
         }
@@ -191,7 +197,6 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
         if ((err = sendSynchronousCommand(SYNC_CMD_WRITE, fd, "REPLCONF",
                                           "capa", "eof", "capa", "psync2")) != NULL) {
             debug("slave send capa failed, err=%s\n", err);
-            sdsfree(err);
             goto write_error;
         }
         server.repl_state = REPL_STATE_RECEIVE_CAPA;
@@ -268,10 +273,18 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
 error:
 
+    elDeleteFileEvent(server.el, server.repl_transfer_s, EL_READABLE | EL_WRITABLE);
+    close(server.repl_transfer_s);
+    server.repl_transfer_s = -1;
+    server.repl_state = REPL_STATE_CONNECT;
+
+
 write_error:
 
+    debug("Handshaking MASTER <-> SLAVE synchronization, err: %s",err);
+    sdsfree(err);
+    goto error;
 
-    return;
 }
 
 
