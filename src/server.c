@@ -414,7 +414,18 @@ void initServer(void) {
     server.aof_pipe_read_ack_from_parent = -1;
     server.aof_pipe_write_ack_to_child = -1;
     server.aof_stop_sending_diff = -1;
+    server.repl_diskless_sync = CONFIG_REPL_DISKLESS_SYNC;
+    server.repl_backlog_size = CONFIG_REPL_BACKLOG_SIZE;
+    server.repl_backlog_idx = 0l;
+    server.repl_backlog_histlen = 0l;
+    server.repl_backlog_off = 0l;
+    server.master_repl_offset = 0l;
+    server.aof_type = AOF_TYPE_NONE;
+    server.aof_repl_read_from_child = -1;
+    server.aof_repl_write_to_parent = -1;
+    server.slaves = listCreate();
 
+    listSetFreeMethod(server.slaves, zfree);
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
     listSetMatchMethod(server.pubsub_patterns, listValueEqual);
     listSetFreeMethod(server.pubsub_patterns, listFreePubsubPatterns);
@@ -523,6 +534,15 @@ void listFreePubsubPatterns(void *ptr) {
 void listFreeObject(void *ptr) {
     // todo make sure ptr is robj
     decrRefCount(ptr);
+}
+
+void* listDupString(void *ptr) {
+    char *s = ptr;
+    size_t len = strlen(s);
+    char *copy = zmalloc(sizeof(char) * (len+1));
+    memcpy(copy, s, len);
+    s[len] = '\0';
+    return copy;
 }
 
 void propagate(struct redisCommand *cmd, int dbid, int argc, robj **argv, int flags) {

@@ -122,3 +122,24 @@ listNode *listNext(listIter *li) {
     }
     return current;
 }
+
+list *listDup(list *l) {
+
+    list *c;
+    listIter li;
+    listNode *ln;
+
+    c = listCreate();
+    listRewind(l, &li);
+    while ((ln = listNext(&li)) != NULL) {
+        listNode *n;
+        n = zmalloc(sizeof(*n));
+        if (l->dup) {
+            n->value = ln->value;
+        } else {
+            n->value = l->dup(ln->value);
+        }
+        listAddNodeTail(c, n);
+    }
+    return c;
+}

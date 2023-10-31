@@ -3,6 +3,162 @@
 //
 #include "server.h"
 
+
+// ------------------------ MASTER ---------------------
+
+void changeReplicationId() {
+    // todo update master replication id.
+}
+
+void createReplicationBacklog() {
+    server.repl_backlog = zmalloc(server.repl_backlog_size);
+    server.repl_backlog_idx = 0l;
+    server.repl_backlog_histlen = 0l;
+
+    server.repl_backlog_off = server.master_repl_offset + 1;
+}
+
+int replicationSetupFullResync(client *slave, off_t offset) {
+
+    char buf[128];
+    int buflen;
+    slave->repl_state = SLAVE_STATE_WAIT_BGSAVE_END;
+    slave->psync_initial_offset = offset;
+
+    buflen = snprintf(buf, sizeof(buf), "+FULLRESYNC %s %lld\r\n",
+                      server.master_replid,
+                      offset);
+
+    if (write(slave->fd, buf, buflen) != buflen) {
+        freeClient(slave);
+        return C_ERR;
+    }
+
+    return C_OK;
+
+}
+
+int startBgAofForSlaveSockets() {
+
+    listIter li;
+    listNode *ln;
+    client *slave;
+    pid_t childpid;
+    int pipefds[2], numfds, retval;
+    int *fds;
+
+    if (server.aof_fd != -1) return C_ERR;
+
+    if (pipe(pipefds) == -1) {
+        debug("BgAofForSlaveSockets pipe system call, err=%s", strerror(errno));
+        return C_ERR;
+    }
+
+    fds = zmalloc(sizeof(int) * listLength(server.slaves));
+    numfds = 0;
+
+    listRewind(server.slaves, &li);
+    while ((ln = listNext(&li)) != NULL) {
+        slave = ln->value;
+        if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
+            fds[numfds++] = slave->fd;
+            replicationSetupFullResync(slave, server.master_repl_offset);
+        }
+    }
+
+    server.aof_repl_read_from_child = pipefds[0];
+    server.aof_repl_write_to_parent = pipefds[1];
+
+    if ((childpid = fork()) == 0) { // spawn child process.
+
+        closeListeningSockets();
+
+        retval = aofSaveToSlavesWithEOFMark(fds, numfds);
+
+    } else {
+
+    }
+
+    return C_ERR;
+
+}
+
+int startBgAofRewriteForReplication(int mincapa) {
+
+    int socket_type = server.repl_diskless_sync && (mincapa & REPL_CAPA_EOF);
+    int retval;
+    if (socket_type) {
+        retval = startBgAofForSlaveSockets();
+    }
+
+    return C_ERR;
+}
+
+
+void syncCommand(client *c) {
+
+    if (c->flag & CLIENT_SLAVE) return;
+
+    if (clientHasPendingWrites(c)) {
+        addReplyError(c, "MASTER sync while client has outputs...");
+        return;
+    }
+
+    c->repl_state = SLAVE_STATE_WAIT_BGSAVE_START;
+    c->flag |= CLIENT_SLAVE;
+
+    listAddNodeTail(server.slaves, c);
+
+    if (listLength(server.slaves) == 1 && server.repl_backlog == NULL) {
+        changeReplicationId();
+        createReplicationBacklog();
+    }
+
+    if (server.aof_fd != -1 && server.aof_type == AOF_TYPE_DISK) {
+
+        listIter li;
+        listNode *ln;
+        client *slave;
+
+        listRewind(server.slaves, &li);
+        while ((ln = listNext(&li)) != NULL) {
+            slave = listNodeValue(ln);
+            if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END) {
+                break;
+            }
+        }
+
+        if (ln && (c->slave_capa & slave->slave_capa) == slave->slave_capa) {
+            copyClientOutputBuffer(c, slave); // copy client replicate buffer
+            replicationSetupFullResync(c, slave->psync_initial_offset);
+            debug("Waiting for end of BGSAVE for SYNC");
+        } else {
+            debug("Can't attach the slave to the current BGSAVE. Waiting for next BGSAVE for SYNC");
+        }
+    } else if (server.aof_fd != -1 && server.aof_type == AOF_TYPE_SOCKET) {
+
+        if ((c->slave_capa & REPL_CAPA_EOF) && server.repl_diskless_sync) {
+            debug("Current repl socket started, delay to start next socket type sync.");
+        } else {
+            debug("Current repl socket started, delay to start next disk type sync.");
+        }
+
+    } else {
+
+       if (server.aof_child_pid == -1) {
+           startBgAofRewriteForReplication(c->slave_capa);
+       } else {
+           debug("delay replication sync to next.");
+       }
+    }
+
+    return;
+
+}
+
+
+
+
 // ------------------------- slave ----------------------
 
 #define SYNC_CMD_READ (1<<0)

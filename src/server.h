@@ -51,7 +51,8 @@
 #define DEFAULT_AOF_FILENAME "appendonly.aof"
 #define CONFIG_REPL_RUNID_LEN 40
 
-
+#define CONFIG_REPL_BACKLOG_SIZE (1024 * 1024 * 10) // 10m
+#define CONFIG_REPL_DISKLESS_SYNC 0 // default set to disable socket.
 #define LIST_ITER_DIR_FORWARD 1
 #define LIST_ITER_DIR_BACKWARD 2
 
@@ -82,6 +83,8 @@
 #define CLIENT_CAS_EXEC (1 << 7)
 #define CLIENT_FAKE (1 << 8)
 #define CLIENT_MASTER (1 << 9)
+#define CLIENT_SLAVE (1 << 10)
+
 // server cron period
 #define SERVER_CRON_PERIOD_MS 1
 
@@ -110,6 +113,7 @@
 // ------- propagate flags ------------
 #define PROPAGATE_CMD_NONE 0
 #define PROPAGATE_CMD_AOF 1
+#define PROPAGATE_CMD_REPL 2
 #define PROPAGATE_CMD_FULL (PROPAGATE_CMD_AOF)
 
 // ------------ AOF POLICY-------------
@@ -121,6 +125,11 @@
 #define AOF_OFF 0
 #define AOF_ON 1
 #define AOF_RW 2
+
+// ------------ AOF TYPE ---------------
+#define AOF_TYPE_NONE 0
+#define AOF_TYPE_DISK 1
+#define AOF_TYPE_SOCKET 2
 
 //------------ AOF REWRITE --------------
 #define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
@@ -143,6 +152,17 @@
 #define REPL_STATE_RECEIVE_PSYNC 13
 #define REPL_STATE_TRANSFER 14
 #define REPL_STATE_CONNECTED 15
+
+// CLIENT SLAVE STATE
+#define SLAVE_STATE_WAIT_BGSAVE_START 6
+#define SLAVE_STATE_WAIT_BGSAVE_END 7
+
+
+// REPL CAPA
+#define REPL_CAPA_NONE 0
+#define REPL_CAPA_PSYNC2 1
+#define REPL_CAPA_EOF 2
+
 // ------------- REPL_PARTIAL-------------
 #define PSYNC_WRITE_ERROR 1
 #define PSYNC_WAIT_REPLY 2
@@ -232,8 +252,14 @@ typedef struct client {
     list *pubsub_patterns;
 
     // replicate
+    // master
     char replid[CONFIG_REPL_RUNID_LEN+1];
-    long long repl_offset;
+    off_t repl_offset; // repl_offset if the client is master.
+
+    // slave
+    int repl_state;
+    int slave_capa;
+    off_t psync_initial_offset;
 
 } client;
 
@@ -301,8 +327,25 @@ typedef struct redisServer {
     int aof_pipe_write_ack_to_child;
     int aof_stop_sending_diff;
     sds aof_child_diff;
+    int aof_type;
 
-    // replicate
+    // replicate master
+    list *slaves;      // slaves list
+
+    off_t master_repl_offset; // current master replicate offset.
+
+    // circular backlog.
+    char *repl_backlog;
+    // backlog circular arr info
+    long long repl_backlog_size; // backlog size.
+    long long repl_backlog_idx;  // backlog next write offset, [0, backlog size)
+    long long repl_backlog_histlen; // backlog valid read len, [0, backlog size)
+
+    // backlog virtual arr info
+    long long repl_backlog_off;  // backlog total offset, using for psync compare with slave's offset.
+
+    // replicate slave
+    int repl_diskless_sync;
     int repl_state;
     int repl_transfer_s;
     char *master_host;
@@ -310,7 +353,7 @@ typedef struct redisServer {
     char *master_auth;
     long long repl_send_timeout;
     long long repl_read_timeout;
-    long long master_initial_offset;
+    off_t master_initial_offset;
     char master_replid[CONFIG_REPL_RUNID_LEN+1];
     client *cache_master;
     client *master;
@@ -318,6 +361,10 @@ typedef struct redisServer {
     long long repl_transfer_size;
     char repl_transfer_tmp_file[255];
     size_t repl_transfer_nread;
+    int aof_repl_read_from_child;
+    int aof_repl_write_to_parent;
+
+
     struct redisCommand *expire_command;
     struct redisCommand *pexpire_command;
     struct redisCommand *multi_command;
@@ -535,6 +582,9 @@ void execCommand(client *c);
 // queued the command on multi context.
 void queueMultiCommand(client *c);
 
+// ------------ replication command ------------
+void syncCommand(client *c);
+
 // block client for multi input keys.
 void blockForKeys(client *c, robj **argv, int argc, long long timeout);
 
@@ -691,11 +741,12 @@ void addReplyError(client *c, const char *str);
 void addReplyErrorLength(client *c, const char *str, size_t len);
 void setProtocolError(client *c);
 void replyUnBlockClientTimeout(client *c);
+void copyClientOutputBuffer(client *src, client *dst);
 // ------------redis client--------------
 
 // reset the client so it can process command again.
 void resetClient(client *c);
-clent* createClient(int fd);
+client* createClient(int fd);
 void freeClient(client *c);
 void freeClientAsync(client *c);
 void freeClientInFreeQueueAsync(void);
@@ -709,7 +760,11 @@ void slaveCron(void);
 long long serverCron(struct eventLoop *el, int id, void *clientData);
 
 
-// ------------ replicate -----------------
+// ------------ replicate master ---------------
+int startBgAofRewriteForReplication(int mincapa);
+int startBgAofForSlaveSockets();
+
+// ------------ replicate slave -----------------
 int connectWithMaster(void);
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);
 void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData);
@@ -751,7 +806,10 @@ void killAppendOnlyChild();
 void stopAppendOnly();
 int startAppendOnly();
 void restartAOF();
+int aofSaveToSlavesWithEOFMark(int *fds, int numfds);
 // ---------- free method -----------------
 void listFreePubsubPatterns(void *ptr);
 void listFreeObject(void *ptr);
+// ----------- dup method -----------------
+void* listDupString(void *ptr);
 #endif //REDIS_SERVER_H

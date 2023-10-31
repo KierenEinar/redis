@@ -635,6 +635,8 @@ client* createClient(int cfd) {
     c->sentlen = 0;
     c->reply = listCreate();
     listSetFreeMethod(c->reply, zfree);
+    listSetDupMethod(c->reply, listDupString);
+
     c->reply_bytes = 0ll;
     c->bpop.blocking_keys = dictCreate(&objectKeyValuePtrDictType);
     listAddNodeTail(server.client_list, c);
@@ -646,8 +648,20 @@ client* createClient(int cfd) {
     listSetMatchMethod(c->pubsub_patterns, listValueEqual);
     c->watch_keys = listCreate();
 
+    c->repl_state = REPL_STATE_NONE;
+    c->slave_capa = REPL_CAPA_NONE;
+    c->repl_offset = -1;
     return c;
 
+}
+
+void copyClientOutputBuffer(client *src, client *dst) {
+
+    listRelease(dst->reply);
+    dst->reply = listDup(src->reply);
+
+    dst->bufpos = src->bufpos;
+    memcpy(dst->buf, src->buf, src->bufpos);
 }
 
 void freeClient(client *c) {

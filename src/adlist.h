@@ -15,7 +15,7 @@ typedef struct list {
      listNode *head;
      listNode *tail;
      unsigned long len;
-     void *(*dup)(void *key);
+     void *(*dup)(void *value);
      void (*free)(void *ptr);
      int (*match)(void *ptr, void *value);
 }list;
@@ -43,4 +43,5 @@ void listRelease(list *l);
 listNode *listSearchKey(list *l, void *value);
 void listRewind(list *l, listIter *li);
 listNode *listNext(listIter *li);
+list *listDup(list *l);
 #endif //REDIS_ADLIST_H

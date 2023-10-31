@@ -886,6 +886,7 @@ cleanup:
     aofRewriteBufferReset();
     server.aof_child_pid = -1;
     server.aof_seldb = -1;
+    server.aof_type = AOF_TYPE_NONE;
 }
 
 void killAppendOnlyChild() {
@@ -940,5 +941,19 @@ int startAppendOnly() {
     server.aof_state = AOF_RW;
     server.aof_fd = newfd;
     return C_OK;
+
+}
+
+int aofSaveToSlavesWithEOFMark(int *fds, int numfds) {
+
+
+    // $EOF: ***(40bytes random char)\r\n
+    // body
+    // ***(40bytes random char)\r\n
+
+
+
+    return C_ERR;
+
 
 }
