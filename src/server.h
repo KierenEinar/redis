@@ -50,7 +50,7 @@
 
 #define DEFAULT_AOF_FILENAME "appendonly.aof"
 #define CONFIG_REPL_RUNID_LEN 40
-
+#define CONFIG_REPL_EOFMARK_LEN 40
 #define CONFIG_REPL_BACKLOG_SIZE (1024 * 1024 * 10) // 10m
 #define CONFIG_REPL_DISKLESS_SYNC 0 // default set to disable socket.
 #define LIST_ITER_DIR_FORWARD 1
@@ -134,6 +134,9 @@
 //------------ AOF REWRITE --------------
 #define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
 #define AOF_FWRITE_BLOCK_SIZE (1024 * 4)
+
+// ----------- AOF SYNC REPL---------------
+#define AOF_PROTO_WRITE_SIZE (1024 * 1024 * 16)
 
 // ----------- REPL_STATE -----------
 #define REPL_STATE_NONE 0

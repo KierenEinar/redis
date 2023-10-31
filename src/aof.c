@@ -946,10 +946,28 @@ int startAppendOnly() {
 
 int aofSaveToSlavesWithEOFMark(int *fds, int numfds) {
 
+    char *buf;
+    char eofmark[CONFIG_REPL_EOFMARK_LEN]; //todo make eof mark random string
+    int *states, j;
+
+    buf = sdsnewlen(NULL, AOF_PROTO_WRITE_SIZE);
+    states = zmalloc(sizeof(int)*numfds);
+    memset(states, 0, numfds);
 
     // $EOF: ***(40bytes random char)\r\n
     // body
     // ***(40bytes random char)\r\n
+
+    buf = sdscatlen(buf, "$EOF:", 5);
+    buf = sdscatlen(buf, eofmark, CONFIG_REPL_EOFMARK_LEN);
+    buf = sdscatlen(buf, "\r\n", 2);
+    for (j=0; j<numfds; j++) {
+        if (write(fds[j], buf, sdslen(buf)) != sdslen(buf)) {
+            states[j] = -1;
+        }
+    }
+
+
 
 
 
