@@ -811,7 +811,7 @@ int rewriteAppendOnlyFile(FILE *fp) {
 
     // write the diff to the disk
     if (ndiff) {
-        if (fwrite(server.aof_child_diff, ndiff, 1, fp) != ndiff) {
+        if (fwrite(server.aof_child_diff, ndiff, 1, fp) != 1) {
             goto err;
         }
     }

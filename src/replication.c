@@ -84,8 +84,8 @@ int startBgAofForSlaveSockets() {
 
         if (retval == C_OK) {
 
-            void *msg = zmalloc(sizeof(uint64_t*) * (1 + numfds));
-            size_t msglen = sizeof(uint64_t*) * (1 + numfds);
+            void *msg = zmalloc(sizeof(uint64_t*) * (1 + numfds * 2));
+            size_t msglen = sizeof(uint64_t*) * (1 + numfds * 2);
             uint64_t *len = msg;
             uint64_t *ids = len + 1;
             *len = numfds;
