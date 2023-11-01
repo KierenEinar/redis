@@ -723,6 +723,22 @@ sds aofDictEntryAppendBuffer(sds buf, redisDb *db, dictEntry *de) {
 
 }
 
+int aofBufferWriteFile(sds buf, FILE *fp) {
+
+    size_t len = sdslen(buf);
+    size_t nwritten;
+    while (len) {
+        if ((nwritten = write(fileno(fp), buf, len)) == -1) {
+            if (errno == EAGAIN) continue;
+            return 0;
+        }
+        sdsmove(buf, (long)nwritten, -1);
+        len-=nwritten;
+    }
+
+    return 1;
+}
+
 int rewriteAppendOnlyFile(FILE *fp) {
 
     int j, err;
@@ -750,10 +766,7 @@ int rewriteAppendOnlyFile(FILE *fp) {
             buf = aofDictEntryAppendBuffer(buf, &db, de);
 
             if (sdslen(buf) >= AOF_FWRITE_BLOCK_SIZE) {
-                if ((nwriten = fwrite(buf, AOF_FWRITE_BLOCK_SIZE, 1, fp)) == 0) {
-                    if (errno == EAGAIN) continue;
-                    goto err;
-                }
+                if (aofBufferWriteFile(buf, fp) == 0) goto err;
             }
 
             if (j % 100 == 0) {
@@ -762,9 +775,7 @@ int rewriteAppendOnlyFile(FILE *fp) {
         }
 
         if (sdslen(buf)) {
-            if ((nwriten = fwrite(buf, sdslen(buf), 1, fp)) == 0) {
-                goto err;
-            }
+            if (aofBufferWriteFile(buf, fp) == 0) goto err;
         }
 
     }

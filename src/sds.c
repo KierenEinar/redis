@@ -275,3 +275,25 @@ sds sdsrange(sds s, long start, long end) {
 
     return s;
 }
+
+size_t sdsmove(sds s, long pos, size_t len) {
+
+    sdshdr *sh;
+    size_t slen, movelen;
+    slen = sdslen(s);
+
+    if (len == -1) {
+        len = slen - pos;
+    }
+
+    if (pos >= slen - 1 || len <= 0) {
+        return 0;
+    }
+
+    movelen = slen - pos > len ? len : slen - pos;
+    sh = (sdshdr*)((char*)s - sizeof(sdshdr));
+    memmove(s, s+pos, movelen);
+    sh->free+=(slen-movelen);
+    sh->used = movelen;
+    return movelen;
+}
