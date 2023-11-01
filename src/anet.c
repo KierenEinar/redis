@@ -180,6 +180,18 @@ int anetBlock(int fd) {
     return anetSetBlock(fd, 1);
 }
 
+int anetTcpNoDelay(int fd) {
+    socklen_t onlen;
+    int on, retval;
+    on = 1;
+    onlen = sizeof(onlen);
+    if ((retval = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &on, onlen)) == -1) {
+        debug("server setsockopt tcp no_delay failed, err=%s", strerror(errno));
+        return C_ERR;
+    }
+    return C_OK;
+}
+
 int anetTcpServer(char *err, int port, int backlog) {
     return _anetTcpServer(err, port, AF_INET, backlog);
 }

@@ -678,9 +678,54 @@ err:
 
 }
 
+sds aofDictEntryAppendBuffer(sds buf, redisDb *db, dictEntry *de) {
+
+    robj *key, *value;
+    long long expire;
+
+    key = de->key;
+    value = de->value.ptr;
+    expire = getExpire(db, key);
+    if (expire != -1 && expire < mstime()) {
+        return buf;
+    }
+
+    if (value->type == REDIS_OBJECT_STRING) {
+
+        buf = sdscatprintf(buf, "*3\r\n$3\r\nSET\r\n");
+        buf = sdscatfmt(buf, "$%u\r\n", sdslen(key->ptr));
+        buf = sdscatsds(buf, key->ptr);
+        buf = sdscatsds(buf, shared.crlf->ptr);
+
+        buf = sdscatfmt(buf, "$%u\r\n", sdslen(value->ptr));
+        buf = sdscatsds(buf, value->ptr);
+        buf = sdscatsds(buf, shared.crlf->ptr);
+
+    } else if (value->type == REDIS_OBJECT_LIST) {
+
+    } else { // todo more object type is coming in future.
+
+    }
+
+    if (expire != -1) {
+
+        buf = sdscatprintf(buf, "*2\r\n$9\r\nPEXPIREAT\r\n");
+        buf = sdscatfmt(buf, "$%u\r\n", sdslen(key->ptr));
+        buf = sdscatsds(buf, key->ptr);
+        buf = sdscatsds(buf, shared.crlf->ptr);
+
+        buf = sdscatfmt(buf, "$%u\r\n", sdslen(value->ptr));
+        buf = sdscatfmt(buf, "%U", mstime() + expire);
+        buf = sdscatsds(buf, shared.crlf->ptr);
+    }
+
+    return buf;
+
+}
+
 int rewriteAppendOnlyFile(FILE *fp) {
 
-    int j;
+    int j, err;
     sds buf;
     size_t nwriten;
     size_t ndiff;
@@ -694,8 +739,6 @@ int rewriteAppendOnlyFile(FILE *fp) {
         redisDb db;
         dictEntry *de;
         size_t db_num_size;
-        robj *key, *value;
-        long long expire;
 
         db = server.dbs[j];
         dictSafeGetIterator(db.dict, &iter);
@@ -703,39 +746,8 @@ int rewriteAppendOnlyFile(FILE *fp) {
         db_num_size = ll2string(db_num, (long long)j);
         buf = sdscatfmt(buf, "*2\r\n$6\r\nSELECT\r\n$%u\r\n", j, db_num_size);
         while ((de=dictNext(&iter)) != NULL) {
-            key = de->key;
-            value = de->value.ptr;
-            expire = getExpire(&db, key);
-            if (expire != -1 && expire < mstime()) continue;
 
-            if (value->type == REDIS_OBJECT_STRING) {
-
-                buf = sdscatprintf(buf, "*3\r\n$3\r\nSET\r\n");
-                buf = sdscatfmt(buf, "$%u\r\n", sdslen(key->ptr));
-                buf = sdscatsds(buf, key->ptr);
-                buf = sdscatsds(buf, shared.crlf->ptr);
-
-                buf = sdscatfmt(buf, "$%u\r\n", sdslen(value->ptr));
-                buf = sdscatsds(buf, value->ptr);
-                buf = sdscatsds(buf, shared.crlf->ptr);
-
-            } else if (value->type == REDIS_OBJECT_LIST) {
-
-            } else { // todo more object type is coming in future.
-
-            }
-
-            if (expire != -1) {
-
-                buf = sdscatprintf(buf, "*2\r\n$9\r\nPEXPIREAT\r\n");
-                buf = sdscatfmt(buf, "$%u\r\n", sdslen(key->ptr));
-                buf = sdscatsds(buf, key->ptr);
-                buf = sdscatsds(buf, shared.crlf->ptr);
-
-                buf = sdscatfmt(buf, "$%u\r\n", sdslen(value->ptr));
-                buf = sdscatfmt(buf, "%U", mstime() + expire);
-                buf = sdscatsds(buf, shared.crlf->ptr);
-            }
+            buf = aofDictEntryAppendBuffer(buf, &db, de);
 
             if (sdslen(buf) >= AOF_FWRITE_BLOCK_SIZE) {
                 if ((nwriten = fwrite(buf, AOF_FWRITE_BLOCK_SIZE, 1, fp)) == 0) {
@@ -944,15 +956,31 @@ int startAppendOnly() {
 
 }
 
-int aofSaveToSlavesWithEOFMark(int *fds, int numfds) {
+sds aofBufferWriteToSlavesSocket(sds buf, int *fds, int *states, int numfds, int *num_writeok) {
+
+    int j;
+    *num_writeok = 0;
+    for (j=0; j<numfds; j++) {
+        if (states[j] != 0) continue;
+        if (write(fds[j], buf, sdslen(buf)) != sdslen(buf)) {
+            states[j] = errno;
+            continue;
+        }
+        (*num_writeok)++;
+    }
+    buf = sdsclear(buf);
+    return buf;
+}
+
+
+// todo: make it better with coding and reading.
+int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds) {
 
     char *buf;
     char eofmark[CONFIG_REPL_EOFMARK_LEN]; //todo make eof mark random string
-    int *states, j;
+    int j, num_writeok;
 
-    buf = sdsnewlen(NULL, AOF_PROTO_WRITE_SIZE);
-    states = zmalloc(sizeof(int)*numfds);
-    memset(states, 0, numfds);
+    buf = sdsnewlen(NULL, AOF_PROTO_REPL_WRITE_SIZE);
 
     // $EOF: ***(40bytes random char)\r\n
     // body
@@ -967,11 +995,39 @@ int aofSaveToSlavesWithEOFMark(int *fds, int numfds) {
         }
     }
 
+    for (j=0; j<server.dbnum; j++) {
+        dictIter iter;
+        redisDb db;
+        dictEntry *de;
+        size_t db_num_size;
+        int k;
+        db = server.dbs[j];
+        dictSafeGetIterator(db.dict, &iter);
+        char db_num[128];
+        db_num_size = ll2string(db_num, (long long)j);
+        buf = sdscatfmt(buf, "*2\r\n$6\r\nSELECT\r\n$%u\r\n", j, db_num_size);
+        while ((de=dictNext(&iter)) != NULL) {
+            num_writeok = 0;
+            buf = aofDictEntryAppendBuffer(buf, &db, de);
+            if (sdslen(buf) >= AOF_PROTO_REPL_WRITE_SIZE) {
+                buf = aofBufferWriteToSlavesSocket(buf, fds, states, numfds, &num_writeok);
+            }
+            if (num_writeok == 0) goto err;
+        }
 
+    }
 
+    buf = sdscatlen(buf, eofmark, CONFIG_REPL_EOFMARK_LEN);
+    buf = sdscatlen(buf, "\r\n", 2);
+    buf = aofBufferWriteToSlavesSocket(buf, fds, states, numfds, &num_writeok);
 
+    if (num_writeok == 0) goto err;
 
+    sdsfree(buf);
+    return C_OK;
+
+err:
+    sdsfree(buf);
     return C_ERR;
-
 
 }

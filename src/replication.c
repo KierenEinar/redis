@@ -45,24 +45,29 @@ int startBgAofForSlaveSockets() {
     client *slave;
     pid_t childpid;
     int pipefds[2], numfds, retval;
-    int *fds;
+    int *fds, *states;
+    unsigned long long *clientids;
+
 
     if (server.aof_fd != -1) return C_ERR;
-
     if (pipe(pipefds) == -1) {
         debug("BgAofForSlaveSockets pipe system call, err=%s", strerror(errno));
         return C_ERR;
     }
 
-    fds = zmalloc(sizeof(int) * listLength(server.slaves));
     numfds = 0;
+    fds = zmalloc(sizeof(int) * listLength(server.slaves));
+    clientids = zmalloc(sizeof(unsigned long long) * listLength(server.slaves));
 
     listRewind(server.slaves, &li);
     while ((ln = listNext(&li)) != NULL) {
         slave = ln->value;
         if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
+            clientids[numfds] = slave->id;
             fds[numfds++] = slave->fd;
             replicationSetupFullResync(slave, server.master_repl_offset);
+            anetBlock(slave->fd);
+            // anetTcpNoDelay(slave->fd);
         }
     }
 
@@ -71,15 +76,71 @@ int startBgAofForSlaveSockets() {
 
     if ((childpid = fork()) == 0) { // spawn child process.
 
-        closeListeningSockets();
+        states = zmalloc(sizeof(int)*numfds);
+        memset(states, 0, numfds);
 
-        retval = aofSaveToSlavesWithEOFMark(fds, numfds);
+        closeListeningSockets();
+        retval = aofSaveToSlavesWithEOFMark(fds, states, numfds);
+
+        if (retval == C_OK) {
+
+            void *msg = zmalloc(sizeof(uint64_t*) * (1 + numfds));
+            size_t msglen = sizeof(uint64_t*) * (1 + numfds);
+            uint64_t *len = msg;
+            uint64_t *ids = len + 1;
+            *len = numfds;
+
+            for (int j = 0; j<numfds; j++) {
+                *ids++ = clientids[j];
+                *ids++ = states[j];
+            }
+
+            if (write(server.aof_repl_write_to_parent, msg, msglen) != msglen) {
+                retval = C_ERR;
+            }
+
+            zfree(msg);
+        }
+
+        zfree(states);
+        zfree(fds);
+        zfree(clientids);
+        exitFromChild(retval == C_OK ? 0 : 1);
 
     } else {
 
+        if (childpid == -1) {
+
+            listRewind(server.slaves, &li);
+            while ((ln = listNext(&li)) != NULL) {
+                slave = ln->value;
+                for (int i=0; i<numfds; i++) {
+                    if (slave->id == clientids[i]) {
+                        slave->repl_state = SLAVE_STATE_WAIT_BGSAVE_START;
+                        slave->psync_initial_offset = -1;
+                        break;
+                    }
+                }
+            }
+
+            close(pipefds[0]);
+            close(pipefds[1]);
+            server.aof_repl_read_from_child = -1;
+            server.aof_repl_write_to_parent = -1;
+
+        } else {
+
+            // child fork success.
+            server.aof_fd = childpid;
+            server.aof_type = AOF_TYPE_SOCKET;
+        }
+
+        zfree(fds);
+        zfree(clientids);
+
     }
 
-    return C_ERR;
+    return childpid != -1 ? C_OK : C_ERR;
 
 }
 
@@ -89,6 +150,8 @@ int startBgAofRewriteForReplication(int mincapa) {
     int retval;
     if (socket_type) {
         retval = startBgAofForSlaveSockets();
+    } else {
+
     }
 
     return C_ERR;

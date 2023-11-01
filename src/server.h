@@ -19,6 +19,7 @@
 #include <signal.h>
 #include <netdb.h>
 #include <sys/socket.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <stdarg.h>
 #include <fcntl.h>
@@ -136,7 +137,7 @@
 #define AOF_FWRITE_BLOCK_SIZE (1024 * 4)
 
 // ----------- AOF SYNC REPL---------------
-#define AOF_PROTO_WRITE_SIZE (1024 * 1024 * 16)
+#define AOF_PROTO_REPL_WRITE_SIZE (1024 * 16)
 
 // ----------- REPL_STATE -----------
 #define REPL_STATE_NONE 0
@@ -809,7 +810,7 @@ void killAppendOnlyChild();
 void stopAppendOnly();
 int startAppendOnly();
 void restartAOF();
-int aofSaveToSlavesWithEOFMark(int *fds, int numfds);
+int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds);
 // ---------- free method -----------------
 void listFreePubsubPatterns(void *ptr);
 void listFreeObject(void *ptr);

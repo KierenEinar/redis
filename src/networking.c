@@ -650,6 +650,7 @@ client* createClient(int cfd) {
 
     c->repl_state = REPL_STATE_NONE;
     c->slave_capa = REPL_CAPA_NONE;
+    c->psync_initial_offset = -1;
     c->repl_offset = -1;
     return c;
 
