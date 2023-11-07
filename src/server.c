@@ -292,8 +292,10 @@ long long serverCron(struct eventLoop *el, int id, void *clientData) {
         }
 
         if (pid == server.aof_child_pid) {
-            aofRewriteDoneHandler(bysignal, exitcode);
+            aofDoneHandler(bysignal, exitcode);
         }
+
+        dictEnableResize();
     }
 
 

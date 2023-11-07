@@ -912,6 +912,129 @@ cleanup:
     server.aof_type = AOF_TYPE_NONE;
 }
 
+void updateSlavesWaitingBgAOF(int type) {
+
+    listNode *ln;
+    listIter li;
+    client *slave;
+    int mincapa, start_bgsave;
+
+    mincapa = -1;
+    start_bgsave = 0;
+
+    listRewind(server.slaves, &li);
+    while ((ln = listNext(&li)) != NULL) {
+
+        slave = listNodeValue(ln);
+
+        if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
+            start_bgsave = 1;
+            mincapa = mincapa == -1 ? slave->slave_capa : mincapa & slave->slave_capa;
+        } else if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END) {
+            slave->repl_state = SLAVE_STATE_ONLINE;
+            slave->repl_put_online_ack = 1;
+        }
+    }
+
+    if (start_bgsave) startBgAofRewriteForReplication(mincapa);
+
+}
+
+
+void aofDoneHandlerSlavesSocket(int bysignal, int code) {
+    uint64_t *ok_slaves;
+    int j, mincapa;
+    listNode *ln;
+    listIter li;
+    client *slave;
+    mincapa = -1;
+    if (!bysignal && !code) {
+        debug("Slave aof socket sync terminated with success.");
+    } else if (bysignal && !code) {
+        debug("Slave aof socket sync terminated with failed by signal=%d", bysignal);
+    } else {
+        debug("Slave aof socket sync terminated with failed by code=%d", code);
+    }
+
+    ok_slaves = zmalloc(sizeof(uint64_t));
+    ok_slaves[0] = 0;
+
+    server.aof_fd = -1;
+    server.aof_type = AOF_TYPE_NONE;
+
+
+    if (!bysignal && code) {
+
+        size_t readlen = sizeof(uint64_t);
+
+        if (read(server.aof_repl_read_from_child, ok_slaves, readlen) == readlen) {
+            readlen = sizeof(uint64_t) * ok_slaves[0];
+            ok_slaves = zrealloc(ok_slaves, readlen + sizeof(uint64_t));
+            if (read(server.aof_repl_read_from_child, ok_slaves+1, readlen) != readlen) {
+                ok_slaves[0] = 0;
+            }
+        }
+    }
+
+    close(server.aof_repl_read_from_child);
+    close(server.aof_repl_write_to_parent);
+
+    server.aof_repl_read_from_child = -1;
+    server.aof_repl_write_to_parent = -1;
+
+    listRewind(server.slaves, &li);
+    while ((ln=listNext(&li)) != NULL) {
+
+        slave = listNodeValue(ln);
+        uint64_t errcode = 0;
+
+        if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END) {
+
+            for (j=0; j<ok_slaves[0]; j++) {
+                if (slave->id == ok_slaves[2*j+1]) {
+                    errcode = ok_slaves[2*j+2];
+                    break;
+                }
+            }
+
+            if (j == ok_slaves[0] || errcode != 0) {
+                debug("Slave FullResync(socket_type) state failed, close connection asap, id=%llu, fd=%d, err=%s", slave->id, slave->fd,
+                      errcode == 0 ? "slave not found in aof transfers set" : strerror(errcode));
+                freeClient(slave);
+            } else {
+                anetNonBlock(slave->fd);
+            }
+        }
+    }
+
+    zfree(ok_slaves);
+
+    updateSlavesWaitingBgAOF(AOF_TYPE_SOCKET);
+
+}
+
+void aofDoneHandlerSlavesDisk(int bysignal, int code) {
+
+}
+
+void aofDoneHandler(int bysignal, int code) {
+    switch (server.aof_type) {
+        case AOF_TYPE_RW:
+            aofRewriteDoneHandler(bysignal, code);
+            break;
+        case AOF_TYPE_SOCKET:
+            aofDoneHandlerSlavesSocket(bysignal, code);
+            break;
+        case AOF_TYPE_DISK:
+            aofDoneHandlerSlavesDisk(bysignal, code);
+            break;
+        default:
+            // todo server panic
+            debug("unknown aof_type to handler");
+            exit(1);
+    }
+}
+
 void killAppendOnlyChild() {
 
     char tmp_file[256];

@@ -652,6 +652,7 @@ client* createClient(int cfd) {
     c->slave_capa = REPL_CAPA_NONE;
     c->psync_initial_offset = -1;
     c->repl_offset = -1;
+    c->repl_put_online_ack = 0;
     return c;
 
 }
@@ -694,9 +695,14 @@ void freeClient(client *c) {
     }
 
     listDelNode(server.client_list, c->client_list_node);
-
     unWatchAllKeys(c);
     listRelease(c->watch_keys);
+
+    if (c->flag & CLIENT_SLAVE) { // delete slave
+        listNode *ln;
+        ln = listSearchKey(server.slaves, c);
+        listDelNode(server.slaves, ln);
+    }
 
 }
 

@@ -215,8 +215,6 @@ void syncCommand(client *c) {
        }
     }
 
-    return;
-
 }
 
 

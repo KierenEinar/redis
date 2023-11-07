@@ -129,8 +129,9 @@
 
 // ------------ AOF TYPE ---------------
 #define AOF_TYPE_NONE 0
-#define AOF_TYPE_DISK 1
-#define AOF_TYPE_SOCKET 2
+#define AOF_TYPE_RW 1
+#define AOF_TYPE_DISK 2
+#define AOF_TYPE_SOCKET 3
 
 //------------ AOF REWRITE --------------
 #define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
@@ -160,7 +161,7 @@
 // CLIENT SLAVE STATE
 #define SLAVE_STATE_WAIT_BGSAVE_START 6
 #define SLAVE_STATE_WAIT_BGSAVE_END 7
-
+#define SLAVE_STATE_ONLINE 8
 
 // REPL CAPA
 #define REPL_CAPA_NONE 0
@@ -264,6 +265,8 @@ typedef struct client {
     int repl_state;
     int slave_capa;
     off_t psync_initial_offset;
+    int repl_put_online_ack;
+
 
 } client;
 
@@ -800,7 +803,10 @@ int rewriteAppendOnlyFileChild(char *name);
 int rewriteAppendOnlyFile(FILE *fp);
 int sendParentStopWriteAppendDiff(void);
 size_t readDiffFromParent(void);
+void aofDoneHandler(int bysignal, int code);
 void aofRewriteDoneHandler(int bysignal, int code);
+void aofDoneHandlerSlavesSocket(int bysignal, int code);
+void aofDoneHandlerSlavesDisk(int bysignal, int code);
 void exitFromChild(int code);
 int aofCreatePipes(void);
 void aofClosePipes(void);
