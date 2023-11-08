@@ -933,6 +933,7 @@ void updateSlavesWaitingBgAOF(int type) {
         } else if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END) {
             slave->repl_state = SLAVE_STATE_ONLINE;
             slave->repl_put_online_ack = 1;
+            slave->repl_last_ack = server.unix_time;
         }
     }
 

@@ -148,13 +148,49 @@ int startBgAofRewriteForReplication(int mincapa) {
 
     int socket_type = server.repl_diskless_sync && (mincapa & REPL_CAPA_EOF);
     int retval;
+
     if (socket_type) {
         retval = startBgAofForSlaveSockets();
     } else {
+        // todo start bg aof disks for slaves
+        retval = C_ERR;
+    }
+
+    if (retval == C_ERR) {
+
+        listIter li;
+        listNode *ln;
+        client *slave;
+
+        listRewind(server.slaves, &li);
+
+        while ((ln = listNext(&li)) != NULL) {
+            slave = listNodeValue(ln);
+            if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
+                listDelNode(server.slaves, ln);
+                addReplyError(slave, "Slave bg save failed, stop sync continue.");
+                slave->flag |= CLIENT_CLOSE_AFTER_REPLY;
+            }
+        }
+
+        return C_ERR;
 
     }
 
-    return C_ERR;
+    return C_OK;
+}
+
+void putSlaveOnline(client *slave) {
+
+    slave->repl_put_online_ack = 0;
+    slave->repl_last_ack = server.unix_time;
+    anetNonBlock(slave->fd);
+
+    if (elCreateFileEvent(server.el, slave->fd, EL_WRITABLE,
+                          sendClientData, NULL) == EL_ERR) {
+        debug("Unable to register writable event for slave bulk transfer: %s", strerror(errno));
+        freeClient(slave);
+    }
 }
 
 
@@ -217,7 +253,35 @@ void syncCommand(client *c) {
 
 }
 
+void replConfCommand(client *c) {
 
+    if (!(c->flag & CLIENT_SLAVE)) {
+        return;
+    }
+
+    // replconf ack offset
+    if (!strcmp(c->argv[1]->ptr, "ack")) {
+
+        long long offset;
+        char *off = c->argv[2]->ptr;
+        if (getLongLongFromObject(c->argv[2], &offset) != C_OK) {
+            return;
+        }
+
+        if (offset > server.master_repl_offset)
+            c->repl_offset = offset;
+
+        c->repl_last_ack = server.unix_time;
+
+        if (c->repl_put_online_ack && c->repl_state == SLAVE_STATE_ONLINE) {
+            putSlaveOnline(c);
+        }
+
+        return;
+    }
+
+
+}
 
 
 // ------------------------- slave ----------------------

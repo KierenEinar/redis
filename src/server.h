@@ -266,7 +266,7 @@ typedef struct client {
     int slave_capa;
     off_t psync_initial_offset;
     int repl_put_online_ack;
-
+    time_t repl_last_ack;
 
 } client;
 
@@ -591,6 +591,8 @@ void queueMultiCommand(client *c);
 
 // ------------ replication command ------------
 void syncCommand(client *c);
+void replConfCommand(client *c);
+
 
 // block client for multi input keys.
 void blockForKeys(client *c, robj **argv, int argc, long long timeout);
@@ -728,6 +730,7 @@ int processMultiBulkBuffer(client *client);
 int processInlineBuffer(client *client);
 
 int clientHasPendingWrites(client *c);
+void sendClientData (struct eventLoop *el, int fd, int mask, void *clientData);
 int writeToClient(client *client, int handler_installed);
 void handleClientsPendingWrite(void);
 void processEventsWhileBlocked(void);
