@@ -212,7 +212,7 @@ void execCommand(client *c) {
     discardTransaction(c);
 
     if (must_propagate) {
-        server.dirty++; // make sure the exec command will write to aof .
+        server.dirty++; // make sure the exec commands will write to aof .
     }
 
 }

@@ -166,7 +166,7 @@ int startBgAofRewriteForReplication(int mincapa) {
 
         while ((ln = listNext(&li)) != NULL) {
             slave = listNodeValue(ln);
-            if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
+            if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END) {
                 listDelNode(server.slaves, ln);
                 addReplyError(slave, "Slave bg save failed, stop sync continue.");
                 slave->flag |= CLIENT_CLOSE_AFTER_REPLY;
@@ -193,6 +193,38 @@ void putSlaveOnline(client *slave) {
     }
 }
 
+
+void replicationFeedSlaves(int dbid, robj **argv, int argc) {
+
+    if (server.master_host) return;
+
+    if (listLength(server.slaves) == 0 && server.repl_backlog == NULL) return;
+
+    if (server.repl_seldbid != dbid) {
+
+        robj *selcmd;
+
+        if (dbid < OBJ_SHARED_COMMAND_SIZE) {
+            selcmd = shared.commands[dbid];
+        } else {
+
+            char ll2str[21];
+            size_t llen = ll2string(ll2str, dbid);
+            sds s = sdscatprintf(sdsempty(), "*2\r\n$6\r\nSELECT\r\n$%d\r\n%d", llen, dbid);
+            selcmd = createStringObject(s, sdslen(s));
+            incrRefCount(selcmd);
+        }
+
+        if (server.repl_backlog) {
+            // todo feed replicate back log.
+        }
+
+    }
+
+
+
+
+}
 
 void syncCommand(client *c) {
 
@@ -277,9 +309,9 @@ void replConfCommand(client *c) {
             putSlaveOnline(c);
         }
 
-        return;
     }
 
+    addReply(c, shared.ok);
 
 }
 

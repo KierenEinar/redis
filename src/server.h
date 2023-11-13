@@ -351,6 +351,8 @@ typedef struct redisServer {
     // backlog virtual arr info
     long long repl_backlog_off;  // backlog total offset, using for psync compare with slave's offset.
 
+    int repl_seldbid;
+
     // replicate slave
     int repl_diskless_sync;
     int repl_state;
@@ -396,10 +398,12 @@ typedef struct aof_rwblock {
 #define OBJ_SHARED_INTEGERS 10000
 #define OBJ_BULK_LEN_SIZE 32
 #define OBJ_SHARED_REFCOUNT INT_MAX
+#define OBJ_SHARED_COMMAND_SIZE 10
 struct redisSharedObject {
     robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk, *emptymultibulk, *loadingerr,
     *integers[OBJ_SHARED_INTEGERS],
     *mbulkhdr[OBJ_BULK_LEN_SIZE],
+    *commands[OBJ_SHARED_COMMAND_SIZE],
     *bulkhdr[OBJ_BULK_LEN_SIZE], *czero, *cone, *subscribe, *psubscribe, *queued, *execaborterr;
 };
 
@@ -486,10 +490,10 @@ int checkType(robj *key, int type);
 // get timeout
 int getTimeoutFromObjectOrReply(client *c, robj* argv, int unit, long long *timeout, robj *reply);
 
-//-------------- redis command process prototype -----------
+//-------------- redis commands process prototype -----------
 void populateCommandTable(void);
 
-// lookup command by redis object, should be the string type object.
+// lookup commands by redis object, should be the string type object.
 struct redisCommand* lookupCommand(robj *o);
 
 void selectCommand(client *c);
@@ -510,11 +514,11 @@ void pexpireCommand(client *c);
 
 void expireGenericCommand(client *c, int unit);
 
-// utils for redis command prototype
-// generic get command
+// utils for redis commands prototype
+// generic get commands
 int getGenericCommand(client *c);
 
-// generic set command
+// generic set commands
 int setGenericCommand(client *c, robj *key, robj *value, int flags, robj *expires, int unit, robj *ok_reply, robj *abort_reply);
 
 // set multi key value
@@ -523,7 +527,7 @@ void msetCommand(client *c);
 // get multi key value
 void mgetCommand(client *c);
 
-// set multi key value generic command
+// set multi key value generic commands
 int msetGenericCommand(client *c, int nx);
 
 // client use which db.
@@ -586,10 +590,10 @@ void discardCommand(client *c);
 // exec the transaction.
 void execCommand(client *c);
 
-// queued the command on multi context.
+// queued the commands on multi context.
 void queueMultiCommand(client *c);
 
-// ------------ replication command ------------
+// ------------ replication commands ------------
 void syncCommand(client *c);
 void replConfCommand(client *c);
 
@@ -621,10 +625,10 @@ unsigned long clientSubscriptionCount(client *c);
 // publish message to all subscribe clients.
 int pubsubPublishMessage(robj *channel, robj *message);
 
-// execute the command.
+// execute the commands.
 void call(client *c, int flags);
 
-// ----------- command utils -------------
+// ----------- commands utils -------------
 
 // delete the key from expires set if exists, but logically has been expired.
 // return 1 if key remove from expires, 0 key not exists.
@@ -643,7 +647,7 @@ robj *lookupKeyWrite(redisDb *db, robj *key);
 // if key not exists or expired, reply will send to client if is not null.
 robj *lookupKeyReadOrReply(client *c, robj *key, robj *reply);
 
-// redis command prototype
+// redis commands prototype
 typedef void redisCommandProc(client *c);
 
 struct redisCommand {
@@ -683,10 +687,10 @@ int emptyDb(int dbid);
 
 //------------- list prototype --------------
 
-// push command, lpush or rpush, where -> LIST_HEAD or LIST_TAIL.
+// push commands, lpush or rpush, where -> LIST_HEAD or LIST_TAIL.
 void pushGenericCommand(client *c, int where);
 
-// pop command, lpop or rpop, where -> LIST_HEAD or LIST_TAIL
+// pop commands, lpop or rpop, where -> LIST_HEAD or LIST_TAIL
 void popGenericCommand(client *c, int where);
 
 // push.
@@ -754,7 +758,7 @@ void replyUnBlockClientTimeout(client *c);
 void copyClientOutputBuffer(client *src, client *dst);
 // ------------redis client--------------
 
-// reset the client so it can process command again.
+// reset the client so it can process commands again.
 void resetClient(client *c);
 client* createClient(int fd);
 void freeClient(client *c);
@@ -773,16 +777,17 @@ long long serverCron(struct eventLoop *el, int id, void *clientData);
 // ------------ replicate master ---------------
 int startBgAofRewriteForReplication(int mincapa);
 int startBgAofForSlaveSockets();
+void replicationFeedSlaves(int dbid, robj **argv, int argc);
 
 // ------------ replicate slave -----------------
 int connectWithMaster(void);
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);
 void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData);
 void replicationDiscardCacheMaster();
-// ------------process command -------------
+// ------------process commands -------------
 int processCommand(client *c);
 
-// ------------propagate command --------------
+// ------------propagate commands --------------
 void propagate(struct redisCommand *cmd, int dbid, int argc, robj **argv, int flag);
 void propagateCommand(client *c, int flags);
 void execCommandPropagateMulti(client *c);

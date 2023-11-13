@@ -107,7 +107,7 @@ struct redisCommand redisCommandTable[] = {
 
 };
 
-// dict type for command table
+// dict type for commands table
 dictType commandTableDictType = {
         dictSdsCaseHash,
         dictSdsCaseCompare,
@@ -194,6 +194,12 @@ void createSharedObject(void) {
         sds s = sdscatfmt(sdsempty(), "*%i\r\n", j);
         shared.mbulkhdr[j] = createObject(REDIS_OBJECT_STRING, s);
         makeObjectShared(shared.mbulkhdr[j]);
+    }
+
+    for (int j=0; j<OBJ_SHARED_COMMAND_SIZE; j++) {
+        sds s = sdscatprintf(sdsempty(), "*2\r\n$6\r\nSELECT\r\n$1\r\n%d", j);
+        shared.commands[j] = createObject(REDIS_OBJECT_STRING, s);
+        makeObjectShared(shared.commands[j]);
     }
 
     makeObjectShared(shared.crlf);
@@ -298,6 +304,9 @@ long long serverCron(struct eventLoop *el, int id, void *clientData) {
         dictEnableResize();
     }
 
+    // todo with 1000ms period
+    slaveCron();
+
 
     return SERVER_CRON_PERIOD_MS;
 }
@@ -336,9 +345,20 @@ void clientCron(void) {
 
 void slaveCron(void) {
 
-    if (server.repl_state == REPL_STATE_CONNECT) {
+
+    //-------------- replicate ----------------
+
+    if (server.master && server.master_host && server.repl_state == REPL_STATE_CONNECT) {
         connectWithMaster();
     }
+
+
+    //-------------- master -------------------
+    // each 10s ping our slaves
+
+
+
+
 }
 
 void updateCachedTime() {
@@ -425,6 +445,7 @@ void initServer(void) {
     server.aof_type = AOF_TYPE_NONE;
     server.aof_repl_read_from_child = -1;
     server.aof_repl_write_to_parent = -1;
+    server.repl_seldbid = -1;
     server.slaves = listCreate();
 
     listSetFreeMethod(server.slaves, zfree);
@@ -490,7 +511,7 @@ int processCommand(client *c) {
 
     if (c->cmd == NULL) {
         flagTransactionAsDirty(c);
-        addReplyError(c, "unknown command");
+        addReplyError(c, "unknown commands");
         return C_OK;
     }
 
