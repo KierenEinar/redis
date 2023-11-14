@@ -305,7 +305,7 @@ long long serverCron(struct eventLoop *el, int id, void *clientData) {
     }
 
     // todo with 1000ms period
-    slaveCron();
+    replicationCron();
 
 
     return SERVER_CRON_PERIOD_MS;
@@ -340,24 +340,6 @@ void clientCron(void) {
         listDelNode(server.client_list, ln);
         clientHandleCronTimeout(c, now);
     }
-
-}
-
-void slaveCron(void) {
-
-
-    //-------------- replicate ----------------
-
-    if (server.master && server.master_host && server.repl_state == REPL_STATE_CONNECT) {
-        connectWithMaster();
-    }
-
-
-    //-------------- master -------------------
-    // each 10s ping our slaves
-
-
-
 
 }
 
@@ -446,6 +428,8 @@ void initServer(void) {
     server.aof_repl_read_from_child = -1;
     server.aof_repl_write_to_parent = -1;
     server.repl_seldbid = -1;
+    server.repl_send_ping_period = CONFIG_REPL_PING_PERIOD;
+    server.repl_timeout = CONFIG_REPL_TIMEOUT;
     server.slaves = listCreate();
 
     listSetFreeMethod(server.slaves, zfree);

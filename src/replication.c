@@ -63,11 +63,12 @@ int startBgAofForSlaveSockets() {
     while ((ln = listNext(&li)) != NULL) {
         slave = ln->value;
         if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
-            clientids[numfds] = slave->id;
-            fds[numfds++] = slave->fd;
-            replicationSetupFullResync(slave, server.master_repl_offset);
-            anetBlock(slave->fd);
-            // anetTcpNoDelay(slave->fd);
+            if (replicationSetupFullResync(slave, server.master_repl_offset) == C_OK) {
+                clientids[numfds] = slave->id;
+                fds[numfds++] = slave->fd;
+                anetBlock(slave->fd);
+                // anetTcpNoDelay(slave->fd);
+            }
         }
     }
 
@@ -868,4 +869,49 @@ void restartAOF() {
 
     debug("FATAL: this slave instance finished the synchronization with its master, but the AOF can't be turned on. Exiting now.");
     exit(1);
+}
+
+
+
+// --------------------------- replication cronjob ---------------------------
+void replicationCron(void) {
+
+    static long long replication_cron_loops = 0;
+
+
+    // ------------------ slave -----------------
+    if (server.master && server.master_host && server.repl_state == REPL_STATE_CONNECT) {
+        connectWithMaster();
+    }
+
+    // ------------------ master -----------------
+
+    // each n seconds ping our slaves.
+    if (replication_cron_loops % server.repl_send_ping_period == 0 && listLength(server.slaves)) {
+        robj *ping_cmd[1];
+        ping_cmd[0] = createStringObject("PING", 4);
+        replicationFeedSlaves(server.repl_seldbid, ping_cmd, 1);
+        decrRefCount(ping_cmd[0]);
+    }
+
+    // find out the timed out slaves and free it.
+    listNode *ln;
+    client *slave;
+    listIter li;
+    listRewind(server.slaves, &li);
+    while ((ln = listNext(&li)) != NULL) {
+
+        slave = listNodeValue(ln);
+        if (slave->repl_state != SLAVE_STATE_ONLINE) continue;
+
+        if (server.unix_time - slave->repl_last_ack > server.repl_timeout) {
+            debug("Disconnecting timedout slave...");
+            freeClient(slave);
+        }
+    }
+
+
+
+
+    replication_cron_loops++;
 }

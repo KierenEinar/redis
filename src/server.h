@@ -54,6 +54,8 @@
 #define CONFIG_REPL_EOFMARK_LEN 40
 #define CONFIG_REPL_BACKLOG_SIZE (1024 * 1024 * 10) // 10m
 #define CONFIG_REPL_DISKLESS_SYNC 0 // default set to disable socket.
+#define CONFIG_REPL_PING_PERIOD 10 // each 10 seconds send ping to our slaves.
+#define CONFIG_REPL_TIMEOUT 60 // 60 seconds timed out if no data nor ack received.
 #define LIST_ITER_DIR_FORWARD 1
 #define LIST_ITER_DIR_BACKWARD 2
 
@@ -352,7 +354,8 @@ typedef struct redisServer {
     long long repl_backlog_off;  // backlog total offset, using for psync compare with slave's offset.
 
     int repl_seldbid;
-
+    int repl_send_ping_period;
+    int repl_timeout;
     // replicate slave
     int repl_diskless_sync;
     int repl_state;
@@ -770,7 +773,7 @@ void freeClientMultiState(client *c);
 
 void clientCron(void);
 void clientHandleCronTimeout(client *c, mstime_t nowms);
-void slaveCron(void);
+void replicationCron(void);
 long long serverCron(struct eventLoop *el, int id, void *clientData);
 
 
