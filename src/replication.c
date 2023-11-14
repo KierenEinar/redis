@@ -167,6 +167,7 @@ int startBgAofRewriteForReplication(int mincapa) {
         while ((ln = listNext(&li)) != NULL) {
             slave = listNodeValue(ln);
             if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END) {
+                slave->flag &= ~CLIENT_SLAVE;
                 listDelNode(server.slaves, ln);
                 addReplyError(slave, "Slave bg save failed, stop sync continue.");
                 slave->flag |= CLIENT_CLOSE_AFTER_REPLY;
@@ -196,34 +197,101 @@ void putSlaveOnline(client *slave) {
 
 void replicationFeedSlaves(int dbid, robj **argv, int argc) {
 
+    listNode *ln;
+    listIter li;
+    client *slave;
+
     if (server.master_host) return;
 
-    if (listLength(server.slaves) == 0 && server.repl_backlog == NULL) return;
+    if (listLength(server.slaves) == 0 || server.repl_backlog == NULL) return;
 
     if (server.repl_seldbid != dbid) {
 
         robj *selcmd;
 
-        if (dbid < OBJ_SHARED_COMMAND_SIZE) {
+        if (dbid > 0 && dbid < OBJ_SHARED_COMMAND_SIZE) {
             selcmd = shared.commands[dbid];
         } else {
 
             char ll2str[21];
             size_t llen = ll2string(ll2str, dbid);
-            sds s = sdscatprintf(sdsempty(), "*2\r\n$6\r\nSELECT\r\n$%d\r\n%d", llen, dbid);
+            sds s = sdscatprintf(sdsempty(), "*2\r\n$6\r\nSELECT\r\n$%d\r\n%d\r\n", llen, dbid);
             selcmd = createStringObject(s, sdslen(s));
-            incrRefCount(selcmd);
+            decrRefCount(selcmd);
+            sdsfree(s);
         }
 
         if (server.repl_backlog) {
-            // todo feed replicate back log.
+            feedReplicationBacklogObject(selcmd);
+        }
+    }
+
+    server.repl_seldbid = dbid;
+
+    if (server.repl_backlog) {
+
+        char buffer[32];
+        size_t multilen = snprintf(buffer, sizeof(buffer), "*%d\r\n", argc);
+        feedReplicationBacklog(buffer, multilen);
+
+        for (int j = 0; j < argc; j++) {
+            robj *val = getDecodedObject(argv[j]);
+            size_t multibulklen = sdslen(val->ptr);
+            size_t blen = snprintf(buffer, sizeof(buffer), "$%ld\r\n", multibulklen);
+            feedReplicationBacklog(buffer, blen);
+            feedReplicationBacklog(val->ptr, sdslen(val->ptr));
+            feedReplicationBacklog("\r\n", 2);
+            decrRefCount(val);
         }
 
     }
 
+    listRewind(server.slaves, &li);
+
+    while ((ln = listNext(&li)) != NULL) {
+
+        slave = listNodeValue(ln);
+        if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) continue;
+
+        addReplyMultiBulkLen(slave, argc);
+
+        for (int j = 0; j< argc ; j++) {
+            addReplyBulkLen(slave, argv[j]);
+        }
+
+    }
+
+}
 
 
+void feedReplicationBacklog(void *ptr, size_t len) {
 
+    const char *s = (char *)ptr;
+    server.master_repl_offset += len;
+
+    while (len) {
+        size_t thislen = server.repl_backlog_size - server.repl_backlog_idx;
+        server.repl_backlog_idx += thislen;
+        memcpy(server.repl_backlog + server.repl_backlog_idx, s, thislen);
+        if (thislen == server.repl_backlog_size) {
+            server.repl_backlog_idx = 0;
+        }
+        len-=thislen;
+        server.repl_backlog_histlen += thislen;
+    }
+
+    if (server.repl_backlog_histlen > server.repl_backlog_size) {
+        server.repl_backlog_histlen = server.repl_backlog_size;
+    }
+
+    server.repl_backlog_off = server.master_repl_offset - server.repl_backlog_histlen + 1;
+}
+
+void feedReplicationBacklogObject(robj *obj) {
+
+    obj = getDecodedObject(obj);
+    feedReplicationBacklog(obj->ptr, sdslen(obj->ptr));
+    decrRefCount(obj);
 }
 
 void syncCommand(client *c) {
@@ -442,6 +510,8 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
     max_retry = 5;
     dfd = -1;
+    sock_err = 0;
+    err = NULL;
 
     sock_err_size = sizeof(sock_err);
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &sock_err, &sock_err_size) == -1) {

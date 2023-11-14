@@ -27,7 +27,8 @@ void readTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
 }
 
 int prepareClientToWrite(client *c) {
-    if (!(c->flag & CLIENT_PENDING_WRITE)) {
+    if (!(c->flag & CLIENT_PENDING_WRITE) && (
+            c->repl_state == REPL_STATE_NONE || (c->repl_state == SLAVE_STATE_ONLINE && !c->repl_put_online_ack))) {
         c->flag |= CLIENT_PENDING_WRITE;
         listAddNodeTail(server.client_pending_writes, c);
     }
