@@ -781,8 +781,10 @@ long long serverCron(struct eventLoop *el, int id, void *clientData);
 int startBgAofRewriteForReplication(int mincapa);
 int startBgAofForSlaveSockets();
 void replicationFeedSlaves(int dbid, robj **argv, int argc);
+int addReplyReplicationBacklog(client *c, long long psync_offset);
 void feedReplicationBacklog(void *ptr, size_t len);
 void feedReplicationBacklogObject(robj *obj);
+int masterTryPartialResynchronization(client *c);
 // ------------ replicate slave -----------------
 int connectWithMaster(void);
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);

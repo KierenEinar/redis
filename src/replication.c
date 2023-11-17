@@ -264,6 +264,29 @@ void replicationFeedSlaves(int dbid, robj **argv, int argc) {
 
 }
 
+int addReplyReplicationBacklog(client *c, long long psync_offset) {
+
+    long long skip, j, len;
+
+    if (server.repl_backlog_histlen == 0) {
+        return 0;
+    }
+
+    skip = psync_offset - server.repl_backlog_off;
+    j = 0 ? server.repl_backlog_histlen < server.repl_backlog_size : server.repl_backlog_idx;
+    j = (j + skip) % server.repl_backlog_size;
+    len = server.repl_backlog_histlen - skip;
+
+    while (len) {
+        size_t thislen = len ? (server.repl_backlog_size - j > len) : (server.repl_backlog_size - j);
+        addReplyString(c, server.repl_backlog + j, thislen);
+        len -= thislen;
+        j = 0l;
+    }
+
+    return len;
+
+}
 
 void feedReplicationBacklog(void *ptr, size_t len) {
 
@@ -295,6 +318,63 @@ void feedReplicationBacklogObject(robj *obj) {
     decrRefCount(obj);
 }
 
+int masterTryPartialResynchronization(client *c) {
+
+    char *master_replid;
+    long long psync_offset;
+
+    master_replid = c->argv[1]->ptr;
+
+    if (getLongLongFromObjectOrReply(c->argv[2]->ptr, &psync_offset, c, NULL) == C_ERR) {
+        goto need_full_resync;
+    }
+
+    // psync runid offset
+    if (!strcmp(master_replid, server.master_replid)) {
+
+        if (!strcmp(master_replid, "?")) {
+            debug("Slave Request Psync Resync...");
+        } else {
+            debug("Slave Request Psync master_replid[%s] not eq out replid[%s]", master_replid, server.master_replid);
+        }
+
+        goto need_full_resync;
+    }
+
+    if (!server.repl_backlog ||
+            psync_offset < server.repl_backlog_off ||
+            psync_offset > server.repl_backlog_off) {
+        debug("Slave Request Psync, offset[%lld] not match our repl_backlog_off[%lld]",
+              psync_offset, server.repl_backlog_off);
+        goto need_full_resync;
+    }
+
+
+    c->flag |= CLIENT_SLAVE;
+    c->repl_state = SLAVE_STATE_ONLINE;
+    c->repl_put_online_ack = 0;
+    c->repl_last_ack = server.unix_time;
+    listAddNodeTail(server.slaves, c);
+
+    // reply slaves: +continue replid
+    char buf[128];
+    size_t rlen = snprintf(buf, sizeof(buf), "+CONTINUE %s\r\n", server.master_replid);
+
+    if (write(c->fd, buf, rlen) != rlen) {
+        freeClient(c);
+        return C_OK;
+    }
+
+    addReplyReplicationBacklog(c, psync_offset);
+
+    return C_OK;
+
+need_full_resync:
+
+    return C_ERR;
+
+}
+
 void syncCommand(client *c) {
 
     if (c->flag & CLIENT_SLAVE) return;
@@ -312,6 +392,10 @@ void syncCommand(client *c) {
     if (listLength(server.slaves) == 1 && server.repl_backlog == NULL) {
         changeReplicationId();
         createReplicationBacklog();
+    }
+
+    if (masterTryPartialResynchronization(c) == C_OK) { // psync continue
+        return;
     }
 
     if (server.aof_fd != -1 && server.aof_type == AOF_TYPE_DISK) {
@@ -909,9 +993,6 @@ void replicationCron(void) {
             freeClient(slave);
         }
     }
-
-
-
 
     replication_cron_loops++;
 }
