@@ -1020,7 +1020,7 @@ void replicationCron(void) {
     }
 
     // clear the backlog if there is no slaves and backlog attached timeout.
-    if (server.backlog &&
+    if (server.master == NULL && server.backlog &&
         listLength(server.slaves) == 0 &&
         server.unix_time - server.repl_backlog_no_slaves_since > server.repl_backlog_time_limit) {
 
