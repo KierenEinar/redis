@@ -44,18 +44,21 @@
 
 // define networking
 #define SERVER_NETWORK_ERR_LEN 255
-#define DEFAULT_BACKLOG 511
-#define DEFAULT_BIND_PORT 6379
-#define DEFAULT_LIST_FILL_FACTOR -2
-#define SERVER_NETWORK_IP_FD_LEN 16
+#define CONFIG_TCP_BACKLOG 511
+#define CONFIG_BIND_PORT 6379
+#define CONFIG_QUICKLIST_FILL_FACTOR (-2)
+#define CONFIG_NETWORK_IP_FD_LEN 16
 
-#define DEFAULT_AOF_FILENAME "appendonly.aof"
+#define CONFIG_AOF_FILENAME "appendonly.aof"
 #define CONFIG_REPL_RUNID_LEN 40
 #define CONFIG_REPL_EOFMARK_LEN 40
 #define CONFIG_REPL_BACKLOG_SIZE (1024 * 1024 * 10) // 10m
 #define CONFIG_REPL_DISKLESS_SYNC 0 // default set to disable socket.
 #define CONFIG_REPL_PING_PERIOD 10 // each 10 seconds send ping to our slaves.
 #define CONFIG_REPL_TIMEOUT 60 // 60 seconds timed out if no data nor ack received.
+#define CONFIG_REPL_BACKLOG_TIMEOUT (60 * 60) // 1 hour for repl backlog if there is no slaves.
+#define CONFIG_REPL_DISKLESS_SYNC_DELAY 10 // 10 seconds for delay
+#define CONFIG_SLAVE_IDLE 60
 #define LIST_ITER_DIR_FORWARD 1
 #define LIST_ITER_DIR_BACKWARD 2
 
@@ -228,7 +231,7 @@ typedef struct client {
 
     int reqtype; // protocol is inline or multibulk
     int fd;
-
+    time_t lastinteraction;
     unsigned long long flag; // client flag
 
     // reply list
@@ -289,7 +292,7 @@ typedef struct redisServer {
 
     // networking
     int ipfd_count;
-    int ipfd[SERVER_NETWORK_IP_FD_LEN];
+    int ipfd[CONFIG_NETWORK_IP_FD_LEN];
     char neterr[SERVER_NETWORK_ERR_LEN];
     int port;
     int backlog;
@@ -358,6 +361,7 @@ typedef struct redisServer {
     int repl_timeout;
     // replicate slave
     int repl_diskless_sync;
+    int repl_diskless_sync_delay;
     int repl_state;
     int repl_transfer_s;
     char *master_host;
@@ -376,6 +380,8 @@ typedef struct redisServer {
     int aof_repl_read_from_child;
     int aof_repl_write_to_parent;
 
+    long long repl_backlog_time_limit; // replication backlog will release when no slaves and ttl.
+    time_t repl_backlog_no_slaves_since;
 
     struct redisCommand *expire_command;
     struct redisCommand *pexpire_command;
@@ -778,8 +784,8 @@ long long serverCron(struct eventLoop *el, int id, void *clientData);
 
 
 // ------------ replicate master ---------------
-int startBgAofRewriteForReplication(int mincapa);
-int startBgAofForSlaveSockets();
+int startBgAofSaveForReplication(int mincapa);
+int startBgAofSaveForSlaveSockets();
 void replicationFeedSlaves(int dbid, robj **argv, int argc);
 int addReplyReplicationBacklog(client *c, long long psync_offset);
 void feedReplicationBacklog(void *ptr, size_t len);

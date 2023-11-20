@@ -912,7 +912,7 @@ cleanup:
     server.aof_type = AOF_TYPE_NONE;
 }
 
-void updateSlavesWaitingBgAOF(int type) {
+void updateSlavesWaitingBgAOFSave(int type) {
 
     listNode *ln;
     listIter li;
@@ -923,21 +923,32 @@ void updateSlavesWaitingBgAOF(int type) {
     start_bgsave = 0;
 
     listRewind(server.slaves, &li);
-    while ((ln = listNext(&li)) != NULL) {
 
-        slave = listNodeValue(ln);
+    if (type == AOF_TYPE_SOCKET) {
 
-        if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
-            start_bgsave = 1;
-            mincapa = mincapa == -1 ? slave->slave_capa : mincapa & slave->slave_capa;
-        } else if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END) {
-            slave->repl_state = SLAVE_STATE_ONLINE;
-            slave->repl_put_online_ack = 1;
-            slave->repl_last_ack = server.unix_time;
+        while ((ln = listNext(&li)) != NULL) {
+
+            slave = listNodeValue(ln);
+
+            if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
+                start_bgsave = 1;
+                mincapa = mincapa == -1 ? slave->slave_capa : mincapa & slave->slave_capa;
+            } else if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END) {
+                slave->repl_state = SLAVE_STATE_ONLINE;
+                slave->repl_put_online_ack = 1;
+                slave->repl_last_ack = server.unix_time;
+            }
         }
+
+
+    } else {
+
+        // todo server panic
+
+
     }
 
-    if (start_bgsave) startBgAofRewriteForReplication(mincapa);
+    if (start_bgsave) startBgAofSaveForReplication(mincapa);
 
 }
 
@@ -1010,7 +1021,7 @@ void aofDoneHandlerSlavesSocket(int bysignal, int code) {
 
     zfree(ok_slaves);
 
-    updateSlavesWaitingBgAOF(AOF_TYPE_SOCKET);
+    updateSlavesWaitingBgAOFSave(AOF_TYPE_SOCKET);
 
 }
 

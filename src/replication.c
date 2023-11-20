@@ -7,7 +7,7 @@
 // ------------------------ MASTER ---------------------
 
 void changeReplicationId() {
-    // todo update master replication id.
+
 }
 
 void createReplicationBacklog() {
@@ -38,7 +38,7 @@ int replicationSetupFullResync(client *slave, off_t offset) {
 
 }
 
-int startBgAofForSlaveSockets() {
+int startBgAofSaveForSlaveSockets() {
 
     listIter li;
     listNode *ln;
@@ -145,13 +145,13 @@ int startBgAofForSlaveSockets() {
 
 }
 
-int startBgAofRewriteForReplication(int mincapa) {
+int startBgAofSaveForReplication(int mincapa) {
 
     int socket_type = server.repl_diskless_sync && (mincapa & REPL_CAPA_EOF);
     int retval;
 
     if (socket_type) {
-        retval = startBgAofForSlaveSockets();
+        retval = startBgAofSaveForSlaveSockets();
     } else {
         // todo start bg aof disks for slaves
         retval = C_ERR;
@@ -204,13 +204,13 @@ void replicationFeedSlaves(int dbid, robj **argv, int argc) {
 
     if (server.master_host) return;
 
-    if (listLength(server.slaves) == 0 || server.repl_backlog == NULL) return;
+    if (listLength(server.slaves) == 0 && server.repl_backlog == NULL) return;
 
     if (server.repl_seldbid != dbid) {
 
         robj *selcmd;
 
-        if (dbid > 0 && dbid < OBJ_SHARED_COMMAND_SIZE) {
+        if (dbid >= 0 && dbid < OBJ_SHARED_COMMAND_SIZE) {
             selcmd = shared.commands[dbid];
         } else {
 
@@ -218,13 +218,23 @@ void replicationFeedSlaves(int dbid, robj **argv, int argc) {
             size_t llen = ll2string(ll2str, dbid);
             sds s = sdscatprintf(sdsempty(), "*2\r\n$6\r\nSELECT\r\n$%d\r\n%d\r\n", llen, dbid);
             selcmd = createStringObject(s, sdslen(s));
-            decrRefCount(selcmd);
-            sdsfree(s);
+        }
+
+        listRewind(server.slaves, &li);
+
+        while ((ln = listNext(&li)) != NULL) {
+
+            slave = listNodeValue(ln);
+            if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) continue;
+            addReply(slave, selcmd);
         }
 
         if (server.repl_backlog) {
             feedReplicationBacklogObject(selcmd);
         }
+
+        if (dbid < 0 || dbid >= OBJ_SHARED_COMMAND_SIZE) decrRefCount(selcmd);
+
     }
 
     server.repl_seldbid = dbid;
@@ -273,7 +283,7 @@ int addReplyReplicationBacklog(client *c, long long psync_offset) {
     }
 
     skip = psync_offset - server.repl_backlog_off;
-    j = 0 ? server.repl_backlog_histlen < server.repl_backlog_size : server.repl_backlog_idx;
+    j = 0 ? (server.repl_backlog_histlen < server.repl_backlog_size) : server.repl_backlog_idx;
     j = (j + skip) % server.repl_backlog_size;
     len = server.repl_backlog_histlen - skip;
 
@@ -428,14 +438,13 @@ void syncCommand(client *c) {
         }
 
     } else {
-
-       if (server.aof_child_pid == -1) {
-           startBgAofRewriteForReplication(c->slave_capa);
+        // only start bg save for disk type.
+       if (server.aof_child_pid == -1 && (!server.repl_diskless_sync || !(c->slave_capa & REPL_CAPA_EOF))) {
+           startBgAofSaveForReplication(c->slave_capa);
        } else {
-           debug("delay replication sync to next.");
+           debug("we want more slaves to sync at the same time, so delay socket type replication sync to next cronjob.");
        }
     }
-
 }
 
 void replConfCommand(client *c) {
@@ -962,6 +971,10 @@ void replicationCron(void) {
 
     static long long replication_cron_loops = 0;
 
+    listNode *ln;
+    client *slave;
+    listIter li;
+
 
     // ------------------ slave -----------------
     if (server.master && server.master_host && server.repl_state == REPL_STATE_CONNECT) {
@@ -974,14 +987,26 @@ void replicationCron(void) {
     if (replication_cron_loops % server.repl_send_ping_period == 0 && listLength(server.slaves)) {
         robj *ping_cmd[1];
         ping_cmd[0] = createStringObject("PING", 4);
-        replicationFeedSlaves(server.repl_seldbid, ping_cmd, 1);
+        replicationFeedSlaves(server.repl_seldbid, ping_cmd, 1); // update slaves lastinteraction field. prevent slaves cancel connect.
         decrRefCount(ping_cmd[0]);
     }
 
+    // for presync stage, we send a newline to ping our slaves as ack.
+    listRewind(server.slaves, &li);
+    while ((ln = listNext(&li)) != NULL) {
+
+        slave = listNodeValue(ln);
+        if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START || (
+                slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END && server.aof_type == AOF_TYPE_DISK)) {
+
+            if (write(slave->fd, "\n", 1) != 1) {
+                debug("Master ping slaves during aof bg save start, failed");
+            }
+        }
+    }
+
+
     // find out the timed out slaves and free it.
-    listNode *ln;
-    client *slave;
-    listIter li;
     listRewind(server.slaves, &li);
     while ((ln = listNext(&li)) != NULL) {
 
@@ -993,6 +1018,52 @@ void replicationCron(void) {
             freeClient(slave);
         }
     }
+
+    // clear the backlog if there is no slaves and backlog attached timeout.
+    if (server.backlog &&
+        listLength(server.slaves) == 0 &&
+        server.unix_time - server.repl_backlog_no_slaves_since > server.repl_backlog_time_limit) {
+
+        // change replid, make sure next slave ask request to psync, we go fullresync.
+        changeReplicationId();
+
+        server.repl_backlog_idx = 0;
+        server.repl_backlog_histlen = 0;
+        server.repl_backlog_off = server.master_repl_offset + 1;
+        zfree(server.repl_backlog);
+        server.repl_backlog = NULL;
+    }
+
+
+    // start fullresync to slaves whose waiting to start.
+
+    if (server.aof_fd == -1) {
+
+        int max_idle, idle;
+        int waiting, mincapa;
+        max_idle = 0;
+        idle = 0;
+        waiting = 0;
+        mincapa = -1;
+
+        listRewind(server.slaves, &li);
+        while ((ln = listNext(&li)) != NULL) {
+
+            slave = listNodeValue(ln);
+            if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
+                idle = (int)(server.unix_time - slave->lastinteraction);
+                if (idle > max_idle) max_idle = idle;
+                waiting++;
+                mincapa = mincapa == -1 ? slave->slave_capa : (slave->slave_capa & mincapa);
+            }
+        }
+
+        if (waiting && (!server.repl_diskless_sync || max_idle >= server.repl_diskless_sync_delay)) {
+            startBgAofSaveForReplication(mincapa);
+        }
+
+    }
+
 
     replication_cron_loops++;
 }

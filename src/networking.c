@@ -27,8 +27,9 @@ void readTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
 }
 
 int prepareClientToWrite(client *c) {
-    if (!(c->flag & CLIENT_PENDING_WRITE) && (
-            c->repl_state == REPL_STATE_NONE || (c->repl_state == SLAVE_STATE_ONLINE && !c->repl_put_online_ack))) {
+    if (!clientHasPendingWrites(c) &&   // if client has pending writes is shows has writable event, should not add into list.
+        !(c->flag & CLIENT_PENDING_WRITE) &&
+          (c->repl_state == REPL_STATE_NONE || (c->repl_state == SLAVE_STATE_ONLINE && !c->repl_put_online_ack))) {
         c->flag |= CLIENT_PENDING_WRITE;
         listAddNodeTail(server.client_pending_writes, c);
     }
@@ -200,6 +201,8 @@ void acceptTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
 
 
 void processInputBuffer(client *c) {
+
+    c->lastinteraction = server.unix_time;
 
     while (c->buflen) {
 
@@ -703,6 +706,9 @@ void freeClient(client *c) {
         listNode *ln;
         ln = listSearchKey(server.slaves, c);
         listDelNode(server.slaves, ln);
+
+        if (listLength(server.slaves) == 0)
+            server.repl_backlog_no_slaves_since = server.unix_time;
     }
 
 }

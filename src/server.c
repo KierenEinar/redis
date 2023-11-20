@@ -381,9 +381,9 @@ void initServer(void) {
     expire_command_key = createStringObject("EXPIRE", 6);
     pexpire_command_key = createStringObject("PEXPIRE", 7);
     multi_command_key = createStringObject("MULTI", 5);
-    server.list_fill_factor = DEFAULT_LIST_FILL_FACTOR;
-    server.backlog = DEFAULT_BACKLOG;
-    server.port = DEFAULT_BIND_PORT;
+    server.list_fill_factor = CONFIG_QUICKLIST_FILL_FACTOR;
+    server.backlog = CONFIG_TCP_BACKLOG;
+    server.port = CONFIG_BIND_PORT;
     updateCachedTime();
     server.el = elCreateEventLoop(1024);
     server.client_pending_writes = listCreate();
@@ -394,7 +394,7 @@ void initServer(void) {
     server.pubsub_patterns = listCreate();
     server.aof_seldb = -1;
     server.aof_buf = sdsempty();
-    server.aof_filename = DEFAULT_AOF_FILENAME;
+    server.aof_filename = CONFIG_AOF_FILENAME;
     server.dirty = 0;
     server.expire_command = lookupCommand(expire_command_key);
     server.pexpire_command = lookupCommand(pexpire_command_key);
@@ -419,6 +419,7 @@ void initServer(void) {
     server.aof_pipe_write_ack_to_child = -1;
     server.aof_stop_sending_diff = -1;
     server.repl_diskless_sync = CONFIG_REPL_DISKLESS_SYNC;
+    server.repl_diskless_sync_delay = CONFIG_REPL_DISKLESS_SYNC_DELAY;
     server.repl_backlog_size = CONFIG_REPL_BACKLOG_SIZE;
     server.repl_backlog_idx = 0l;
     server.repl_backlog_histlen = 0l;
@@ -430,6 +431,8 @@ void initServer(void) {
     server.repl_seldbid = -1;
     server.repl_send_ping_period = CONFIG_REPL_PING_PERIOD;
     server.repl_timeout = CONFIG_REPL_TIMEOUT;
+    server.repl_backlog_time_limit = CONFIG_REPL_BACKLOG_TIMEOUT;
+    server.repl_backlog_no_slaves_since = time(NULL);
     server.slaves = listCreate();
 
     listSetFreeMethod(server.slaves, zfree);
