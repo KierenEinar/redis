@@ -131,3 +131,8 @@ void handleClientsOnBlockedList(void) {
 
 
 }
+
+void disconnectAllBlockedClients(void) {
+
+
+}

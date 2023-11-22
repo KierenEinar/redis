@@ -149,6 +149,8 @@
 #define REPL_STATE_NONE 0
 #define REPL_STATE_CONNECT 1
 #define REPL_STATE_CONNECTING 2
+// states must be ordered
+// handshake stage
 #define REPL_STATE_RECEIVE_PONG 3
 #define REPL_STATE_SEND_AUTH 4
 #define REPL_STATE_RECEIVE_AUTH 5
@@ -160,6 +162,8 @@
 #define REPL_STATE_RECEIVE_CAPA 11
 #define REPL_STATE_SEND_PSYNC 12
 #define REPL_STATE_RECEIVE_PSYNC 13
+
+// data transfer stage
 #define REPL_STATE_TRANSFER 14
 #define REPL_STATE_CONNECTED 15
 
@@ -605,7 +609,7 @@ void queueMultiCommand(client *c);
 // ------------ replication commands ------------
 void syncCommand(client *c);
 void replConfCommand(client *c);
-
+void slaveofCommand(client *c);
 
 // block client for multi input keys.
 void blockForKeys(client *c, robj **argv, int argc, long long timeout);
@@ -627,6 +631,8 @@ int pubsubSubscribeChannel(client *c, robj *channel);
 
 // subscribe pattern except glob like style input.
 int pubsubSubscribePattern(client *c, robj *pattern);
+
+void disconnectAllBlockedClients(void);
 
 // get the clients pubsub count.
 unsigned long clientSubscriptionCount(client *c);
@@ -795,7 +801,15 @@ int masterTryPartialResynchronization(client *c);
 int connectWithMaster(void);
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);
 void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData);
-void replicationDiscardCacheMaster();
+void replicationDiscardCacheMaster(void);
+void replicationUnsetMaster(void);
+void disconnectSlaves(void);
+int replicationIsInHandshake(void);
+void undoConnectWithMaster(void);
+void cancelReplicationHandShake(void);
+void replicationAbortSyncTransfer(void);
+void replicationSetMaster(char *host, long port);
+
 // ------------process commands -------------
 int processCommand(client *c);
 

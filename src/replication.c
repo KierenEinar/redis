@@ -10,6 +10,14 @@ void changeReplicationId() {
 
 }
 
+void freeReplicationBacklog() {
+    server.repl_backlog_idx = 0;
+    server.repl_backlog_histlen = 0;
+    server.repl_backlog_off = server.master_repl_offset + 1;
+    zfree(server.repl_backlog);
+    server.repl_backlog = NULL;
+}
+
 void createReplicationBacklog() {
     server.repl_backlog = zmalloc(server.repl_backlog_size);
     server.repl_backlog_idx = 0l;
@@ -522,7 +530,106 @@ sds sendSynchronousCommand(int flags, int fd, ...) {
     return NULL;
 }
 
-void replicationDiscardCacheMaster() {
+void replicationUnsetMaster(void) {
+
+}
+
+void disconnectSlaves(void) {
+
+    listIter li;
+    listNode *ln;
+    while ((ln= listNext(&li)) != NULL) {
+        client *slave = listNodeValue(ln);
+        freeClient(slave);
+    }
+
+}
+
+void cancelReplicationHandShake(void) {
+
+    if (server.repl_state == REPL_STATE_TRANSFER) {
+        replicationAbortSyncTransfer();
+    } else if (server.repl_state == REPL_STATE_CONNECTING || replicationIsInHandshake()  ) {
+        undoConnectWithMaster();
+    }
+
+    server.repl_state = REPL_STATE_CONNECT;
+}
+
+void replicationSetMaster(char *host, long port) {
+
+    if (server.master_host) {
+        sdsfree(server.master_host);
+    }
+
+    if (server.master) {
+        freeClient(server.master);
+    }
+
+    server.master_host = sdscatsds(sdsempty(), host);
+    server.master_port = (int)port;
+
+    // now change master to slave, pub/sub not allow on slave.
+    disconnectAllBlockedClients();
+
+    disconnectSlaves();
+
+    cancelReplicationHandShake();
+
+}
+
+
+void slaveofCommand(client *c) {
+
+
+    // slaveof no one
+    if (!strcasecmp(c->argv[1]->ptr, "no") &&
+        !strcasecmp(c->argv[2]->ptr, "one")) {
+
+        if (server.master) {
+            replicationUnsetMaster();
+        }
+
+    } else {
+
+        char *host;
+        long long port;
+
+        if (c->flag & CLIENT_SLAVE) {
+            addReplyError(c, "Slave is not allow to call this command...");
+            return;
+        }
+
+        // slaveof host port
+        if (!getLongLongFromObjectOrReply(c->argv[2], &port, c, NULL)) {
+            return;
+        }
+
+        host = c->argv[1]->ptr;
+
+        if (server.master && !strcasecmp(host, server.master_host) && port == server.master_port) {
+            char *reply = "+OK Already connected to specified master\r\n";
+            addReplyString(c, reply, strlen(reply));
+            return;
+        }
+
+        replicationSetMaster(host, port);
+
+    }
+
+
+    addReply(c, shared.ok);
+
+
+
+
+
+
+
+}
+
+
+void replicationDiscardCacheMaster(void) {
 
     if (!server.cache_master) return;
     client *c = server.cache_master;
@@ -797,35 +904,23 @@ int replicationIsInHandshake(void) {
 }
 
 void undoConnectWithMaster(void){
+
     elDeleteFileEvent(server.el, server.repl_transfer_s, EL_WRITABLE | EL_READABLE);
     close(server.repl_transfer_s);
     server.repl_transfer_s = -1;
-
-    server.master_initial_offset = -1;
-    memcpy(server.master_replid, 0, sizeof(server.master_replid));
-    server.repl_state = REPL_STATE_CONNECT;
 }
 
 void replicationAbortSyncTransfer(void) {
-
     undoConnectWithMaster();
+    elDeleteFileEvent(server.el, server.repl_transfer_tmp_fd, EL_WRITABLE);
     close(server.repl_transfer_tmp_fd);
-    server.repl_transfer_tmp_fd = -1;
     unlink(server.repl_transfer_tmp_file);
-    memcpy(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
+    server.repl_transfer_tmp_fd = -1;
+    server.master_initial_offset = -1;
+    memset(server.master_replid, 0, sizeof(server.master_replid));
+    memset(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
 }
 
-
-void cancelReplicationHandShake() {
-
-    if (server.repl_state == REPL_STATE_TRANSFER) {
-        replicationAbortSyncTransfer();
-    } else if (server.repl_state == REPL_STATE_CONNECTING ||
-            replicationIsInHandshake()) {
-        undoConnectWithMaster();
-    }
-
-}
 
 void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData) {
 
@@ -1027,11 +1122,8 @@ void replicationCron(void) {
         // change replid, make sure next slave ask request to psync, we go fullresync.
         changeReplicationId();
 
-        server.repl_backlog_idx = 0;
-        server.repl_backlog_histlen = 0;
-        server.repl_backlog_off = server.master_repl_offset + 1;
-        zfree(server.repl_backlog);
-        server.repl_backlog = NULL;
+        // free replication backlog.
+        freeReplicationBacklog();
     }
 
 
