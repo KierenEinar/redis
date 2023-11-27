@@ -14,6 +14,8 @@
 int anetNonBlock(int fd);
 int anetBlock(int fd);
 int anetTcpNoDelay(int fd);
+int anetTcpSendTimeout(int fd, long timeout);
+int anetTcpRecvTimeout(int fd, long timeout);
 int anetTcpServer(char *err, int port, int backlog);
 int anetTcp6Server(char *err, int port, int backlog);
 int anetTcpAccept(char *err, int fd, char *ip, size_t iplen, int *port);

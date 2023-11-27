@@ -49,6 +49,7 @@
 #define CONFIG_QUICKLIST_FILL_FACTOR (-2)
 #define CONFIG_NETWORK_IP_FD_LEN 16
 
+#define CONFIG_AOF_OFF 0
 #define CONFIG_AOF_FILENAME "appendonly.aof"
 #define CONFIG_REPL_RUNID_LEN 40
 #define CONFIG_REPL_EOFMARK_LEN 40
@@ -58,6 +59,7 @@
 #define CONFIG_REPL_TIMEOUT 60 // 60 seconds timed out if no data nor ack received.
 #define CONFIG_REPL_BACKLOG_TIMEOUT (60 * 60) // 1 hour for repl backlog if there is no slaves.
 #define CONFIG_REPL_DISKLESS_SYNC_DELAY 10 // 10 seconds for delay
+#define CONFIG_REPL_SEND_TIMEOUT 10 // 10 seconds for replicate send time out.
 #define CONFIG_SLAVE_IDLE 60
 #define LIST_ITER_DIR_FORWARD 1
 #define LIST_ITER_DIR_BACKWARD 2
@@ -131,12 +133,13 @@
 #define AOF_OFF 0
 #define AOF_ON 1
 #define AOF_RW 2
+#define AOF_REPLICATE_SAVE 3
 
 // ------------ AOF TYPE ---------------
-#define AOF_TYPE_NONE 0
-#define AOF_TYPE_RW 1
-#define AOF_TYPE_DISK 2
-#define AOF_TYPE_SOCKET 3
+#define AOF_SAVE_TYPE_NONE 0
+#define AOF_SAVE_TYPE_RW 1
+#define AOF_SAVE_TYPE_REPLICATE_DISK 2
+#define AOF_SAVE_TYPE_REPLICATE_SOCKET 3
 
 //------------ AOF REWRITE --------------
 #define AOF_REWRITE_BLOCK_SIZE (1024 * 1024 * 10)
@@ -327,7 +330,10 @@ typedef struct redisServer {
     int aof_fsync;
     char *aof_filename;
     time_t aof_last_fsync;
-    int aof_state;
+    int aof_off;
+    int aof_save_type;
+    int aof_rw_schedule;
+
     int loading;
     time_t loading_time;
     off_t aof_loaded_bytes;
@@ -343,7 +349,7 @@ typedef struct redisServer {
     int aof_pipe_write_ack_to_child;
     int aof_stop_sending_diff;
     sds aof_child_diff;
-    int aof_type;
+
 
     // replicate master
     list *slaves;      // slaves list
@@ -386,7 +392,7 @@ typedef struct redisServer {
 
     long long repl_backlog_time_limit; // replication backlog will release when no slaves and ttl.
     time_t repl_backlog_no_slaves_since;
-
+    long repl_slave_send_timeout;
     struct redisCommand *expire_command;
     struct redisCommand *pexpire_command;
     struct redisCommand *multi_command;
@@ -827,6 +833,7 @@ void pipeFromChildReadable(struct eventLoop *el, int fd, int mask, void *clientD
 void aofRewriteBufferPipeWritable(struct eventLoop *el, int fd, int mask, void *clientData);
 size_t aofRewriteBufferWrite(int fd);
 void aofRewriteBufferReset();
+void aofRemoveTempFile();
 void flushAppendOnlyFile(int force);
 client *createFakeClient(void);
 void freeFakeClient(client *c);
@@ -846,7 +853,7 @@ int aofCreatePipes(void);
 void aofClosePipes(void);
 void startLoading(FILE *fp);
 void loadingProgress(off_t pos);
-void killAppendOnlyChild();
+void killAppendOnlyChild(int force);
 void stopAppendOnly();
 int startAppendOnly();
 void restartAOF();

@@ -348,9 +348,7 @@ void updateCachedTime() {
 }
 
 void loadDataFromDisk() {
-    if (server.aof_state == AOF_ON) {
-        loadAppendOnlyFile(server.aof_filename);
-    }
+    loadAppendOnlyFile(server.aof_filename);
 }
 
 
@@ -404,7 +402,9 @@ void initServer(void) {
     server.aof_update_size = 0;
     server.aof_last_fsync = -1;
     server.loading = 0;
-    server.aof_state = AOF_ON;
+    server.aof_off = CONFIG_AOF_OFF;
+    server.aof_save_type = AOF_SAVE_TYPE_NONE;
+    server.aof_rw_schedule = 0;
     server.aof_loaded_bytes = 0;
     server.aof_loading_total_bytes = 0;
     server.aof_loaded_truncated = 1;
@@ -425,7 +425,7 @@ void initServer(void) {
     server.repl_backlog_histlen = 0l;
     server.repl_backlog_off = 0l;
     server.master_repl_offset = 0l;
-    server.aof_type = AOF_TYPE_NONE;
+    server.aof_save_type = AOF_SAVE_TYPE_NONE;
     server.aof_repl_read_from_child = -1;
     server.aof_repl_write_to_parent = -1;
     server.repl_seldbid = -1;
@@ -433,6 +433,7 @@ void initServer(void) {
     server.repl_timeout = CONFIG_REPL_TIMEOUT;
     server.repl_backlog_time_limit = CONFIG_REPL_BACKLOG_TIMEOUT;
     server.repl_backlog_no_slaves_since = time(NULL);
+    server.repl_slave_send_timeout = CONFIG_REPL_SEND_TIMEOUT;
     server.slaves = listCreate();
 
     listSetFreeMethod(server.slaves, zfree);
@@ -556,7 +557,7 @@ void* listDupString(void *ptr) {
 }
 
 void propagate(struct redisCommand *cmd, int dbid, int argc, robj **argv, int flags) {
-    if (flags & PROPAGATE_CMD_AOF && server.aof_state == AOF_ON) {
+    if (flags & PROPAGATE_CMD_AOF && !server.aof_off) {
         feedAppendOnlyFile(cmd, dbid, argc, argv);
     }
 }

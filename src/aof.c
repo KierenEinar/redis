@@ -96,10 +96,10 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **arg
         buf = catAppendOnlyFileGenericCommand(buf, argc, argv);
     }
 
-    if (server.aof_state == AOF_ON)
+    if (!server.aof_off)
         server.aof_buf = sdscatsds(server.aof_buf, buf);
 
-    if (server.aof_child_pid != -1)
+    if (server.aof_child_pid != -1 && server.aof_save_type == AOF_SAVE_TYPE_RW)
         aofRewriteBufferAppend(buf);
 
     sdsfree(buf);
@@ -168,6 +168,18 @@ void aofRewriteBufferReset() {
     listRelease(server.aof_rw_block_list);
     server.aof_rw_block_list = listCreate();
     listSetFreeMethod(server.aof_rw_block_list, zfree);
+}
+
+void aofRemoveTempFile() {
+
+    if (server.aof_save_type == AOF_SAVE_TYPE_RW) {
+        char tmp_file[255];
+        char *filename = "temp_aof_rewrite_%d.aof";
+        snprintf(tmp_file, sizeof(tmp_file), filename, server.aof_child_pid);
+        unlink(tmp_file);
+    } else if (server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_DISK) {
+
+    }
 }
 
 ssize_t aofWrite(sds buf, size_t len) {
@@ -331,7 +343,7 @@ int loadAppendOnlyFile(char *filename) {
     client *fake_client;
     struct stat st;
     off_t valid_up_to, valid_up_to_multi;
-    int old_state;
+    int old_aof_off;
     long loops;
 
     fake_client = createFakeClient();
@@ -348,9 +360,9 @@ int loadAppendOnlyFile(char *filename) {
 
     startLoading(fp);
 
-    old_state = server.aof_state;
+    old_aof_off = server.aof_off;
     loops = 0;
-    server.aof_state = AOF_OFF;
+    server.aof_off = 1;
 
     while (1) {
 
@@ -457,7 +469,7 @@ loaded_ok:
     fclose(fp);
     aofUpdateCurrentSize();
     freeFakeClient(fake_client);
-    server.aof_state = old_state;
+    server.aof_off = old_aof_off;
     stopLoading();
     return C_OK;
 readerr:
@@ -880,10 +892,6 @@ void aofRewriteDoneHandler(int bysignal, int code) {
             bioCreateBackgroundJob(BIO_AOF_FSYNC, newfd);
         }
 
-        if (server.aof_state == AOF_RW) {
-            server.aof_state = AOF_ON;
-        }
-
         if (server.aof_fd == -1) {
             goto cleanup;
         } else {
@@ -909,7 +917,7 @@ cleanup:
     aofRewriteBufferReset();
     server.aof_child_pid = -1;
     server.aof_seldb = -1;
-    server.aof_type = AOF_TYPE_NONE;
+    server.aof_save_type = AOF_SAVE_TYPE_NONE;
 }
 
 void updateSlavesWaitingBgAOFSave(int type) {
@@ -924,7 +932,7 @@ void updateSlavesWaitingBgAOFSave(int type) {
 
     listRewind(server.slaves, &li);
 
-    if (type == AOF_TYPE_SOCKET) {
+    if (type == AOF_SAVE_TYPE_REPLICATE_SOCKET) {
 
         while ((ln = listNext(&li)) != NULL) {
 
@@ -971,8 +979,8 @@ void aofDoneHandlerSlavesSocket(int bysignal, int code) {
     ok_slaves = zmalloc(sizeof(uint64_t));
     ok_slaves[0] = 0;
 
-    server.aof_fd = -1;
-    server.aof_type = AOF_TYPE_NONE;
+    server.aof_child_pid = -1;
+    server.aof_save_type = AOF_SAVE_TYPE_NONE;
 
 
     if (!bysignal && code) {
@@ -1021,7 +1029,7 @@ void aofDoneHandlerSlavesSocket(int bysignal, int code) {
 
     zfree(ok_slaves);
 
-    updateSlavesWaitingBgAOFSave(AOF_TYPE_SOCKET);
+    updateSlavesWaitingBgAOFSave(AOF_SAVE_TYPE_REPLICATE_SOCKET);
 
 }
 
@@ -1030,35 +1038,37 @@ void aofDoneHandlerSlavesDisk(int bysignal, int code) {
 }
 
 void aofDoneHandler(int bysignal, int code) {
-    switch (server.aof_type) {
-        case AOF_TYPE_RW:
+    switch (server.aof_save_type) {
+        case AOF_SAVE_TYPE_RW:
             aofRewriteDoneHandler(bysignal, code);
             break;
-        case AOF_TYPE_SOCKET:
+        case AOF_SAVE_TYPE_REPLICATE_SOCKET:
             aofDoneHandlerSlavesSocket(bysignal, code);
             break;
-        case AOF_TYPE_DISK:
+        case AOF_SAVE_TYPE_REPLICATE_DISK:
             aofDoneHandlerSlavesDisk(bysignal, code);
             break;
         default:
             // todo server panic
-            debug("unknown aof_type to handler");
+            debug("unknown aof_save_type to handler");
             exit(1);
     }
 }
 
-void killAppendOnlyChild() {
-
-    char tmp_file[256];
+void killAppendOnlyChild(int force) {
     int stat_loc;
+
+    if (server.aof_child_pid == -1)
+        return;
+
+    if (server.aof_save_type != AOF_SAVE_TYPE_RW && !force)
+        return;
 
     if (kill(server.aof_child_pid, SIGUSR1) != -1) {
         while (wait3(&stat_loc, WNOHANG, NULL) != server.aof_child_pid);
     }
-
-    char *filename = "temp_aof_rewrite_%d.aof";
-    snprintf(tmp_file, sizeof(tmp_file), filename, server.aof_child_pid);
-    unlink(tmp_file);
+    server.aof_save_type = AOF_SAVE_TYPE_NONE;
+    aofRemoveTempFile();
     aofRewriteBufferReset();
     server.aof_child_pid = -1;
     server.aof_seldb = -1;
@@ -1067,20 +1077,24 @@ void killAppendOnlyChild() {
 
 void stopAppendOnly() {
 
-    // todo assert server.aof_state is AOF_ON
+    //todo assert server.aof_state != AOF_OFF
     flushAppendOnlyFile(1);
-    server.aof_state = AOF_OFF;
+    killAppendOnlyChild(0);
+    server.aof_off = 1;
+
     sdsfree(server.aof_buf);
     server.aof_buf = sdsempty();
     close(server.aof_fd);
-    if (server.aof_child_pid == -1) return;
-    killAppendOnlyChild();
 }
 
 int startAppendOnly() {
 
-    // todo assert server.aof_state is AOF_OFF
+    // todo assert server.aof_off is 0
     int newfd;
+
+    if (server.aof_fd != -1) {
+        return C_ERR;
+    }
 
     newfd = open(server.aof_filename, O_CREAT | O_APPEND | O_RDWR);
     if (newfd == -1) {
@@ -1089,15 +1103,20 @@ int startAppendOnly() {
     }
 
     if (server.aof_child_pid != -1) {
-        killAppendOnlyChild();
+        server.aof_rw_schedule = (server.aof_save_type == AOF_SAVE_TYPE_RW) ? 0 : 1;
+    }
+
+    if (server.aof_rw_schedule) {
+        return C_OK;
     }
 
     if (rewriteAppendOnlyFileBackground() == C_ERR) {
         return C_ERR;
     }
 
-    server.aof_state = AOF_RW;
+    server.aof_off = 1;
     server.aof_fd = newfd;
+    server.aof_save_type = AOF_SAVE_TYPE_RW;
     return C_OK;
 
 }

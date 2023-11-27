@@ -57,7 +57,7 @@ int startBgAofSaveForSlaveSockets() {
     unsigned long long *clientids;
 
 
-    if (server.aof_fd != -1) return C_ERR;
+    if (server.aof_child_pid != -1) return C_ERR;
     if (pipe(pipefds) == -1) {
         debug("BgAofForSlaveSockets pipe system call, err=%s", strerror(errno));
         return C_ERR;
@@ -75,6 +75,7 @@ int startBgAofSaveForSlaveSockets() {
                 clientids[numfds] = slave->id;
                 fds[numfds++] = slave->fd;
                 anetBlock(slave->fd);
+                anetTcpSendTimeout(slave->fd, server.repl_slave_send_timeout * 1000);
                 // anetTcpNoDelay(slave->fd);
             }
         }
@@ -140,8 +141,8 @@ int startBgAofSaveForSlaveSockets() {
         } else {
 
             // child fork success.
-            server.aof_fd = childpid;
-            server.aof_type = AOF_TYPE_SOCKET;
+            server.aof_child_pid = childpid;
+            server.aof_save_type = AOF_SAVE_TYPE_REPLICATE_SOCKET;
         }
 
         zfree(fds);
@@ -416,7 +417,7 @@ void syncCommand(client *c) {
         return;
     }
 
-    if (server.aof_fd != -1 && server.aof_type == AOF_TYPE_DISK) {
+    if (server.aof_fd != -1 && server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_DISK) {
 
         listIter li;
         listNode *ln;
@@ -437,7 +438,7 @@ void syncCommand(client *c) {
         } else {
             debug("Can't attach the slave to the current BGSAVE. Waiting for next BGSAVE for SYNC");
         }
-    } else if (server.aof_fd != -1 && server.aof_type == AOF_TYPE_SOCKET) {
+    } else if (server.aof_fd != -1 && server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_SOCKET) {
 
         if ((c->slave_capa & REPL_CAPA_EOF) && server.repl_diskless_sync) {
             debug("Current repl socket started, delay to start next socket type sync.");
@@ -530,6 +531,7 @@ sds sendSynchronousCommand(int flags, int fd, ...) {
     return NULL;
 }
 
+// todo implement
 void replicationUnsetMaster(void) {
 
 }
@@ -549,7 +551,7 @@ void cancelReplicationHandShake(void) {
 
     if (server.repl_state == REPL_STATE_TRANSFER) {
         replicationAbortSyncTransfer();
-    } else if (server.repl_state == REPL_STATE_CONNECTING || replicationIsInHandshake()  ) {
+    } else if (server.repl_state == REPL_STATE_CONNECTING || replicationIsInHandshake()) {
         undoConnectWithMaster();
     }
 
@@ -575,6 +577,8 @@ void replicationSetMaster(char *host, long port) {
     disconnectSlaves();
 
     cancelReplicationHandShake();
+
+    server.repl_state = REPL_STATE_CONNECT;
 
 }
 
@@ -620,12 +624,6 @@ void slaveofCommand(client *c) {
 
     addReply(c, shared.ok);
 
-
-
-
-
-
-
 }
 
 
@@ -663,6 +661,7 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
 
     reply = sendSynchronousCommand(SYNC_CMD_READ, fd, NULL);
 
+    // during master transfer the socket/disk aof, always send new line just ping to slaves.
     if (sdslen(reply) == 0) {
         sdsfree(reply);
         return PSYNC_WAIT_REPLY;
@@ -715,6 +714,8 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
     err = NULL;
 
     sock_err_size = sizeof(sock_err);
+
+    // check socket if error happened.
     if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &sock_err, &sock_err_size) == -1) {
         goto error;
     }
@@ -722,6 +723,8 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
     if (sock_err > 0) {
         goto error;
     }
+
+    // handshake stage start ...
 
     if (server.repl_state == REPL_STATE_CONNECTING) {
 
@@ -742,7 +745,6 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
                 goto error;
             }
         }
-        sdsfree(reply);
         server.repl_state = REPL_STATE_SEND_AUTH;
         return;
     }
@@ -763,7 +765,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
     if (server.repl_state == REPL_STATE_RECEIVE_AUTH) {
 
-        if ((reply = sendSynchronousCommand(SYNC_CMD_READ, fd,  NULL)) != NULL) {
+        if ((reply = sendSynchronousCommand(SYNC_CMD_READ, fd)) != NULL) {
             if (reply[0] == '-') {
                 debug("slave auth, master reply failed, err=%s\n", reply);
                 sdsfree(reply);
@@ -790,7 +792,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
     if (server.repl_state == REPL_STATE_RECEIVE_CAPA) {
 
-        if ((reply = sendSynchronousCommand(SYNC_CMD_READ, fd,  NULL)) != NULL) {
+        if ((reply = sendSynchronousCommand(SYNC_CMD_READ, fd)) != NULL) {
             if (reply[0] == '-') {
                 debug("warming(non critical), slave capa, master do not understand, reply=%s\n", reply);
             }
@@ -820,6 +822,8 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
     if (psync_result == PSYNC_WAIT_REPLY) {
         return;
     }
+
+    // handshake end ...
 
     if (psync_result == PSYNC_FULL_RESYNC) {
 
@@ -861,7 +865,7 @@ error:
     close(server.repl_transfer_s);
     server.repl_transfer_s = -1;
     server.repl_state = REPL_STATE_CONNECT;
-
+    return;
 
 write_error:
 
@@ -927,7 +931,7 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
 
     char buf[4096];
     int eof_reached;
-    int old_aof_state;
+    int old_aof_off;
     size_t nread;
 
     static char eofmark[CONFIG_REPL_RUNID_LEN];
@@ -1005,8 +1009,8 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
             goto error;
         }
 
-        old_aof_state = server.aof_state;
-        if (old_aof_state != AOF_OFF) stopAppendOnly();
+        old_aof_off = server.aof_off;
+        if (!old_aof_off) stopAppendOnly();
 
         // rename aof.
         if (rename(server.repl_transfer_tmp_file, server.aof_filename) == -1) {
@@ -1032,7 +1036,7 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
         close(server.repl_transfer_tmp_fd);
         server.repl_transfer_tmp_fd = -1;
         server.repl_transfer_s = -1;
-        if (old_aof_state != AOF_OFF) restartAOF();
+        if (!old_aof_off) restartAOF();
     }
 
     return;
@@ -1092,7 +1096,7 @@ void replicationCron(void) {
 
         slave = listNodeValue(ln);
         if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START || (
-                slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END && server.aof_type == AOF_TYPE_DISK)) {
+                slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END && server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_DISK)) {
 
             if (write(slave->fd, "\n", 1) != 1) {
                 debug("Master ping slaves during aof bg save start, failed");
@@ -1129,7 +1133,7 @@ void replicationCron(void) {
 
     // start fullresync to slaves whose waiting to start.
 
-    if (server.aof_fd == -1) {
+    if (server.aof_child_pid == -1) {
 
         int max_idle, idle;
         int waiting, mincapa;

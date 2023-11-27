@@ -192,6 +192,37 @@ int anetTcpNoDelay(int fd) {
     return C_OK;
 }
 
+int anetTcpSendTimeout(int fd, long timeout) {
+
+    struct timeval tv;
+    socklen_t tvlen;
+    int retval;
+    tv.tv_sec = timeout / 1000;
+    tv.tv_usec = (int)(timeout % 1000);
+    tvlen = sizeof(tv);
+    if ((retval = setsockopt(fd, IPPROTO_TCP, SO_SNDTIMEO, &tv, tvlen)) == -1) {
+        return C_ERR;
+    }
+
+    return C_OK;
+}
+
+int anetTcpRecvTimeout(int fd, long timeout) {
+
+    struct timeval tv;
+    socklen_t tvlen;
+    int retval;
+    tv.tv_sec = timeout / 1000;
+    tv.tv_usec = (int)(timeout % 1000);
+    tvlen = sizeof(tv);
+    if ((retval = setsockopt(fd, IPPROTO_TCP, SO_RCVTIMEO, &tv, tvlen)) == -1) {
+        return C_ERR;
+    }
+
+    return C_OK;
+
+}
+
 int anetTcpServer(char *err, int port, int backlog) {
     return _anetTcpServer(err, port, AF_INET, backlog);
 }
