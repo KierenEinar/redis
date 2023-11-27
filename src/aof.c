@@ -1110,6 +1110,8 @@ int startAppendOnly() {
         return C_OK;
     }
 
+    killAppendOnlyChild(0);
+
     if (rewriteAppendOnlyFileBackground() == C_ERR) {
         return C_ERR;
     }
