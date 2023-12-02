@@ -96,7 +96,7 @@ void feedAppendOnlyFile(struct redisCommand *cmd, int dbid, int argc, robj **arg
         buf = catAppendOnlyFileGenericCommand(buf, argc, argv);
     }
 
-    if (!server.aof_off)
+    if (server.aof_state == AOF_ON)
         server.aof_buf = sdscatsds(server.aof_buf, buf);
 
     if (server.aof_child_pid != -1 && server.aof_save_type == AOF_SAVE_TYPE_RW)
@@ -343,7 +343,7 @@ int loadAppendOnlyFile(char *filename) {
     client *fake_client;
     struct stat st;
     off_t valid_up_to, valid_up_to_multi;
-    int old_aof_off;
+    int old_aof_state;
     long loops;
 
     fake_client = createFakeClient();
@@ -360,9 +360,9 @@ int loadAppendOnlyFile(char *filename) {
 
     startLoading(fp);
 
-    old_aof_off = server.aof_off;
+    old_aof_state = server.aof_state;
     loops = 0;
-    server.aof_off = 1;
+    server.aof_state = AOF_OFF;
 
     while (1) {
 
@@ -469,7 +469,7 @@ loaded_ok:
     fclose(fp);
     aofUpdateCurrentSize();
     freeFakeClient(fake_client);
-    server.aof_off = old_aof_off;
+    server.aof_state = old_aof_state;
     stopLoading();
     return C_OK;
 readerr:
@@ -899,6 +899,9 @@ void aofRewriteDoneHandler(int bysignal, int code) {
             server.aof_fd = newfd;
             bioCreateBackgroundJob(BIO_CLOSE_FILE, oldfd);
             newfd = -1;
+            if (server.aof_state == AOF_WAIT_REWRITE) {
+                server.aof_state = AOF_ON;
+            }
         }
 
     } else if (bysignal) {
@@ -1080,7 +1083,7 @@ void stopAppendOnly() {
     //todo assert server.aof_state != AOF_OFF
     flushAppendOnlyFile(1);
     killAppendOnlyChild(0);
-    server.aof_off = 1;
+    server.aof_state = AOF_OFF;
 
     sdsfree(server.aof_buf);
     server.aof_buf = sdsempty();
@@ -1103,21 +1106,21 @@ int startAppendOnly() {
     }
 
     if (server.aof_child_pid != -1) {
-        server.aof_rw_schedule = (server.aof_save_type == AOF_SAVE_TYPE_RW) ? 0 : 1;
+        server.aof_rw_schedule = (server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_DISK ||
+                server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_SOCKET) ? 0 : 1;
     }
 
     if (server.aof_rw_schedule) {
-        return C_OK;
+        // do nothing...
+    } else {
+        killAppendOnlyChild(0);
+        if (rewriteAppendOnlyFileBackground() == C_ERR) {
+            return C_ERR;
+        }
     }
 
-    killAppendOnlyChild(0);
-
-    if (rewriteAppendOnlyFileBackground() == C_ERR) {
-        return C_ERR;
-    }
-
-    server.aof_off = 1;
     server.aof_fd = newfd;
+    server.aof_state = AOF_WAIT_REWRITE;
     server.aof_save_type = AOF_SAVE_TYPE_RW;
     return C_OK;
 

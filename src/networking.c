@@ -571,37 +571,43 @@ void processEventsWhileBlocked(void) {
     }
 }
 
-void unlinkClient(client *c) {
-
-    elDeleteFileEvent(server.el, c->fd, EL_WRITABLE);
-    elDeleteFileEvent(server.el, c->fd, EL_READABLE);
-
-    if (c->argc > 0) {
-        for (int j = 0; j < c->argc; j++) {
-            robj *obj = c->argv[j];
-            decrRefCount(obj);
-        }
-        zfree(c->argv);
-        c->argv = NULL;
-    }
-
-    close(c->fd);
-    c->fd = -1;
+void linkClient(client *c) {
+    listAddNodeTail(server.client_list, c);
+    c->client_list_node = listLast(server.client_list);
 }
 
-void resetClient(client *c) {
 
-    c->cmd = NULL;
+void unlinkClient(client *c) {
 
-    if (c->argc) {
-        for (int j=0; j<c->argc; j++) {
-            decrRefCount(c->argv[j]);
+
+    if (c->fd != -1) {
+
+        elDeleteFileEvent(server.el, c->fd, EL_WRITABLE);
+        elDeleteFileEvent(server.el, c->fd, EL_READABLE);
+
+        if (c->client_list_node) {
+            listDelNode(server.client_list, c->client_list_node);
+            c->client_close_node = NULL;
         }
-        c->argc = 0;
-        zfree(c->argv);
-        c->argv = NULL;
+
+        close(c->fd);
+        c->fd = -1;
     }
 
+    if (c->flag & CLIENT_PENDING_WRITE) {
+
+        listNode *ln = listSearchKey(server.client_pending_writes, c);
+        listDelNode(server.client_pending_writes, ln);
+        c->flag &= ~CLIENT_PENDING_WRITE;
+
+    }
+
+}
+
+// reset client prepare for the next command.
+void resetClient(client *c) {
+    c->cmd = NULL;
+    freeClientArgv(c);
     c->reqtype = 0;
     c->multilen = 0;
     c->bulklen = -1;
@@ -670,15 +676,33 @@ void copyClientOutputBuffer(client *src, client *dst) {
     memcpy(dst->buf, src->buf, src->bufpos);
 }
 
+void freeClientArgv(client *c) {
+    if (c->argc > 0) {
+        for (int j = 0; j < c->argc; j++) {
+            robj *obj = c->argv[j];
+            decrRefCount(obj);
+        }
+        zfree(c->argv);
+        c->argv = NULL;
+    }
+
+    c->argc = 0;
+}
+
 void freeClient(client *c) {
 
     fprintf(stdout, "free client, c=%p\n", c);
+
+    if (c->flag & CLIENT_MASTER &&
+        !(c->flag & (CLIENT_CLOSE_AFTER_REPLY | CLIENT_CLOSE_ASAP))) {
+        replicationCacheMaster();
+        return;
+    }
 
     if (c->querybuf) {
         zfree(c->querybuf);
         c->querybuf = NULL;
     }
-
 
     listRelease(c->reply);
     c->reply = NULL;
@@ -692,13 +716,7 @@ void freeClient(client *c) {
         listDelNode(server.client_close_list, c->client_close_node);
     }
 
-    if (c->flag & CLIENT_PENDING_WRITE) {
-        c->flag &= ~CLIENT_PENDING_WRITE;
-        listNode *ln = listSearchKey(server.client_pending_writes, c);
-        listDelNode(server.client_pending_writes, ln);
-    }
 
-    listDelNode(server.client_list, c->client_list_node);
     unWatchAllKeys(c);
     listRelease(c->watch_keys);
 
@@ -710,6 +728,10 @@ void freeClient(client *c) {
         if (listLength(server.slaves) == 0)
             server.repl_backlog_no_slaves_since = server.unix_time;
     }
+
+    freeClientArgv(c);
+
+    zfree(c);
 
 }
 

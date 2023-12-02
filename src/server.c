@@ -304,6 +304,10 @@ long long serverCron(struct eventLoop *el, int id, void *clientData) {
         dictEnableResize();
     }
 
+    if (server.aof_child_pid == -1 && server.aof_rw_schedule) {
+        rewriteAppendOnlyFileBackground();
+    }
+
     // todo with 1000ms period
     replicationCron();
 
@@ -402,7 +406,7 @@ void initServer(void) {
     server.aof_update_size = 0;
     server.aof_last_fsync = -1;
     server.loading = 0;
-    server.aof_off = CONFIG_AOF_OFF;
+    server.aof_state = CONFIG_AOF_ON;
     server.aof_save_type = AOF_SAVE_TYPE_NONE;
     server.aof_rw_schedule = 0;
     server.aof_loaded_bytes = 0;
@@ -425,6 +429,7 @@ void initServer(void) {
     server.repl_backlog_histlen = 0l;
     server.repl_backlog_off = 0l;
     server.master_repl_offset = 0l;
+    server.repl_down_since = -1;
     server.aof_save_type = AOF_SAVE_TYPE_NONE;
     server.aof_repl_read_from_child = -1;
     server.aof_repl_write_to_parent = -1;
@@ -557,7 +562,7 @@ void* listDupString(void *ptr) {
 }
 
 void propagate(struct redisCommand *cmd, int dbid, int argc, robj **argv, int flags) {
-    if (flags & PROPAGATE_CMD_AOF && !server.aof_off) {
+    if (flags & PROPAGATE_CMD_AOF && server.aof_state == AOF_ON) {
         feedAppendOnlyFile(cmd, dbid, argc, argv);
     }
 }

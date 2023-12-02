@@ -417,7 +417,7 @@ void syncCommand(client *c) {
         return;
     }
 
-    if (server.aof_fd != -1 && server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_DISK) {
+    if (server.aof_child_pid != -1 && server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_DISK) {
 
         listIter li;
         listNode *ln;
@@ -438,7 +438,7 @@ void syncCommand(client *c) {
         } else {
             debug("Can't attach the slave to the current BGSAVE. Waiting for next BGSAVE for SYNC");
         }
-    } else if (server.aof_fd != -1 && server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_SOCKET) {
+    } else if (server.aof_child_pid != -1 && server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_SOCKET) {
 
         if ((c->slave_capa & REPL_CAPA_EOF) && server.repl_diskless_sync) {
             debug("Current repl socket started, delay to start next socket type sync.");
@@ -558,6 +558,27 @@ void cancelReplicationHandShake(void) {
     server.repl_state = REPL_STATE_CONNECT;
 }
 
+void replicationHandleMasterDisconnection(void) {
+
+    server.master = NULL;
+    server.repl_state = REPL_STATE_CONNECT;
+    server.repl_down_since = server.unix_time;
+}
+
+void replicationCacheMaster(void) {
+
+    client *c = server.master;
+    unlinkClient(c);
+    sdsclear(c->querybuf);
+    c->buflen = 0;
+    listEmpty(c->reply);
+    if (c->flag & CLIENT_MULTI) discardTransaction(c);
+    resetClient(c);
+    c->repl_read_offset = c->repl_offset;
+    server.cache_master = c;
+    replicationHandleMasterDisconnection();
+}
+
 void replicationSetMaster(char *host, long port) {
 
     if (server.master_host) {
@@ -573,12 +594,12 @@ void replicationSetMaster(char *host, long port) {
 
     // now change master to slave, pub/sub not allow on slave.
     disconnectAllBlockedClients();
-
     disconnectSlaves();
-
     cancelReplicationHandShake();
-
     server.repl_state = REPL_STATE_CONNECT;
+
+    memcpy(server.master_replid, 0, sizeof(server.master_replid));
+    server.master_initial_offset = -1;
 
 }
 
@@ -631,9 +652,37 @@ void replicationDiscardCacheMaster(void) {
 
     if (!server.cache_master) return;
     client *c = server.cache_master;
+    c->flag &= ~CLIENT_MASTER;
     server.cache_master = NULL;
     freeClient(c);
 }
+
+void replicationResurretCacheMaster(int fd) {
+
+    client *master = server.cache_master;
+    master->fd = fd;
+    master->lastinteraction = server.unix_time;
+    master->repl_state = REPL_STATE_CONNECT;
+    master->flag &= ~(CLIENT_CLOSE_ASAP | CLIENT_CLOSE_AFTER_REPLY);
+    server.master = master;
+    server.cache_master = NULL;
+
+    linkClient(master);
+
+    if (elCreateFileEvent(server.el, fd, EL_READABLE, readQueryFromClient, NULL) != EL_OK) {
+        freeClientAsync(master);
+        server.master = NULL;
+    }
+
+    if (clientHasPendingWrites(master)) {
+        if (elCreateFileEvent(server.el, fd, EL_WRITABLE, sendClientData, NULL) != EL_OK) {
+            freeClientAsync(master);
+            server.master = NULL;
+        }
+    }
+
+}
+
 
 int slaveTryPartialResynchronization(int fd, int read_reply) {
 
@@ -683,17 +732,39 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
             }
         }
 
-        if (!replid || !offset || strlen(replid) != CONFIG_REPL_RUNID_LEN) {
+        if (!replid || !offset || (offset - replid - 1) != CONFIG_REPL_RUNID_LEN) {
             sdsfree(reply);
-            return PSYNC_READ_ERROR;
+            return PSYNC_TRY_LATER;
         }
 
-        memcpy(server.master_replid, replid, CONFIG_REPL_RUNID_LEN);
-        server.master_replid[CONFIG_REPL_RUNID_LEN] = '\0';
+        memcpy(server.master_replid, replid, offset - replid - 1);
+        server.master_replid[offset - replid - 1] = '\0';
         server.master_initial_offset = strtoll(offset, NULL, 10);
         sdsfree(reply);
         replicationDiscardCacheMaster();
         return PSYNC_FULL_RESYNC;
+    } else if (!strncmp(reply, "+CONTINUE", 9)) {
+
+        char *replid, *start, *end;
+        start = reply + 10;
+        end = reply + 9;
+        while (end[0] != '\r' && end[0] != '\n' && end[0] != '\0') end++;
+
+        if (end - start != CONFIG_REPL_RUNID_LEN || !strncmp(server.cache_master->replid, start, CONFIG_REPL_RUNID_LEN)) {
+            debug("Master Partial Sync runid is invalid, in this version we do not support.");
+            sdsfree(reply);
+            replicationDiscardCacheMaster();
+            return PSYNC_NOT_SUPPORT;
+        }
+
+        replicationResurretCacheMaster(fd);
+        return PSYNC_CONTINUE;
+
+    } else if (!strncmp(reply, "-", 1)) { // master psync return a error
+
+
+
+
     }
 
     return PSYNC_NOT_SUPPORT;
@@ -725,7 +796,6 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
     }
 
     // handshake stage start ...
-
     if (server.repl_state == REPL_STATE_CONNECTING) {
 
         elDeleteFileEvent(el, fd, EL_WRITABLE);
@@ -781,7 +851,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
     if (server.repl_state == REPL_STATE_SEND_CAPA) {
 
         if ((err = sendSynchronousCommand(SYNC_CMD_WRITE, fd, "REPLCONF",
-                                          "capa", "eof", "capa", "psync2")) != NULL) {
+                                          "capa", "eof", "capa", "psync2", NULL)) != NULL) {
             debug("slave send capa failed, err=%s\n", err);
             goto write_error;
         }
@@ -803,6 +873,9 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
         return;
     }
 
+    // handshake end ...
+
+    // partial sync start write stage ...
     if (server.repl_state == REPL_STATE_SEND_PSYNC) {
 
        if (slaveTryPartialResynchronization(fd, 0) == PSYNC_WRITE_ERROR) {
@@ -817,21 +890,21 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
         goto error;
     }
 
+    // partial sync start read stage ...
     psync_result = slaveTryPartialResynchronization(fd, 1);
 
     if (psync_result == PSYNC_WAIT_REPLY) {
         return;
     }
 
-    // handshake end ...
-
+    // partial sync stage start ...
     if (psync_result == PSYNC_FULL_RESYNC) {
 
         // force disconnect slaves
         // create new backlog buffer
 
         while (max_retry--) {
-            snprintf(tmpfile, 256, "tmp-%d-appendonly.aof", (int)server.unix_time);
+            snprintf(tmpfile, 256, "tmp-%d-%d-appendonly.aof", (int)server.unix_time, max_retry);
             dfd = open(tmpfile, O_CREAT | O_WRONLY);
             if (dfd != -1) break;
             sleep(1);
@@ -916,11 +989,10 @@ void undoConnectWithMaster(void){
 
 void replicationAbortSyncTransfer(void) {
     undoConnectWithMaster();
-    elDeleteFileEvent(server.el, server.repl_transfer_tmp_fd, EL_WRITABLE);
+    elDeleteFileEvent(server.el, server.repl_transfer_tmp_fd, EL_READABLE);
     close(server.repl_transfer_tmp_fd);
     unlink(server.repl_transfer_tmp_file);
     server.repl_transfer_tmp_fd = -1;
-    server.master_initial_offset = -1;
     memset(server.master_replid, 0, sizeof(server.master_replid));
     memset(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
 }
@@ -931,7 +1003,7 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
 
     char buf[4096];
     int eof_reached;
-    int old_aof_off;
+    int old_aof_state;
     size_t nread;
 
     static char eofmark[CONFIG_REPL_RUNID_LEN];
@@ -1009,8 +1081,8 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
             goto error;
         }
 
-        old_aof_off = server.aof_off;
-        if (!old_aof_off) stopAppendOnly();
+        old_aof_state = server.aof_state;
+        if (!old_aof_state) stopAppendOnly();
 
         // rename aof.
         if (rename(server.repl_transfer_tmp_file, server.aof_filename) == -1) {
@@ -1036,7 +1108,7 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
         close(server.repl_transfer_tmp_fd);
         server.repl_transfer_tmp_fd = -1;
         server.repl_transfer_s = -1;
-        if (!old_aof_off) restartAOF();
+        if (!old_aof_state) restartAOF();
     }
 
     return;
@@ -1076,7 +1148,7 @@ void replicationCron(void) {
 
 
     // ------------------ slave -----------------
-    if (server.master && server.master_host && server.repl_state == REPL_STATE_CONNECT) {
+    if (server.master_host && server.repl_state == REPL_STATE_CONNECT) {
         connectWithMaster();
     }
 

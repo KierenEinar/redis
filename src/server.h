@@ -49,7 +49,7 @@
 #define CONFIG_QUICKLIST_FILL_FACTOR (-2)
 #define CONFIG_NETWORK_IP_FD_LEN 16
 
-#define CONFIG_AOF_OFF 0
+#define CONFIG_AOF_ON 1
 #define CONFIG_AOF_FILENAME "appendonly.aof"
 #define CONFIG_REPL_RUNID_LEN 40
 #define CONFIG_REPL_EOFMARK_LEN 40
@@ -132,8 +132,7 @@
 // ------------ AOF STATE --------------
 #define AOF_OFF 0
 #define AOF_ON 1
-#define AOF_RW 2
-#define AOF_REPLICATE_SAVE 3
+#define AOF_WAIT_REWRITE 2
 
 // ------------ AOF TYPE ---------------
 #define AOF_SAVE_TYPE_NONE 0
@@ -183,9 +182,10 @@
 // ------------- REPL_PARTIAL-------------
 #define PSYNC_WRITE_ERROR 1
 #define PSYNC_WAIT_REPLY 2
-#define PSYNC_READ_ERROR 3
+#define PSYNC_TRY_LATER 3
 #define PSYNC_FULL_RESYNC 4
-#define PSYNC_NOT_SUPPORT 5
+#define PSYNC_CONTINUE 5
+#define PSYNC_NOT_SUPPORT 6
 // ------------debug --------------
 #define debug(...) printf(__VA_ARGS__)
 
@@ -271,7 +271,10 @@ typedef struct client {
     // replicate
     // master
     char replid[CONFIG_REPL_RUNID_LEN+1];
-    off_t repl_offset; // repl_offset if the client is master.
+    off_t repl_offset; // total bug len that master send, and we process it.
+    off_t repl_read_offset; // total buf len that master send.
+    off_t psync_initital_offset; // psync master send init offset.
+
 
     // slave
     int repl_state;
@@ -331,6 +334,7 @@ typedef struct redisServer {
     char *aof_filename;
     time_t aof_last_fsync;
     int aof_off;
+    int aof_state;
     int aof_save_type;
     int aof_rw_schedule;
 
@@ -369,6 +373,7 @@ typedef struct redisServer {
     int repl_seldbid;
     int repl_send_ping_period;
     int repl_timeout;
+    time_t repl_down_since;
     // replicate slave
     int repl_diskless_sync;
     int repl_diskless_sync_delay;
@@ -759,6 +764,7 @@ void sendClientData (struct eventLoop *el, int fd, int mask, void *clientData);
 int writeToClient(client *client, int handler_installed);
 void handleClientsPendingWrite(void);
 void processEventsWhileBlocked(void);
+void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData);
 //-------------reply--------------------
 void addReply(client *c, robj *r);
 // reply bulk string to client.
@@ -782,6 +788,9 @@ void copyClientOutputBuffer(client *src, client *dst);
 // reset the client so it can process commands again.
 void resetClient(client *c);
 client* createClient(int fd);
+void linkClient(client *c);
+void unlinkClient(client *c);
+void freeClientArgv(client *c);
 void freeClient(client *c);
 void freeClientAsync(client *c);
 void freeClientInFreeQueueAsync(void);
@@ -808,6 +817,7 @@ int connectWithMaster(void);
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);
 void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData);
 void replicationDiscardCacheMaster(void);
+void replicationResurretCacheMaster(int fd);
 void replicationUnsetMaster(void);
 void disconnectSlaves(void);
 int replicationIsInHandshake(void);
@@ -815,7 +825,9 @@ void undoConnectWithMaster(void);
 void cancelReplicationHandShake(void);
 void replicationAbortSyncTransfer(void);
 void replicationSetMaster(char *host, long port);
-
+void replicationCacheMaster(void);
+void replicationHandleMasterDisconnection(void);
+int slaveTryPartialResynchronization(int fd, int read_reply);
 // ------------process commands -------------
 int processCommand(client *c);
 
