@@ -439,6 +439,8 @@ void initServer(void) {
     server.repl_backlog_time_limit = CONFIG_REPL_BACKLOG_TIMEOUT;
     server.repl_backlog_no_slaves_since = time(NULL);
     server.repl_slave_send_timeout = CONFIG_REPL_SEND_TIMEOUT;
+    server.master_initial_offset = -1;
+    server.second_replid_offset = -1;
     server.slaves = listCreate();
 
     listSetFreeMethod(server.slaves, zfree);

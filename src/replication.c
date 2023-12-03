@@ -531,8 +531,31 @@ sds sendSynchronousCommand(int flags, int fd, ...) {
     return NULL;
 }
 
-// todo implement
 void replicationUnsetMaster(void) {
+
+    if(server.master_host==NULL) {
+        sdsfree(server.master_host);
+        server.master_port = -1;
+        server.master_host = NULL;
+    }
+
+    if (server.master) {
+        freeClient(server.master);
+        server.master = NULL;
+    }
+
+    shiftReplicationId();
+
+    replicationDiscardCacheMaster();
+
+    cancelReplicationHandShake();
+
+    // make sure our slaves reconnect with us, runid has changed.
+    disconnectSlaves();
+
+    server.repl_seldbid = -1;
+
+    server.repl_state = REPL_STATE_NONE;
 
 }
 
@@ -611,7 +634,7 @@ void slaveofCommand(client *c) {
     if (!strcasecmp(c->argv[1]->ptr, "no") &&
         !strcasecmp(c->argv[2]->ptr, "one")) {
 
-        if (server.master) {
+        if (server.master_host) {
             replicationUnsetMaster();
         }
 
@@ -632,7 +655,7 @@ void slaveofCommand(client *c) {
 
         host = c->argv[1]->ptr;
 
-        if (server.master && !strcasecmp(host, server.master_host) && port == server.master_port) {
+        if (server.master_host && !strcasecmp(host, server.master_host) && port == server.master_port) {
             char *reply = "+OK Already connected to specified master\r\n";
             addReplyString(c, reply, strlen(reply));
             return;
@@ -647,6 +670,15 @@ void slaveofCommand(client *c) {
 
 }
 
+void shiftReplicationId(void) {
+
+    memcpy(server.replid2, server.replid, sizeof(server.replid));
+    server.second_replid_offset = server.master_repl_offset;
+    changeReplicationId();
+    debug("Setting secondary replication ID to %s, valid up to offset: %lld. New replication ID is %s",
+          server.replid2, server.second_replid_offset, server.replid);
+
+}
 
 void replicationDiscardCacheMaster(void) {
 

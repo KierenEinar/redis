@@ -745,13 +745,11 @@ void freeClientAsync(client *c) {
 
 
 void freeClientInFreeQueueAsync(void) {
-    listNode *ln = listFirst(server.client_close_list);
-    listNode *next;
-    while (ln) {
-        client *c = (client*)ln->value;
-        next = ln->next;
+    listNode *ln ;
+    while ((ln = listFirst(server.client_close_list)) != NULL) {
+        client *c = listNodeValue(ln);
         freeClient(c);
-        ln = next;
+        listDelNode(server.client_close_list, ln);
     }
 }
 

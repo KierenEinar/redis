@@ -375,6 +375,10 @@ typedef struct redisServer {
     int repl_timeout;
     time_t repl_down_since;
     // replicate slave
+    char replid[CONFIG_REPL_RUNID_LEN+1];
+    char replid2[CONFIG_REPL_RUNID_LEN+1];
+    off_t second_replid_offset;
+
     int repl_diskless_sync;
     int repl_diskless_sync_delay;
     int repl_state;
@@ -816,6 +820,7 @@ int masterTryPartialResynchronization(client *c);
 int connectWithMaster(void);
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);
 void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData);
+void shiftReplicationId(void);
 void replicationDiscardCacheMaster(void);
 void replicationResurretCacheMaster(int fd);
 void replicationUnsetMaster(void);
