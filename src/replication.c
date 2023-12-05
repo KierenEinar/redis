@@ -741,6 +741,9 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
 
     if (!read_reply) {
 
+        // make sure our replid invalid
+        server.master_initial_offset = -1;
+
         if (server.cache_master) {
             psync_replid = server.cache_master->replid;
             snprintf(psync_offset, sizeof(psync_offset), "%lld", server.cache_master->repl_offset+1);
@@ -810,9 +813,10 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
         replicationResurretCacheMaster(fd);
         return PSYNC_CONTINUE;
 
+    } else if (!strncmp(reply, "-NOMASTERLINK", 13)) {
+        debug("Master linking with its Master, so we delay to connect.");
+        return PSYNC_TRY_LATER;
     } else if (!strncmp(reply, "-", 1)) { // master psync return a error
-
-
 
 
     }
@@ -865,8 +869,10 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
                 goto error;
             }
         }
-        server.repl_state = REPL_STATE_SEND_AUTH;
-        return;
+
+        if (server.master_auth) server.repl_state = REPL_STATE_SEND_AUTH;
+        else server.repl_state = REPL_STATE_SEND_CAPA;
+
     }
 
 
@@ -895,7 +901,6 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
         }
 
         server.repl_state = REPL_STATE_SEND_CAPA;
-        return;
     }
 
     if (server.repl_state == REPL_STATE_SEND_CAPA) {
@@ -920,7 +925,6 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
         }
 
         server.repl_state = REPL_STATE_SEND_PSYNC;
-        return;
     }
 
     // handshake end ...
