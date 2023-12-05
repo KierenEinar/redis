@@ -6,7 +6,22 @@
 
 // ------------------------ MASTER ---------------------
 
-void changeReplicationId() {
+void changeReplicationId(void) {
+
+}
+
+void clearReplicationId2(void) {
+    memset(server.replid2, 0, sizeof(server.replid2));
+    server.second_replid_offset = -1;
+}
+
+void shiftReplicationId(void) {
+
+    memcpy(server.replid2, server.replid, sizeof(server.replid));
+    server.second_replid_offset = server.master_repl_offset;
+    changeReplicationId();
+    debug("Setting secondary replication ID to %s, valid up to offset: %lld. New replication ID is %s",
+          server.replid2, server.second_replid_offset, server.replid);
 
 }
 
@@ -34,11 +49,11 @@ int replicationSetupFullResync(client *slave, off_t offset) {
     slave->psync_initial_offset = offset;
 
     buflen = snprintf(buf, sizeof(buf), "+FULLRESYNC %s %lld\r\n",
-                      server.master_replid,
+                      server.replid,
                       offset);
 
     if (write(slave->fd, buf, buflen) != buflen) {
-        freeClient(slave);
+        freeClientAsync(slave);
         return C_ERR;
     }
 
@@ -349,7 +364,8 @@ int masterTryPartialResynchronization(client *c) {
     }
 
     // psync runid offset
-    if (!strcmp(master_replid, server.master_replid)) {
+    if (strcmp(master_replid, server.replid) &&
+        (strcmp(master_replid, server.replid2) && (server.second_replid_offset < psync_offset))) {
 
         if (!strcmp(master_replid, "?")) {
             debug("Slave Request Psync Resync...");
@@ -377,10 +393,10 @@ int masterTryPartialResynchronization(client *c) {
 
     // reply slaves: +continue replid
     char buf[128];
-    size_t rlen = snprintf(buf, sizeof(buf), "+CONTINUE %s\r\n", server.master_replid);
+    size_t rlen = snprintf(buf, sizeof(buf), "+CONTINUE %s\r\n", server.replid);
 
     if (write(c->fd, buf, rlen) != rlen) {
-        freeClient(c);
+        freeClientAsync(c);
         return C_OK;
     }
 
@@ -398,6 +414,11 @@ void syncCommand(client *c) {
 
     if (c->flag & CLIENT_SLAVE) return;
 
+    if (server.master_host && server.repl_state != REPL_STATE_CONNECTED) {
+        addReplyError(c, "NOMASTERLINK the server requested to be master now try replication with another master.");
+        return;
+    }
+
     if (clientHasPendingWrites(c)) {
         addReplyError(c, "MASTER sync while client has outputs...");
         return;
@@ -409,7 +430,10 @@ void syncCommand(client *c) {
     listAddNodeTail(server.slaves, c);
 
     if (listLength(server.slaves) == 1 && server.repl_backlog == NULL) {
+        // when we create a new backlog, we always change our replid and clear replid2,
+        // since there is no valid history int the past.
         changeReplicationId();
+        clearReplicationId2();
         createReplicationBacklog();
     }
 
@@ -533,13 +557,14 @@ sds sendSynchronousCommand(int flags, int fd, ...) {
 
 void replicationUnsetMaster(void) {
 
-    if(server.master_host==NULL) {
+    if(server.master_host) {
         sdsfree(server.master_host);
         server.master_port = -1;
         server.master_host = NULL;
     }
 
     if (server.master) {
+        server.master->flag &= ~CLIENT_MASTER;
         freeClient(server.master);
         server.master = NULL;
     }
@@ -670,15 +695,7 @@ void slaveofCommand(client *c) {
 
 }
 
-void shiftReplicationId(void) {
 
-    memcpy(server.replid2, server.replid, sizeof(server.replid));
-    server.second_replid_offset = server.master_repl_offset;
-    changeReplicationId();
-    debug("Setting secondary replication ID to %s, valid up to offset: %lld. New replication ID is %s",
-          server.replid2, server.second_replid_offset, server.replid);
-
-}
 
 void replicationDiscardCacheMaster(void) {
 
@@ -732,7 +749,8 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
             memcpy(psync_offset, "-1", 3);
         }
 
-        if ((reply = sendSynchronousCommand(SYNC_CMD_WRITE, fd, "PSYNC2", psync_replid, psync_offset, NULL)) != NULL) {
+        if ((reply = sendSynchronousCommand(SYNC_CMD_WRITE, fd, "PSYNC", psync_replid, psync_offset, NULL)) != NULL) {
+            debug("Unable to send PSYNC to master: %s", reply);
             sdsfree(reply);
             return PSYNC_WRITE_ERROR;
         }

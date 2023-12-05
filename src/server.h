@@ -816,11 +816,14 @@ int addReplyReplicationBacklog(client *c, long long psync_offset);
 void feedReplicationBacklog(void *ptr, size_t len);
 void feedReplicationBacklogObject(robj *obj);
 int masterTryPartialResynchronization(client *c);
+void changeReplicationId(void);
+void clearReplicationId2(void);
+void shiftReplicationId(void);
 // ------------ replicate slave -----------------
 int connectWithMaster(void);
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);
 void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData);
-void shiftReplicationId(void);
+
 void replicationDiscardCacheMaster(void);
 void replicationResurretCacheMaster(int fd);
 void replicationUnsetMaster(void);
