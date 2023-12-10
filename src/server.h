@@ -60,6 +60,7 @@
 #define CONFIG_REPL_BACKLOG_TIMEOUT (60 * 60) // 1 hour for repl backlog if there is no slaves.
 #define CONFIG_REPL_DISKLESS_SYNC_DELAY 10 // 10 seconds for delay
 #define CONFIG_REPL_SEND_TIMEOUT 10 // 10 seconds for replicate send time out.
+#define CONFIG_REPL_TRANSFER_SYNC_LEN (1024 * 1024 * 8) // 8m
 #define CONFIG_SLAVE_IDLE 60
 #define LIST_ITER_DIR_FORWARD 1
 #define LIST_ITER_DIR_BACKWARD 2
@@ -270,16 +271,16 @@ typedef struct client {
 
     // replicate
     // master
-    char replid[CONFIG_REPL_RUNID_LEN+1];
+    char master_replid[CONFIG_REPL_RUNID_LEN + 1];
     off_t repl_offset; // total bug len that master send, and we process it.
     off_t repl_read_offset; // total buf len that master send.
-    off_t psync_initital_offset; // psync master send init offset.
-
 
     // slave
     int repl_state;
     int slave_capa;
-    off_t psync_initial_offset;
+    off_t psync_initial_offset; /* FULLRESYNC reply offset other slaves
+                                       copying this slave output buffer
+                                       should use. */
     int repl_put_online_ack;
     time_t repl_last_ack;
 
@@ -396,6 +397,7 @@ typedef struct redisServer {
     long long repl_transfer_size;
     char repl_transfer_tmp_file[255];
     size_t repl_transfer_nread;
+    off_t repl_transfer_last_sync_off;
     int aof_repl_read_from_child;
     int aof_repl_write_to_parent;
 
@@ -825,9 +827,10 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData);
 void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientData);
 
 void replicationDiscardCacheMaster(void);
-void replicationResurretCacheMaster(int fd);
+void replicationResurrectCacheMaster(int fd);
 void replicationUnsetMaster(void);
 void disconnectSlaves(void);
+void replicationCreateMaterClient(int fd);
 int replicationIsInHandshake(void);
 void undoConnectWithMaster(void);
 void cancelReplicationHandShake(void);
