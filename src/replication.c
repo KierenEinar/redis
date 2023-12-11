@@ -545,6 +545,7 @@ sds sendSynchronousCommand(int flags, int fd, ...) {
 
         char tmp[1024];
         size_t nread;
+        server.repl_transfer_lastio = time(NULL);
         if ((nread = syncReadLine(fd, tmp, sizeof(tmp), server.repl_read_timeout*1000)) == -1) {
             return sdscatprintf(sdsempty(), "-Reading from master:%s\r\n", strerror(errno));
         }
@@ -864,6 +865,9 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
 
 }
 
+void replicationSendAck(void) {
+
+}
 
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
@@ -1026,6 +1030,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
     }
 
     anetNonBlock(dfd);
+    server.repl_transfer_lastio = time(NULL);
     server.repl_state = REPL_STATE_TRANSFER;
     server.repl_transfer_tmp_fd = dfd;
     server.repl_transfer_size = -1l;
@@ -1068,6 +1073,7 @@ int connectWithMaster(void) {
 
     server.repl_state = REPL_STATE_CONNECTING;
     server.repl_transfer_s = fd;
+    server.repl_transfer_lastio = time(NULL);
     return C_OK;
 }
 
@@ -1133,6 +1139,7 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
         if (buf[0] == '\0') {
             // at this stage, master used new lines to work as PING to keepalive the connections.
             // so we ignore it.
+            server.repl_transfer_lastio = time(NULL);
             return;
         }
 
@@ -1200,6 +1207,8 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
         }
 
     }
+
+    server.repl_transfer_lastio = time(NULL);
 
     if (write(server.repl_transfer_tmp_fd, buf, nread) != nread) {
         debug("<REPLICATE PSYNC> SLAVE TRANSFER write buf to disk failed, err:%s", strerror(errno));
@@ -1295,9 +1304,33 @@ void replicationCron(void) {
 
 
     // ------------------ slave -----------------
+
+    if (server.master_host && server.repl_state == REPL_STATE_CONNECTING
+        || replicationIsInHandshake()
+        && time(NULL) - server.repl_transfer_lastio > server.repl_timeout) {
+        cancelReplicationHandShake();
+    }
+
+    if (server.master_host && server.repl_state == REPL_STATE_TRANSFER
+        && time(NULL) - server.repl_transfer_lastio > server.repl_timeout) {
+        cancelReplicationHandShake();
+    }
+
+    if (server.master_host && server.master
+        && time(NULL) - server.master->lastinteraction > server.repl_timeout
+        && server.repl_state == REPL_STATE_CONNECTED) {
+
+        freeClient(server.master);
+    }
+
     if (server.master_host && server.repl_state == REPL_STATE_CONNECT) {
         connectWithMaster();
     }
+
+    if (server.master_host && server.master && server.repl_state == REPL_STATE_CONNECTED) {
+        replicationSendAck();
+    }
+
 
     // ------------------ master -----------------
 

@@ -374,6 +374,7 @@ typedef struct redisServer {
     int repl_seldbid;
     int repl_send_ping_period;
     int repl_timeout;
+    time_t repl_transfer_lastio;
     time_t repl_down_since;
     // replicate slave
     char replid[CONFIG_REPL_RUNID_LEN+1];
@@ -839,6 +840,7 @@ void replicationSetMaster(char *host, long port);
 void replicationCacheMaster(void);
 void replicationHandleMasterDisconnection(void);
 int slaveTryPartialResynchronization(int fd, int read_reply);
+void replicationSendAck();
 // ------------process commands -------------
 int processCommand(client *c);
 
