@@ -544,6 +544,8 @@ int rewriteAppendOnlyFileBackground(void) {
     } else { // parent process
         server.aof_child_pid = child_pid;
         server.aof_seldb = -1;
+        server.aof_rw_schedule = 0;
+        server.aof_save_type = AOF_SAVE_TYPE_RW;
     }
 
     return C_OK;
@@ -902,6 +904,7 @@ void aofRewriteDoneHandler(int bysignal, int code) {
             if (server.aof_state == AOF_WAIT_REWRITE) {
                 server.aof_state = AOF_ON;
             }
+            server.aof_save_type = AOF_SAVE_TYPE_NONE;
         }
 
     } else if (bysignal) {
@@ -920,7 +923,9 @@ cleanup:
     aofRewriteBufferReset();
     server.aof_child_pid = -1;
     server.aof_seldb = -1;
-    server.aof_save_type = AOF_SAVE_TYPE_NONE;
+    if (server.aof_state == AOF_WAIT_REWRITE) {
+        server.aof_rw_schedule = 1;
+    }
 }
 
 void updateSlavesWaitingBgAOFSave(int type) {
@@ -1088,6 +1093,7 @@ void stopAppendOnly() {
     sdsfree(server.aof_buf);
     server.aof_buf = sdsempty();
     close(server.aof_fd);
+    server.aof_fd = -1;
 }
 
 int startAppendOnly() {
@@ -1107,7 +1113,7 @@ int startAppendOnly() {
 
     if (server.aof_child_pid != -1) {
         server.aof_rw_schedule = (server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_DISK ||
-                server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_SOCKET) ? 0 : 1;
+                server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_SOCKET) ? 1 : 0;
     }
 
     if (server.aof_rw_schedule) {
@@ -1121,7 +1127,6 @@ int startAppendOnly() {
 
     server.aof_fd = newfd;
     server.aof_state = AOF_WAIT_REWRITE;
-    server.aof_save_type = AOF_SAVE_TYPE_RW;
     return C_OK;
 
 }
