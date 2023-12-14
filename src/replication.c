@@ -226,7 +226,7 @@ void replicationFeedSlaves(int dbid, robj **argv, int argc) {
     listIter li;
     client *slave;
 
-    if (server.master_host) return;
+    if (server.master_host == NULL) return;
 
     if (listLength(server.slaves) == 0 && server.repl_backlog == NULL) return;
 
@@ -482,28 +482,44 @@ void syncCommand(client *c) {
 
 void replConfCommand(client *c) {
 
-    if (!(c->flag & CLIENT_SLAVE)) {
+    int j;
+
+    if (c->argc % 2 == 0) {
+        addReply(c, shared.syntaxerr);
         return;
     }
 
-    // replconf ack offset
-    if (!strcmp(c->argv[1]->ptr, "ack")) {
+    for (j=1; j<c->argc; j+=2) {
 
-        long long offset;
-        char *off = c->argv[2]->ptr;
-        if (getLongLongFromObject(c->argv[2], &offset) != C_OK) {
+
+        if (!strcasecmp(c->argv[j]->ptr, "capa")) {
+
+            if (!strcasecmp(c->argv[j+1]->ptr, "eof")) {
+                c->repl_capa |= REPL_CAPA_EOF;
+            } else if (!strcasecmp(c->argv[j+1]->ptr, "psync2")) {
+                c->repl_capa |= REPL_CAPA_PSYNC2;
+            }
+
+        } else if (!strcasecmp(c->argv[j]->ptr, "ack")) { // replconf ack offset
+
+            long long offset;
+            if (getLongLongFromObject(c->argv[j+1], &offset) != C_OK) {
+                return;
+            }
+
+            if (offset > server.master_repl_offset)
+                c->repl_offset = offset;
+
+            c->repl_last_ack = server.unix_time;
+
+            if (c->repl_put_online_ack && c->repl_state == SLAVE_STATE_ONLINE) {
+                putSlaveOnline(c);
+            }
+
+        } else if (!strcasecmp(c->argv[j]->ptr, "getack")) {
+            if (server.master_host && server.master) replicationSendAck();
             return;
         }
-
-        if (offset > server.master_repl_offset)
-            c->repl_offset = offset;
-
-        c->repl_last_ack = server.unix_time;
-
-        if (c->repl_put_online_ack && c->repl_state == SLAVE_STATE_ONLINE) {
-            putSlaveOnline(c);
-        }
-
     }
 
     addReply(c, shared.ok);
@@ -866,7 +882,16 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
 }
 
 void replicationSendAck(void) {
-
+    // replconf ack offset
+    client *c = server.master;
+    char buffer[128];
+    size_t vlen = ll2string(buffer, c->repl_offset);
+    size_t len = snprintf(buffer, sizeof(buffer), "*3\r\n$8\r\nRREPLCONF\r\n$3ACK\r\n$%ld\r\n%lld\r\n", vlen, c->repl_offset);
+    c->flag &= CLIENT_FORCE_REPLY_MASTER;
+    robj * obj = createStringObject(buffer, len);
+    addReply(c, obj);
+    decrRefCount(obj);
+    c->flag &= ~CLIENT_FORCE_REPLY_MASTER;
 }
 
 void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
@@ -1364,7 +1389,7 @@ void replicationCron(void) {
         slave = listNodeValue(ln);
         if (slave->repl_state != SLAVE_STATE_ONLINE) continue;
 
-        if (server.unix_time - slave->repl_last_ack > server.repl_timeout) {
+        if (time(NULL) - slave->repl_last_ack > server.repl_timeout) {
             debug("Disconnecting timedout slave...");
             freeClient(slave);
         }
@@ -1375,8 +1400,11 @@ void replicationCron(void) {
         listLength(server.slaves) == 0 &&
         server.unix_time - server.repl_backlog_no_slaves_since > server.repl_backlog_time_limit) {
 
-        // change master_replid, make sure next slave ask request to psync, we go fullresync.
+        // change replid, make sure next slave ask request to psync, we go fullresync.
         changeReplicationId();
+
+        // clear repid2.
+        clearReplicationId2();
 
         // free replication backlog.
         freeReplicationBacklog();

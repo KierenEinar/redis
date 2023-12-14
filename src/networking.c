@@ -27,6 +27,11 @@ void readTcpHandler(eventLoop *el, int fd, int mask, void *clientData) {
 }
 
 int prepareClientToWrite(client *c) {
+
+    if (c->flag&CLIENT_MASTER && !(c->flag&CLIENT_FORCE_REPLY_MASTER)) {
+        return C_ERR;
+    }
+
     if (!clientHasPendingWrites(c) &&   // if client has pending writes is shows has writable event, should not add into list.
         !(c->flag & CLIENT_PENDING_WRITE) &&
           (c->repl_state == REPL_STATE_NONE || (c->repl_state == SLAVE_STATE_ONLINE && !c->repl_put_online_ack))) {
@@ -660,6 +665,7 @@ client* createClient(int cfd) {
 
     c->repl_state = REPL_STATE_NONE;
     c->slave_capa = REPL_CAPA_NONE;
+    c->repl_capa = REPL_CAPA_NONE;
     c->psync_initial_offset = -1;
     c->repl_offset = -1;
     c->repl_put_online_ack = 0;

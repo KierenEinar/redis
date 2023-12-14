@@ -104,7 +104,9 @@ struct redisCommand redisCommandTable[] = {
     {"unwatch", unWatchCommand, 1},
     {"exec", execCommand, 1},
     {"discard", discardCommand, 1},
-
+    {"psync", syncCommand, 3},
+    {"replconf", replConfCommand, -3},
+    {"slaveof", slaveofCommand, 3},
 };
 
 // dict type for commands table

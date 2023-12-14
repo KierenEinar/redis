@@ -93,7 +93,7 @@
 #define CLIENT_FAKE (1 << 8)
 #define CLIENT_MASTER (1 << 9)
 #define CLIENT_SLAVE (1 << 10)
-
+#define CLIENT_FORCE_REPLY_MASTER (1<<11)
 // server cron period
 #define SERVER_CRON_PERIOD_MS 1
 
@@ -283,6 +283,7 @@ typedef struct client {
                                        should use. */
     int repl_put_online_ack;
     time_t repl_last_ack;
+    int repl_capa;
 
 } client;
 
