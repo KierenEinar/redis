@@ -21,7 +21,7 @@ size_t syncWrite(int fd, char *ptr, size_t size, long long timeout) {
         elapsed_timeout = elapsed_timeout > REDIS_WAIT_RESOLUTION ? elapsed_timeout : REDIS_WAIT_RESOLUTION;
         if (elWait(fd, EL_WRITABLE, elapsed_timeout) & EL_WRITABLE) {
             if ((nwrite = write(fd, ptr, size)) == -1) {
-                debug("syncWrite write failed, fd=%d\n", fd);
+                debug("syncWrite write failed, fd=%d", fd);
                 if (errno != EAGAIN) {
                     return -1;
                 }

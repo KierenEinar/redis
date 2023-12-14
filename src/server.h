@@ -188,7 +188,10 @@
 #define PSYNC_CONTINUE 5
 #define PSYNC_NOT_SUPPORT 6
 // ------------debug --------------
-#define debug(...) printf(__VA_ARGS__)
+#define debug(...) do { \
+     printf(__VA_ARGS__); \
+     printf("\n");      \
+}while(0);
 
 typedef struct redisObject {
     unsigned type:4;

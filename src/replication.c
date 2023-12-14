@@ -548,7 +548,7 @@ sds sendSynchronousCommand(int flags, int fd, ...) {
 
         cmd = sdscatlen(cmd, "\r\n", 2);
         if (syncWrite(fd, cmd, sdslen(cmd), server.repl_send_timeout*1000) == -1) {
-            debug("sendSynchronousCommand cmd=%s, failed\n", cmd);
+            debug("sendSynchronousCommand cmd=%s, failed", cmd);
             sdsfree(cmd);
             return sdscatprintf(sdsempty(), "-Writing to master:%s\r\n", strerror(errno));
         }
@@ -932,7 +932,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
         if ((reply = sendSynchronousCommand(SYNC_CMD_READ, fd)) != NULL) {
             if (reply[0] != '+') {
-                debug("slave ping, master reply failed\n");
+                debug("slave ping, master reply failed");
                 sdsfree(reply);
                 goto error;
             }
@@ -948,7 +948,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
         if (server.master_auth) {
             if ((err = sendSynchronousCommand(SYNC_CMD_WRITE, fd, "AUTH", server.master_auth, NULL)) != NULL) {
-                debug("slave send auth failed, err=%s\n", strerror(errno));
+                debug("slave send auth failed, err=%s", strerror(errno));
                 goto write_error;
             }
         }
@@ -961,7 +961,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
         if ((reply = sendSynchronousCommand(SYNC_CMD_READ, fd)) != NULL) {
             if (reply[0] == '-') {
-                debug("slave auth, master reply failed, err=%s\n", reply);
+                debug("slave auth, master reply failed, err=%s", reply);
                 sdsfree(reply);
                 goto error;
             }
@@ -975,7 +975,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
         if ((err = sendSynchronousCommand(SYNC_CMD_WRITE, fd, "REPLCONF",
                                           "capa", "eof", "capa", "psync2", NULL)) != NULL) {
-            debug("slave send capa failed, err=%s\n", err);
+            debug("slave send capa failed, err=%s", err);
             goto write_error;
         }
         server.repl_state = REPL_STATE_RECEIVE_CAPA;
@@ -987,7 +987,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
         if ((reply = sendSynchronousCommand(SYNC_CMD_READ, fd)) != NULL) {
             if (reply[0] == '-') {
-                debug("warming(non critical), slave capa, master do not understand, reply=%s\n", reply);
+                debug("warming(non critical), slave capa, master do not understand, reply=%s", reply);
             }
             sdsfree(reply);
         }

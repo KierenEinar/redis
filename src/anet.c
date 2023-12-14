@@ -92,7 +92,7 @@ int _anetTcpGenericConnect(char *host, int port, char *sourceaddr, int flags) {
     hints.ai_socktype = SOCK_STREAM;
 
     if ((error = getaddrinfo(host, _port, &hints, &serverinfo)) == -1) {
-        debug("anetGenericConnect getaddrinfo, err=%s\n", gai_strerror(error));
+        debug("anetGenericConnect getaddrinfo, err=%s", gai_strerror(error));
         return ANET_ERR;
     }
 
@@ -101,26 +101,26 @@ int _anetTcpGenericConnect(char *host, int port, char *sourceaddr, int flags) {
             continue;
 
         if (anetReuseAddr(err, s) == ANET_ERR) {
-            debug("anetTcpGenericConnect anetReuseAddr failed\n");
+            debug("anetTcpGenericConnect anetReuseAddr failed");
             goto error;
         }
 
         if (flags & O_NONBLOCK && anetNonBlock(s) == ANET_ERR) {
-            debug("anetTcpGenericConnect anetNonBlock socket failed\n");
+            debug("anetTcpGenericConnect anetNonBlock socket failed");
             goto error;
         }
 
         if (sourceaddr) {
 
             if ((error = getaddrinfo(sourceaddr, NULL, &hints, &bserverinfo)) == -1) {
-                debug("anetGenericConnect getaddrinfo, sourceaddr=%s, err=%s\n", sourceaddr, gai_strerror(error));
+                debug("anetGenericConnect getaddrinfo, sourceaddr=%s, err=%s", sourceaddr, gai_strerror(error));
                 goto  error;
             }
 
             for (bp = bserverinfo; bp; bp = bserverinfo->ai_next) {
 
                 if (bind(s, bp->ai_addr, bp->ai_addrlen) == -1) {
-                    debug("warnimg anetTcpGenericConnect bind sourceaddr failed, err=%s\n", strerror(error));
+                    debug("warnimg anetTcpGenericConnect bind sourceaddr failed, err=%s", strerror(error));
                     error = errno;
                     continue;
                 }
@@ -261,7 +261,7 @@ int anetTcpAccept(char *err, int fd, char *ip, size_t iplen, int *port) {
         if (port) *port = ntohs(in6->sin6_port);
     }
 
-    fprintf(stdout, "accept, ip=%s, port=%d\n", ip, *port);
+    fprintf(stdout, "accept, ip=%s, port=%d", ip, *port);
     return cfd;
 }
 

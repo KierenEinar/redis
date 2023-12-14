@@ -586,7 +586,7 @@ int main(int argc, char **argv) {
 //    buf = sdscatsds(buf, sdsnew(_buf));
 //    sdsfree(buf);
 
-    printf("server start...., pid=%d\n", getpid());
+    debug("server start...., pid=%d", getpid());
     initServer();
     elMain(server.el);
     return 0;

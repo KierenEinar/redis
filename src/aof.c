@@ -315,13 +315,13 @@ void freeFakeClient(client *c) {
     listRelease(c->reply);
     zfree(c);
 
-    debug("freeFakeClient...\n");
+    debug("freeFakeClient...");
 
 }
 
 void startLoading(FILE *fp) {
     struct stat st;
-    debug("loading aof, start...\n");
+    debug("loading aof, start...");
     fstat(fileno(fp), &st);
     server.loading = 1;
     server.loading_time = time(NULL);
@@ -334,7 +334,7 @@ void loadingProgress(off_t pos) {
 }
 
 void stopLoading(void) {
-    debug("loading aof, finished...\n");
+    debug("loading aof, finished...");
     server.loading = 0;
 }
 
@@ -349,11 +349,11 @@ int loadAppendOnlyFile(char *filename) {
     fake_client = createFakeClient();
     FILE *fp = fopen(filename, "r");
     if (fp == NULL || fstat(fileno(fp), &st) == -1) {
-        debug("loading aof, open aof file exception...\r\n");
+        debug("loading aof, open aof file exception...");
         exit(-1);
     }
     if (st.st_size == 0) {
-        debug("loading aof, warning, file size is 0\r\n");
+        debug("loading aof, warning, file size is 0");
         fclose(fp);
         return C_ERR;
     }
@@ -437,7 +437,7 @@ int loadAppendOnlyFile(char *filename) {
 
         cmd = lookupCommand(fake_client->argv[0]);
         if (cmd == NULL) {
-            debug("loading aof, cmd[%s] not found...\r\n", (char *)fake_client->argv[0]->ptr);
+            debug("loading aof, cmd[%s] not found...", (char *)fake_client->argv[0]->ptr);
             exit(-1);
         }
 
@@ -473,14 +473,14 @@ loaded_ok:
     stopLoading();
     return C_OK;
 readerr:
-    debug("aof readerr...\r\n");
+    debug("aof readerr...");
     if (!feof(fp)) {
         freeFakeClient(fake_client);
         fclose(fp);
         exit(-1);
     }
 uxeof:
-    debug("aof uxeof...\r\n");
+    debug("aof uxeof...");
     if (server.aof_loaded_truncated) {
         if (valid_up_to > 0 && ftruncate(fileno(fp), valid_up_to) > 0) {
             if (fseek(fp, 0, SEEK_END) == 0) {
@@ -493,7 +493,7 @@ uxeof:
     fclose(fp);
     exit(-1);
 fmterr:
-    debug("aof fmterr...\r\n");
+    debug("aof fmterr...");
     freeFakeClient(fake_client);
     fclose(fp);
     exit(-1);
@@ -505,7 +505,7 @@ void aofUpdateCurrentSize(void) {
     struct stat st;
 
     if (fstat(server.aof_fd, &st) == -1) {
-        debug("aofUpdateCurrentSize fstat failed, fd[%d]...\r\n", server.aof_fd);
+        debug("aofUpdateCurrentSize fstat failed, fd[%d]...", server.aof_fd);
         exit(1);
     }
 
