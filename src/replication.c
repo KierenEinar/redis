@@ -7,10 +7,8 @@
 // ------------------------ MASTER ---------------------
 
 void changeReplicationId(void) {
-
-
-
-
+    randomHexChar(server.replid, CONFIG_REPL_RUNID_LEN - 1);
+    server.replid[CONFIG_REPL_RUNID_LEN] = '\0';
 }
 
 void clearReplicationId2(void) {
