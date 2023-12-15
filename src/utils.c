@@ -4,9 +4,11 @@
 
 #include "utils.h"
 #include <limits.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <math.h>
 
 typedef struct _cstring {
     char *s;
@@ -588,6 +590,43 @@ void testmatchstringlen() {
 
 
 }
+
+void randomHexChar(char *p, size_t l) {
+
+    char *charset, *x;
+    pid_t pid;
+    unsigned int j;
+    struct timeval tv;
+
+    charset = "0123456789abcde";
+    x = p;
+
+    if (l>= sizeof(tv.tv_usec)) {
+        memcpy(x, &tv.tv_usec, sizeof(tv.tv_usec));
+        l-=sizeof(tv.tv_usec);
+        x+=sizeof(tv.tv_usec);
+    }
+
+    if (l>= sizeof(tv.tv_sec)) {
+        memcpy(x, &tv.tv_sec, sizeof(tv.tv_sec));
+        l-=sizeof(tv.tv_sec);
+        x+=sizeof(tv.tv_sec);
+    }
+
+    pid = getpid();
+
+    if (l>= sizeof(pid)) {
+        memcpy(x, &pid, sizeof(pid));
+        l-=sizeof(pid);
+        x+=sizeof(pid);
+    }
+
+    for (j=0; j<l; j++) {
+        p[j] ^= rand();
+        p[j] = charset[p[j] & 0xf];
+    }
+}
+
 
 #ifdef RUN_UT
 int main(int argc, char **argv) {

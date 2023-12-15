@@ -38,4 +38,6 @@ unsigned long long uu_rev(unsigned long long value);
 
 void fprettystr(char *s, FILE *f, unsigned int maxlen);
 
+void randomHexChar(char *p, size_t l);
+
 #endif //REDIS_UTILS_H
