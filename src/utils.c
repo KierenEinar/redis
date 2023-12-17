@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <sys/time.h>
 #include <math.h>
 
 typedef struct _cstring {
@@ -595,35 +596,38 @@ void randomHexChar(char *p, size_t l) {
 
     char *charset, *x;
     pid_t pid;
-    unsigned int j;
+    unsigned int j, len;
     struct timeval tv;
 
-    charset = "0123456789abcde";
+    len = l;
+    charset = "0123456789abcdef";
     x = p;
 
-    if (l>= sizeof(tv.tv_usec)) {
+    gettimeofday(&tv, NULL);
+
+    if (len>= sizeof(tv.tv_usec)) {
         memcpy(x, &tv.tv_usec, sizeof(tv.tv_usec));
-        l-=sizeof(tv.tv_usec);
+        len-=sizeof(tv.tv_usec);
         x+=sizeof(tv.tv_usec);
     }
 
-    if (l>= sizeof(tv.tv_sec)) {
+    if (len>= sizeof(tv.tv_sec)) {
         memcpy(x, &tv.tv_sec, sizeof(tv.tv_sec));
-        l-=sizeof(tv.tv_sec);
+        len-=sizeof(tv.tv_sec);
         x+=sizeof(tv.tv_sec);
     }
 
     pid = getpid();
 
-    if (l>= sizeof(pid)) {
+    if (len>= sizeof(pid)) {
         memcpy(x, &pid, sizeof(pid));
-        l-=sizeof(pid);
+        len-=sizeof(pid);
         x+=sizeof(pid);
     }
 
     for (j=0; j<l; j++) {
         p[j] ^= rand();
-        p[j] = charset[p[j] & 0xf];
+        p[j] = charset[p[j] & 0xF];
     }
 }
 

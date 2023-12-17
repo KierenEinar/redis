@@ -107,6 +107,7 @@ struct redisCommand redisCommandTable[] = {
     {"psync", syncCommand, 3},
     {"replconf", replConfCommand, -3},
     {"slaveof", slaveofCommand, 3},
+    {"ping", pingCommand, 1},
 };
 
 // dict type for commands table
@@ -169,6 +170,7 @@ void createSharedObject(void) {
 
     shared.crlf = createObject(REDIS_OBJECT_STRING, sdsnew("\r\n"));
     shared.ok = createObject(REDIS_OBJECT_STRING, sdsnew("+ok\r\n"));
+    shared.pong = createObject(REDIS_OBJECT_STRING, sdsnew("+pong\r\n"));
     shared.syntaxerr = createObject(REDIS_OBJECT_STRING, sdsnew("-ERR syntax err\r\n"));
     shared.wrongtypeerr = createObject(REDIS_OBJECT_STRING, sdsnew("-ERR wrong type against\r\n"));
     shared.nullbulk = createObject(REDIS_OBJECT_STRING, sdsnew("$-1\r\n"));
@@ -573,6 +575,11 @@ void propagate(struct redisCommand *cmd, int dbid, int argc, robj **argv, int fl
 
 void propagateCommand(client *c, int flags) {
     propagate(c->cmd, c->db->id, c->argc, c->argv, flags);
+}
+
+void pingCommand(client *c) {
+
+    addReply(c, shared.pong);
 }
 
 int main(int argc, char **argv) {

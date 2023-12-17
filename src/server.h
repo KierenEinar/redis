@@ -435,7 +435,7 @@ typedef struct aof_rwblock {
 #define OBJ_SHARED_REFCOUNT INT_MAX
 #define OBJ_SHARED_COMMAND_SIZE 10
 struct redisSharedObject {
-    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk, *emptymultibulk, *loadingerr,
+    robj *crlf, *ok, *syntaxerr, *nullbulk, *wrongtypeerr, *nullmultibulk, *emptymultibulk, *loadingerr,*pong,
     *integers[OBJ_SHARED_INTEGERS],
     *mbulkhdr[OBJ_BULK_LEN_SIZE],
     *commands[OBJ_SHARED_COMMAND_SIZE],
@@ -627,6 +627,9 @@ void execCommand(client *c);
 
 // queued the commands on multi context.
 void queueMultiCommand(client *c);
+
+// ping command
+void pingCommand(client *c);
 
 // ------------ replication commands ------------
 void syncCommand(client *c);

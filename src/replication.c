@@ -7,7 +7,7 @@
 // ------------------------ MASTER ---------------------
 
 void changeReplicationId(void) {
-    randomHexChar(server.replid, CONFIG_REPL_RUNID_LEN - 1);
+    randomHexChar(server.replid, CONFIG_REPL_RUNID_LEN);
     server.replid[CONFIG_REPL_RUNID_LEN] = '\0';
 }
 
@@ -360,13 +360,15 @@ int masterTryPartialResynchronization(client *c) {
 
     master_replid = c->argv[1]->ptr;
 
-    if (getLongLongFromObjectOrReply(c->argv[2]->ptr, &psync_offset, c, NULL) == C_ERR) {
+    if (getLongLongFromObjectOrReply(c->argv[2], &psync_offset, c, NULL) == C_ERR) {
         goto need_full_resync;
     }
 
+    debug("<MASTER resync get params slave_runid:%s, slave_offset:%lld>", master_replid, psync_offset);
+
     // psync runid offset
-    if (strcmp(master_replid, server.replid) &&
-        (strcmp(master_replid, server.replid2) && (server.second_replid_offset < psync_offset))) {
+    if (strcmp(master_replid, server.replid) ||
+        (!strcmp(master_replid, server.replid2) && (server.second_replid_offset < psync_offset))) {
 
         if (!strcmp(master_replid, "?")) {
             debug("Slave Request Psync Resync...");
@@ -520,6 +522,9 @@ void replConfCommand(client *c) {
         } else if (!strcasecmp(c->argv[j]->ptr, "getack")) {
             if (server.master_host && server.master) replicationSendAck();
             return;
+        } else {
+            addReply(c, shared.syntaxerr);
+            return;
         }
     }
 
@@ -607,6 +612,7 @@ void disconnectSlaves(void) {
 
     listIter li;
     listNode *ln;
+    listRewind(server.slaves, &li);
     while ((ln= listNext(&li)) != NULL) {
         client *slave = listNodeValue(ln);
         freeClient(slave);
@@ -665,7 +671,6 @@ void replicationSetMaster(char *host, long port) {
     cancelReplicationHandShake();
     server.repl_state = REPL_STATE_CONNECT;
 
-    memcpy(server.master_replid, 0, sizeof(server.master_replid));
     server.master_initial_offset = -1;
 
 }
@@ -1331,9 +1336,9 @@ void replicationCron(void) {
 
     // ------------------ slave -----------------
 
-    if (server.master_host && server.repl_state == REPL_STATE_CONNECTING
-        || replicationIsInHandshake()
-        && time(NULL) - server.repl_transfer_lastio > server.repl_timeout) {
+    if (server.master_host && (server.repl_state == REPL_STATE_CONNECTING
+        || replicationIsInHandshake())
+        && (time(NULL) - server.repl_transfer_lastio > server.repl_timeout)) {
         cancelReplicationHandShake();
     }
 
