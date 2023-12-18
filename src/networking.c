@@ -547,7 +547,7 @@ void handleClientsPendingWrite(void) {
     listNode *ln;
     list *l = server.client_pending_writes;
     listRewind(l, &li);
-    while ((ln=listNext(&li))) {
+    while ((ln=listNext(&li)) != NULL) {
 
         client *c = listNodeValue(ln);
         c->flag &= ~CLIENT_PENDING_WRITE;
@@ -592,7 +592,7 @@ void unlinkClient(client *c) {
 
         if (c->client_list_node) {
             listDelNode(server.client_list, c->client_list_node);
-            c->client_close_node = NULL;
+            c->client_list_node = NULL;
         }
 
         close(c->fd);
@@ -664,7 +664,6 @@ client* createClient(int cfd) {
     c->watch_keys = listCreate();
 
     c->repl_state = REPL_STATE_NONE;
-    c->slave_capa = REPL_CAPA_NONE;
     c->repl_capa = REPL_CAPA_NONE;
     c->psync_initial_offset = -1;
     c->repl_offset = -1;

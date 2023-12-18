@@ -697,16 +697,17 @@ sds aofDictEntryAppendBuffer(sds buf, redisDb *db, dictEntry *de) {
     robj *key, *value;
     long long expire;
 
-    key = de->key;
+    key = createStringObject(de->key, sdslen(de->key));
     value = de->value.ptr;
     expire = getExpire(db, key);
     if (expire != -1 && expire < mstime()) {
+        decrRefCount(key);
         return buf;
     }
 
     if (value->type == REDIS_OBJECT_STRING) {
 
-        buf = sdscatprintf(buf, "*3\r\n$3\r\nSET\r\n");
+        buf = sdscatfmt(buf, "*3\r\n$3\r\nSET\r\n");
         buf = sdscatfmt(buf, "$%u\r\n", sdslen(key->ptr));
         buf = sdscatsds(buf, key->ptr);
         buf = sdscatsds(buf, shared.crlf->ptr);
@@ -723,15 +724,17 @@ sds aofDictEntryAppendBuffer(sds buf, redisDb *db, dictEntry *de) {
 
     if (expire != -1) {
 
-        buf = sdscatprintf(buf, "*2\r\n$9\r\nPEXPIREAT\r\n");
+        buf = sdscatfmt(buf, "*3\r\n$9\r\nPEXPIREAT\r\n");
         buf = sdscatfmt(buf, "$%u\r\n", sdslen(key->ptr));
         buf = sdscatsds(buf, key->ptr);
         buf = sdscatsds(buf, shared.crlf->ptr);
 
         buf = sdscatfmt(buf, "$%u\r\n", sdslen(value->ptr));
-        buf = sdscatfmt(buf, "%U", mstime() + expire);
+        buf = sdscatfmt(buf, "%U", expire);
         buf = sdscatsds(buf, shared.crlf->ptr);
     }
+
+    decrRefCount(key);
 
     return buf;
 
@@ -948,7 +951,7 @@ void updateSlavesWaitingBgAOFSave(int type) {
 
             if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
                 start_bgsave = 1;
-                mincapa = mincapa == -1 ? slave->slave_capa : mincapa & slave->slave_capa;
+                mincapa = mincapa == -1 ? slave->repl_capa : mincapa & slave->repl_capa;
             } else if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_END) {
                 slave->repl_state = SLAVE_STATE_ONLINE;
                 slave->repl_put_online_ack = 1;
@@ -1132,12 +1135,14 @@ int startAppendOnly() {
 }
 
 sds aofBufferWriteToSlavesSocket(sds buf, int *fds, int *states, int numfds, int *num_writeok) {
-
     int j;
     *num_writeok = 0;
+    size_t slen = sdslen(buf);
+    size_t wlen;
     for (j=0; j<numfds; j++) {
         if (states[j] != 0) continue;
-        if (write(fds[j], buf, sdslen(buf)) != sdslen(buf)) {
+        if ((wlen = write(fds[j], buf, slen)) != slen) {
+            debug("<Master> prepare transfer FULLRESYNC write failed, expected write len:%lu, act write len:%lu", slen, wlen);
             states[j] = errno;
             continue;
         }
@@ -1152,11 +1157,11 @@ sds aofBufferWriteToSlavesSocket(sds buf, int *fds, int *states, int numfds, int
 int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds) {
 
     char *buf;
-    char eofmark[CONFIG_REPL_EOFMARK_LEN]; //todo make eof mark random string
+    char eofmark[CONFIG_REPL_EOFMARK_LEN];
     int j, num_writeok;
 
-    buf = sdsnewlen(NULL, AOF_PROTO_REPL_WRITE_SIZE);
-
+    randomHexChar(eofmark, CONFIG_REPL_EOFMARK_LEN);
+    buf = sdsempty();
     // $EOF: ***(40bytes random char)\r\n
     // body
     // ***(40bytes random char)\r\n
@@ -1164,6 +1169,7 @@ int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds) {
     buf = sdscatlen(buf, "$EOF:", 5);
     buf = sdscatlen(buf, eofmark, CONFIG_REPL_EOFMARK_LEN);
     buf = sdscatlen(buf, "\r\n", 2);
+
     for (j=0; j<numfds; j++) {
         if (write(fds[j], buf, sdslen(buf)) != sdslen(buf)) {
             states[j] = -1;
@@ -1172,22 +1178,21 @@ int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds) {
 
     for (j=0; j<server.dbnum; j++) {
         dictIter iter;
-        redisDb db;
+        redisDb *db;
         dictEntry *de;
         size_t db_num_size;
-        int k;
-        db = server.dbs[j];
-        dictSafeGetIterator(db.dict, &iter);
+        db = server.dbs+j;
+        dictSafeGetIterator(db->dict, &iter);
         char db_num[128];
         db_num_size = ll2string(db_num, (long long)j);
-        buf = sdscatfmt(buf, "*2\r\n$6\r\nSELECT\r\n$%u\r\n", j, db_num_size);
+        buf = sdscatfmt(buf, "*2\r\n$6\r\nSELECT\r\n$%u\r\n%i\r\n", db_num_size, j);
+        num_writeok = 0;
         while ((de=dictNext(&iter)) != NULL) {
-            num_writeok = 0;
-            buf = aofDictEntryAppendBuffer(buf, &db, de);
+            buf = aofDictEntryAppendBuffer(buf, db, de);
             if (sdslen(buf) >= AOF_PROTO_REPL_WRITE_SIZE) {
                 buf = aofBufferWriteToSlavesSocket(buf, fds, states, numfds, &num_writeok);
+                if (num_writeok == 0) goto err;
             }
-            if (num_writeok == 0) goto err;
         }
 
     }

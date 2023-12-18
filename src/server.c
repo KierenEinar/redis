@@ -201,7 +201,7 @@ void createSharedObject(void) {
     }
 
     for (int j=0; j<OBJ_SHARED_COMMAND_SIZE; j++) {
-        sds s = sdscatprintf(sdsempty(), "*2\r\n$6\r\nSELECT\r\n$1\r\n%d", j);
+        sds s = sdscatfmt(sdsempty(), "*2\r\n$6\r\nSELECT\r\n$1\r\n%i", j);
         shared.commands[j] = createObject(REDIS_OBJECT_STRING, s);
         makeObjectShared(shared.commands[j]);
     }
@@ -335,17 +335,15 @@ void clientHandleCronTimeout(client *c, mstime_t nowms) {
 #define CLIENT_CRON_MIN_ITERATION 5
 void clientCron(void) {
 
-    int clientsnum = listLength(server.client_list);
+    int clients_num = listLength(server.client_list);
 
-    int iterations = clientsnum > CLIENT_CRON_MIN_ITERATION ? CLIENT_CRON_MIN_ITERATION : clientsnum;
+    int iterations = clients_num > CLIENT_CRON_MIN_ITERATION ? CLIENT_CRON_MIN_ITERATION : clients_num;
 
     mstime_t now = mstime();
 
     while (listLength(server.client_list) && iterations--) {
-
         listNode *ln = listFirst(server.client_list);
         client *c = listNodeValue(ln);
-        listDelNode(server.client_list, ln);
         clientHandleCronTimeout(c, now);
     }
 
@@ -570,6 +568,10 @@ void* listDupString(void *ptr) {
 void propagate(struct redisCommand *cmd, int dbid, int argc, robj **argv, int flags) {
     if (flags & PROPAGATE_CMD_AOF && server.aof_state == AOF_ON) {
         feedAppendOnlyFile(cmd, dbid, argc, argv);
+    }
+
+    if (flags & PROPAGATE_CMD_REPL) {
+        replicationFeedSlaves(dbid, argv, argc);
     }
 }
 

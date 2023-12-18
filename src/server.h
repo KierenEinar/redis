@@ -54,7 +54,7 @@
 #define CONFIG_REPL_RUNID_LEN 40
 #define CONFIG_REPL_EOFMARK_LEN 40
 #define CONFIG_REPL_BACKLOG_SIZE (1024 * 1024 * 10) // 10m
-#define CONFIG_REPL_DISKLESS_SYNC 0 // default set to disable socket.
+#define CONFIG_REPL_DISKLESS_SYNC 1 // default set to enable socket.
 #define CONFIG_REPL_PING_PERIOD 10 // each 10 seconds send ping to our slaves.
 #define CONFIG_REPL_TIMEOUT 60 // 60 seconds timed out if no data nor ack received.
 #define CONFIG_REPL_BACKLOG_TIMEOUT (60 * 60) // 1 hour for repl backlog if there is no slaves.
@@ -123,7 +123,7 @@
 #define PROPAGATE_CMD_NONE 0
 #define PROPAGATE_CMD_AOF 1
 #define PROPAGATE_CMD_REPL 2
-#define PROPAGATE_CMD_FULL (PROPAGATE_CMD_AOF)
+#define PROPAGATE_CMD_FULL (PROPAGATE_CMD_AOF | PROPAGATE_CMD_REPL)
 
 // ------------ AOF POLICY-------------
 #define AOF_FSYNC_NO  0
@@ -189,6 +189,7 @@
 #define PSYNC_NOT_SUPPORT 6
 // ------------debug --------------
 #define debug(...) do { \
+     printf("[DEBUG] ");  \
      printf(__VA_ARGS__); \
      printf("\n");      \
 }while(0);
@@ -280,7 +281,6 @@ typedef struct client {
 
     // slave
     int repl_state;
-    int slave_capa;
     off_t psync_initial_offset; /* FULLRESYNC reply offset other slaves
                                        copying this slave output buffer
                                        should use. */

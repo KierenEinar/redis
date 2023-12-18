@@ -109,7 +109,7 @@ int startBgAofSaveForSlaveSockets() {
         retval = aofSaveToSlavesWithEOFMark(fds, states, numfds);
 
         if (retval == C_OK) {
-
+            debug("<MASTER> child process transfer aof to slaves success.");
             void *msg = zmalloc(sizeof(uint64_t*) * (1 + numfds * 2));
             size_t msglen = sizeof(uint64_t*) * (1 + numfds * 2);
             uint64_t *len = msg;
@@ -144,6 +144,7 @@ int startBgAofSaveForSlaveSockets() {
                     if (slave->id == clientids[i]) {
                         slave->repl_state = SLAVE_STATE_WAIT_BGSAVE_START;
                         slave->psync_initial_offset = -1;
+                        anetNonBlock(slave->fd);
                         break;
                     }
                 }
@@ -214,7 +215,7 @@ void putSlaveOnline(client *slave) {
     anetNonBlock(slave->fd);
 
     if (elCreateFileEvent(server.el, slave->fd, EL_WRITABLE,
-                          sendClientData, NULL) == EL_ERR) {
+                          sendClientData, slave) == EL_ERR) {
         debug("Unable to register writable event for slave bulk transfer: %s", strerror(errno));
         freeClient(slave);
     }
@@ -241,7 +242,7 @@ void replicationFeedSlaves(int dbid, robj **argv, int argc) {
 
             char ll2str[21];
             size_t llen = ll2string(ll2str, dbid);
-            sds s = sdscatprintf(sdsempty(), "*2\r\n$6\r\nSELECT\r\n$%d\r\n%d\r\n", llen, dbid);
+            sds s = sdscatfmt(sdsempty(), "*2\r\n$6\r\nSELECT\r\n$%u\r\n%i\r\n", llen, dbid);
             selcmd = createStringObject(s, sdslen(s));
         }
 
@@ -344,6 +345,11 @@ void feedReplicationBacklog(void *ptr, size_t len) {
     }
 
     server.repl_backlog_off = server.master_repl_offset - server.repl_backlog_histlen + 1;
+
+    debug("<MASTER> feed backlog, bufstr:%s, repl_idx:%lld, repl_offset:%lld, backlog_histlen: %lld", s, server.repl_backlog_idx,
+          server.master_repl_offset, server.repl_backlog_histlen);
+
+
 }
 
 void feedReplicationBacklogObject(robj *obj) {
@@ -458,7 +464,7 @@ void syncCommand(client *c) {
             }
         }
 
-        if (ln && (c->slave_capa & slave->slave_capa) == slave->slave_capa) {
+        if (ln && (c->repl_capa & slave->repl_capa) == slave->repl_capa) {
             copyClientOutputBuffer(c, slave); // copy client replicate buffer
             replicationSetupFullResync(c, slave->psync_initial_offset);
             debug("Waiting for end of BGSAVE for SYNC");
@@ -467,7 +473,7 @@ void syncCommand(client *c) {
         }
     } else if (server.aof_child_pid != -1 && server.aof_save_type == AOF_SAVE_TYPE_REPLICATE_SOCKET) {
 
-        if ((c->slave_capa & REPL_CAPA_EOF) && server.repl_diskless_sync) {
+        if ((c->repl_capa & REPL_CAPA_EOF) && server.repl_diskless_sync) {
             debug("Current repl socket started, delay to start next socket type sync.");
         } else {
             debug("Current repl socket started, delay to start next disk type sync.");
@@ -475,8 +481,8 @@ void syncCommand(client *c) {
 
     } else {
         // only start bg save for disk type.
-       if (server.aof_child_pid == -1 && (!server.repl_diskless_sync || !(c->slave_capa & REPL_CAPA_EOF))) {
-           startBgAofSaveForReplication(c->slave_capa);
+       if (server.aof_child_pid == -1 && (!server.repl_diskless_sync || !(c->repl_capa & REPL_CAPA_EOF))) {
+           startBgAofSaveForReplication(c->repl_capa);
        } else {
            debug("we want more slaves to sync at the same time, so delay socket type replication sync to next cronjob.");
        }
@@ -498,8 +504,10 @@ void replConfCommand(client *c) {
         if (!strcasecmp(c->argv[j]->ptr, "capa")) {
 
             if (!strcasecmp(c->argv[j+1]->ptr, "eof")) {
+                debug("<MASTER> receive SLAVE: EOF CAPA");
                 c->repl_capa |= REPL_CAPA_EOF;
             } else if (!strcasecmp(c->argv[j+1]->ptr, "psync2")) {
+                debug("<MASTER> receive SLAVE: PSYNC2 CAPA");
                 c->repl_capa |= REPL_CAPA_PSYNC2;
             }
 
@@ -556,7 +564,7 @@ sds sendSynchronousCommand(int flags, int fd, ...) {
         if (syncWrite(fd, cmd, sdslen(cmd), server.repl_send_timeout*1000) == -1) {
             debug("sendSynchronousCommand cmd=%s, failed", cmd);
             sdsfree(cmd);
-            return sdscatprintf(sdsempty(), "-Writing to master:%s\r\n", strerror(errno));
+            return sdscatfmt(sdsempty(), "-Writing to master:%s\r\n", strerror(errno));
         }
 
         sdsfree(cmd);
@@ -569,7 +577,7 @@ sds sendSynchronousCommand(int flags, int fd, ...) {
         size_t nread;
         server.repl_transfer_lastio = time(NULL);
         if ((nread = syncReadLine(fd, tmp, sizeof(tmp), server.repl_read_timeout*1000)) == -1) {
-            return sdscatprintf(sdsempty(), "-Reading from master:%s\r\n", strerror(errno));
+            return sdscatfmt(sdsempty(), "-Reading from master:%s\r\n", strerror(errno));
         }
         return sdsnewlen(tmp, nread);
     }
@@ -742,13 +750,13 @@ void replicationResurrectCacheMaster(int fd) {
 
     linkClient(master);
 
-    if (elCreateFileEvent(server.el, fd, EL_READABLE, readQueryFromClient, NULL) != EL_OK) {
+    if (elCreateFileEvent(server.el, fd, EL_READABLE, readQueryFromClient, master) != EL_OK) {
         freeClientAsync(master);
         server.master = NULL;
     }
 
     if (clientHasPendingWrites(master)) {
-        if (elCreateFileEvent(server.el, fd, EL_WRITABLE, sendClientData, NULL) != EL_OK) {
+        if (elCreateFileEvent(server.el, fd, EL_WRITABLE, sendClientData, master) != EL_OK) {
             freeClientAsync(master);
             server.master = NULL;
         }
@@ -1436,7 +1444,7 @@ void replicationCron(void) {
                 idle = (int)(server.unix_time - slave->lastinteraction);
                 if (idle > max_idle) max_idle = idle;
                 waiting++;
-                mincapa = mincapa == -1 ? slave->slave_capa : (slave->slave_capa & mincapa);
+                mincapa = mincapa == -1 ? slave->repl_capa : (slave->repl_capa & mincapa);
             }
         }
 
