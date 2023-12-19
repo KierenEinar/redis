@@ -312,8 +312,10 @@ long long serverCron(struct eventLoop *el, int id, void *clientData) {
         rewriteAppendOnlyFileBackground();
     }
 
-    // todo with 1000ms period
-    replicationCron();
+    if (time(NULL) - server.last_replication_cron > server.repl_cron_period) {
+        replicationCron();
+        server.last_replication_cron = time(NULL);
+    }
 
 
     return SERVER_CRON_PERIOD_MS;
@@ -444,7 +446,8 @@ void initServer(void) {
     server.master_initial_offset = -1;
     server.second_replid_offset = -1;
     server.slaves = listCreate();
-
+    server.last_replication_cron = 0l;
+    server.repl_cron_period = CONFIG_REPL_PERIOD;
     listSetFreeMethod(server.slaves, zfree);
     listSetFreeMethod(server.client_list, zfree); // free the client which alloc from heap
     listSetMatchMethod(server.pubsub_patterns, listValueEqual);

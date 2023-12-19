@@ -131,6 +131,7 @@ int startBgAofSaveForSlaveSockets() {
         zfree(states);
         zfree(fds);
         zfree(clientids);
+        debug("exitFromChild..., retval=%d", retval);
         exitFromChild(retval == C_OK ? 0 : 1);
 
     } else {
@@ -1441,7 +1442,7 @@ void replicationCron(void) {
 
             slave = listNodeValue(ln);
             if (slave->repl_state == SLAVE_STATE_WAIT_BGSAVE_START) {
-                idle = (int)(server.unix_time - slave->lastinteraction);
+                idle = (int)(time(NULL) - slave->lastinteraction);
                 if (idle > max_idle) max_idle = idle;
                 waiting++;
                 mincapa = mincapa == -1 ? slave->repl_capa : (slave->repl_capa & mincapa);

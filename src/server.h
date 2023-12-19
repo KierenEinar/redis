@@ -60,6 +60,7 @@
 #define CONFIG_REPL_BACKLOG_TIMEOUT (60 * 60) // 1 hour for repl backlog if there is no slaves.
 #define CONFIG_REPL_DISKLESS_SYNC_DELAY 10 // 10 seconds for delay
 #define CONFIG_REPL_SEND_TIMEOUT 10 // 10 seconds for replicate send time out.
+#define CONFIG_REPL_PERIOD 1
 #define CONFIG_REPL_TRANSFER_SYNC_LEN (1024 * 1024 * 8) // 8m
 #define CONFIG_SLAVE_IDLE 60
 #define LIST_ITER_DIR_FORWARD 1
@@ -364,6 +365,9 @@ typedef struct redisServer {
     list *slaves;      // slaves list
 
     off_t master_repl_offset; // current master replicate offset.
+
+    time_t last_replication_cron;
+    int repl_cron_period;
 
     // circular backlog.
     char *repl_backlog;

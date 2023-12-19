@@ -994,14 +994,14 @@ void aofDoneHandlerSlavesSocket(int bysignal, int code) {
     server.aof_save_type = AOF_SAVE_TYPE_NONE;
 
 
-    if (!bysignal && code) {
+    if (!bysignal && !code) {
 
         size_t readlen = sizeof(uint64_t);
 
         if (read(server.aof_repl_read_from_child, ok_slaves, readlen) == readlen) {
-            readlen = sizeof(uint64_t) * ok_slaves[0];
-            ok_slaves = zrealloc(ok_slaves, readlen + sizeof(uint64_t));
-            if (read(server.aof_repl_read_from_child, ok_slaves+1, readlen) != readlen) {
+            readlen = sizeof(uint64_t) * (ok_slaves[0] * 2 + 1);
+            ok_slaves = zrealloc(ok_slaves, readlen);
+            if (read(server.aof_repl_read_from_child, ok_slaves+1, readlen - sizeof(uint64_t)) != readlen - sizeof(uint64_t)) {
                 ok_slaves[0] = 0;
             }
         }
@@ -1156,7 +1156,7 @@ sds aofBufferWriteToSlavesSocket(sds buf, int *fds, int *states, int numfds, int
 // todo: make it better with coding and reading.
 int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds) {
 
-    char *buf;
+    sds buf;
     char eofmark[CONFIG_REPL_EOFMARK_LEN];
     int j, num_writeok;
 
@@ -1169,12 +1169,12 @@ int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds) {
     buf = sdscatlen(buf, "$EOF:", 5);
     buf = sdscatlen(buf, eofmark, CONFIG_REPL_EOFMARK_LEN);
     buf = sdscatlen(buf, "\r\n", 2);
-
     for (j=0; j<numfds; j++) {
         if (write(fds[j], buf, sdslen(buf)) != sdslen(buf)) {
             states[j] = -1;
         }
     }
+    buf = sdsclear(buf);
 
     for (j=0; j<server.dbnum; j++) {
         dictIter iter;
@@ -1182,6 +1182,9 @@ int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds) {
         dictEntry *de;
         size_t db_num_size;
         db = server.dbs+j;
+        if (dictSize(db->dict) == 0) {
+            continue;
+        }
         dictSafeGetIterator(db->dict, &iter);
         char db_num[128];
         db_num_size = ll2string(db_num, (long long)j);
@@ -1201,12 +1204,15 @@ int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds) {
     buf = sdscatlen(buf, "\r\n", 2);
     buf = aofBufferWriteToSlavesSocket(buf, fds, states, numfds, &num_writeok);
 
-    if (num_writeok == 0) goto err;
+    if (num_writeok == 0) {
+        debug("num_writeok=%d", num_writeok);
+    }
 
     sdsfree(buf);
     return C_OK;
 
 err:
+    debug("aofSaveToSlavesWithEOFMark error.");
     sdsfree(buf);
     return C_ERR;
 
