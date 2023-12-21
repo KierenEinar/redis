@@ -270,6 +270,7 @@ void readQueryFromClient(eventLoop *el, int fd, int mask, void *clientData) {
     nread = read(fd, c->querybuf+c->buflen, readlen);
     if (nread == 0) {
         if (errno == EAGAIN) return;
+        debug("unexpected read eof, closing client....");
         freeClient(c);
         return;
     }

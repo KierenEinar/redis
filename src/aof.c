@@ -1029,7 +1029,8 @@ void aofDoneHandlerSlavesSocket(int bysignal, int code) {
             }
 
             if (j == ok_slaves[0] || errcode != 0) {
-                debug("Slave FullResync(socket_type) state failed, close connection asap, id=%llu, fd=%d, err=%s", slave->id, slave->fd,
+                debug("Slave FullResync(socket_type) state failed, close connection asap, id=%llu, fd=%d, errcode=%lld, "
+                      "j=%d, slaves=%lld, err=%s", slave->id, slave->fd, errcode, j, ok_slaves[0],
                       errcode == 0 ? "slave not found in aof transfers set" : strerror(errcode));
                 freeClient(slave);
             } else {
@@ -1201,7 +1202,6 @@ int aofSaveToSlavesWithEOFMark(int *fds, int *states, int numfds) {
     }
 
     buf = sdscatlen(buf, eofmark, CONFIG_REPL_EOFMARK_LEN);
-    buf = sdscatlen(buf, "\r\n", 2);
     buf = aofBufferWriteToSlavesSocket(buf, fds, states, numfds, &num_writeok);
 
     if (num_writeok == 0) {

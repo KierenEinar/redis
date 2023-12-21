@@ -1054,7 +1054,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
     while (max_retry--) {
         snprintf(tmpfile, 256, "tmp-%d-%d-appendonly.aof", (int)server.unix_time, max_retry);
-        dfd = open(tmpfile, O_CREAT | O_WRONLY);
+        dfd = open(tmpfile, O_CREAT | O_WRONLY, 0666);
         if (dfd != -1) break;
         sleep(1);
     }
@@ -1170,6 +1170,8 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
             goto error;
         }
 
+        buf[nread] = '\0';
+
         // $EOF:<40bytes>
         if (buf[0] == '-') {
             debug("<REPLICATE PSYNC> MASTER abort replication, error msg: %s", buf+1);
@@ -1190,7 +1192,7 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
 
         if (!strncmp(buf+1, "EOF:", 4) && strlen(buf+5) >= CONFIG_REPL_RUNID_LEN) {
             memcpy(eofmark, buf+5, CONFIG_REPL_RUNID_LEN);
-            memcpy(lastbytes, 0, CONFIG_REPL_RUNID_LEN);
+            memset(lastbytes, 0, CONFIG_REPL_RUNID_LEN);
             server.repl_transfer_size = 0; // use 0 to mark is eof capa.
             eof = 1;
             return;

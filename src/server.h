@@ -45,7 +45,7 @@
 // define networking
 #define SERVER_NETWORK_ERR_LEN 255
 #define CONFIG_TCP_BACKLOG 511
-#define CONFIG_BIND_PORT 6379
+#define CONFIG_BIND_PORT 6380
 #define CONFIG_QUICKLIST_FILL_FACTOR (-2)
 #define CONFIG_NETWORK_IP_FD_LEN 16
 
@@ -56,7 +56,7 @@
 #define CONFIG_REPL_BACKLOG_SIZE (1024 * 1024 * 10) // 10m
 #define CONFIG_REPL_DISKLESS_SYNC 1 // default set to enable socket.
 #define CONFIG_REPL_PING_PERIOD 10 // each 10 seconds send ping to our slaves.
-#define CONFIG_REPL_TIMEOUT 60 // 60 seconds timed out if no data nor ack received.
+#define CONFIG_REPL_TIMEOUT 600 // 60 seconds timed out if no data nor ack received.
 #define CONFIG_REPL_BACKLOG_TIMEOUT (60 * 60) // 1 hour for repl backlog if there is no slaves.
 #define CONFIG_REPL_DISKLESS_SYNC_DELAY 10 // 10 seconds for delay
 #define CONFIG_REPL_SEND_TIMEOUT 10 // 10 seconds for replicate send time out.
@@ -190,7 +190,10 @@
 #define PSYNC_NOT_SUPPORT 6
 // ------------debug --------------
 #define debug(...) do { \
-     printf("[DEBUG] ");  \
+     time_t now = time(NULL);   \
+     char time_str[20];           \
+     strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", localtime(&now)); \
+     printf("[DEBUG %s] ", time_str);\
      printf(__VA_ARGS__); \
      printf("\n");      \
 }while(0);
