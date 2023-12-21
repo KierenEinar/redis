@@ -1054,7 +1054,7 @@ void syncWithMaster(struct eventLoop *el, int fd, int mask, void *clientData) {
 
     while (max_retry--) {
         snprintf(tmpfile, 256, "tmp-%d-%d-appendonly.aof", (int)server.unix_time, max_retry);
-        dfd = open(tmpfile, O_CREAT | O_WRONLY, 0666);
+        dfd = open(tmpfile, O_CREAT | O_WRONLY | O_APPEND, 0644);
         if (dfd != -1) break;
         sleep(1);
     }
@@ -1299,7 +1299,7 @@ void readSyncBulkPayload(struct eventLoop *el, int fd, int mask, void *clientDat
         }
 
         debug("<REPLICATE PSYNC> SLAVE load append only file from MASTER completed");
-        memcpy(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
+        memset(server.repl_transfer_tmp_file, 0, sizeof(server.repl_transfer_tmp_file));
         replicationCreateMaterClient(server.repl_transfer_s);
         server.repl_down_since = 0;
         server.repl_state = REPL_STATE_CONNECTED;

@@ -877,7 +877,7 @@ void flushAppendOnlyFile(int force);
 client *createFakeClient(void);
 void freeFakeClient(client *c);
 int loadAppendOnlyFile(char *filename);
-void aofUpdateCurrentSize(void);
+void aofUpdateCurrentSize(int fd);
 int rewriteAppendOnlyFileBackground(void);
 int rewriteAppendOnlyFileChild(char *name);
 int rewriteAppendOnlyFile(FILE *fp);

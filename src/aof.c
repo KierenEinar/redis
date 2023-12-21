@@ -466,8 +466,8 @@ int loadAppendOnlyFile(char *filename) {
 
 
 loaded_ok:
+    aofUpdateCurrentSize(fileno(fp));
     fclose(fp);
-    aofUpdateCurrentSize();
     freeFakeClient(fake_client);
     server.aof_state = old_aof_state;
     stopLoading();
@@ -500,12 +500,12 @@ fmterr:
 }
 
 
-void aofUpdateCurrentSize(void) {
+void aofUpdateCurrentSize(int fd) {
 
     struct stat st;
 
-    if (fstat(server.aof_fd, &st) == -1) {
-        debug("aofUpdateCurrentSize fstat failed, fd[%d]...", server.aof_fd);
+    if (fstat(fd, &st) == -1) {
+        debug("aofUpdateCurrentSize fstat failed, fd[%d]...", fd);
         exit(1);
     }
 
@@ -1109,7 +1109,7 @@ int startAppendOnly() {
         return C_ERR;
     }
 
-    newfd = open(server.aof_filename, O_CREAT | O_APPEND | O_RDWR);
+    newfd = open(server.aof_filename, O_CREAT | O_APPEND | O_RDWR, 0644);
     if (newfd == -1) {
         debug("start append only failed, err=%s", strerror(errno));
         return C_ERR;

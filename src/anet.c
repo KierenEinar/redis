@@ -60,6 +60,7 @@ static int _anetTcpServer(char *err, int port, int af_family, int backlog) {
 
     for ( p = serveInfo; p != NULL; p = p->ai_next) {
         if ((s = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
+            debug("creating tcp server, err=%s", strerror(errno));
             continue;
         }
 
@@ -72,6 +73,7 @@ static int _anetTcpServer(char *err, int port, int af_family, int backlog) {
 
 error:
     if (s != -1) close(s);
+    debug("listening tcp err=%s, af_family=%d", err, af_family);
     return ANET_ERR;
 end:
     return s;
